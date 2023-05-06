@@ -372,6 +372,9 @@ public class PRScript : MonoBehaviour
             "<color=#66bb66>" + s + "</color>");
         _interpreter.errorOutput = (s) =>
         {
+            AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s + 
+                                                        "\n The script content:\n <color=#bb00bb>" + 
+                                                        _interpreter.source +"</color>");
             Debug.LogWarning(s);
             Debug.Log("<color=red>" + s + "</color>");
             // ...and in case of error, we'll also stop the interpreter.
