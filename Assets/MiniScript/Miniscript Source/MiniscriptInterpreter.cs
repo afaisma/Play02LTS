@@ -77,7 +77,7 @@ namespace Miniscript {
 		public TAC.Machine vm;
 		
 		TextOutputMethod _standardOutput;
-		string source;
+		public string source;
 		Parser parser;
 		
 		/// <summary>
