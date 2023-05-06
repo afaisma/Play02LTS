@@ -109,7 +109,8 @@ public class PRUtils
 
         if (request.result != UnityWebRequest.Result.Success) //
         {
-            Debug.LogError($"Failed to download image {url}: " + request.error);
+            Debug.Log($"Failed to download image {url}: " + request.error);
+            AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: " + request.error);
         }
         else
         {

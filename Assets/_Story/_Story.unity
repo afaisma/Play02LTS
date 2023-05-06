@@ -156,8 +156,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c288363d4dc342b9a19df720b1895fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scriptURL: http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt
-  sScript: 
+  scriptURL: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
+  convGoodPeople: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
+  convPeterRabbit: http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script.tx
+  convSeaStoryEn: http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt
+  convSeaStoryRu: http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt
+  convSeaTAHF: http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt
   storyStepsUI: {fileID: 22888428}
   audioPlayer: {fileID: 22888426}
   videoPlayer: {fileID: 1049913047}
@@ -1821,9 +1825,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-    tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
-    quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. '
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 3b2389ce497d44927adfa011b9a713a1, type: 2}
   m_sharedMaterial: {fileID: 6554334236959877747, guid: 3b2389ce497d44927adfa011b9a713a1, type: 2}
@@ -1943,6 +1945,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 5
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &956688965
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 956688967}
+  - component: {fileID: 956688966}
+  m_Layer: 0
+  m_Name: AlerdDialogManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &956688966
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 956688965}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce65258283afb4fa791ed5c2f3500603, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  alertDialogPrefab: {fileID: 2453018638181516684, guid: a775a1be5a581400f8b816a4a6629cda, type: 3}
+  targetCanvas: {fileID: 1042999681}
+--- !u!4 &956688967
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 956688965}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 125.12821, y: -165.4701, z: 0}
+  m_LocalScale: {x: 0.6837607, y: 0.6837607, z: 0.6837607}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1042999682}
+  m_RootOrder: 10
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &966030979
 GameObject:
@@ -2190,6 +2238,7 @@ RectTransform:
   - {fileID: 1239709395}
   - {fileID: 1988561903}
   - {fileID: 1545005716}
+  - {fileID: 956688967}
   - {fileID: 1964763721}
   m_Father: {fileID: 0}
   m_RootOrder: 3
@@ -3126,7 +3175,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3698678726060108660, guid: 3d2fe89de47124b2d848fce893cccf1a, type: 3}
       propertyPath: m_RootOrder
-      value: -1
+      value: 11
       objectReference: {fileID: 0}
     - target: {fileID: 3698678726060108660, guid: 3d2fe89de47124b2d848fce893cccf1a, type: 3}
       propertyPath: m_AnchorMax.x
@@ -3583,9 +3632,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-    tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
-    quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. '
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 3b2389ce497d44927adfa011b9a713a1, type: 2}
   m_sharedMaterial: {fileID: 6554334236959877747, guid: 3b2389ce497d44927adfa011b9a713a1, type: 2}

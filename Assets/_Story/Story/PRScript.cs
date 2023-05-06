@@ -33,7 +33,11 @@ public class ButtonStruct
 public class PRScript : MonoBehaviour
 {
     public string scriptURL;
-    public string sScript;
+    public string convGoodPeople = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
+    public string convPeterRabbit = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script.tx";
+    public string convSeaStoryEn = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
+    public string convSeaStoryRu = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
+    public string convSeaTAHF = "http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt";
     public StoryStepsUI storyStepsUI;
     public AudioPlayer audioPlayer;
     public PRVideoPlayer videoPlayer;
@@ -96,6 +100,7 @@ public class PRScript : MonoBehaviour
             storyStepsUI.AddStoryStep(_scriptlets[i].Content, i);
         }
 
+        //AlertDialogManager.Instance.ShowAlertDialog("executing: " + _settings.Content);
         ExecuteScriptlet(_settings.Content);
     }
 
@@ -114,18 +119,16 @@ public class PRScript : MonoBehaviour
     }
     void OnDestroy()
     {
-        _interpreter.Reset();
+        _interpreter?.Reset();
         Debug.Log("OnDestroy PRScript");
     }
-    
-    
+
     public void Reload()
     {
         storyStepsUI.Cleanup();
         StartCoroutine(PRUtils.DownloadFile(scriptURL, (content) => { parse(content); }));
     }
-    
-    
+
     void SetupInterpreter()
     {
         _interpreter = new Interpreter();
