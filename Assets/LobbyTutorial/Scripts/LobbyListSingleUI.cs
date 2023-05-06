@@ -30,5 +30,6 @@ public class LobbyListSingleUI : MonoBehaviour {
         gameModeText.text = lobby.Data[LobbyManager.KEY_GAME_MODE].Value;
     }
 
+    //
 
 }
