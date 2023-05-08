@@ -45,6 +45,8 @@ public class PRScript : MonoBehaviour
     public AudioAndTextPlayer audioAndTextPlayer;
     public ParentalGate parentalGate;
     public Button buttonParentalGate;
+    public GameObject titlePanel;
+    public TitlePage titlePage;
     public int nCurrentStep = 0;
 
     private Interpreter _interpreter;
@@ -280,6 +282,37 @@ public class PRScript : MonoBehaviour
             storyStepsUI.DisplaybackgoundImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("DisplayTitlePage");
+        f.AddParam("title", "");
+        f.AddParam("author", "");
+        f.AddParam("link", "");
+        f.code = (context, partialResult) =>
+        {
+            string title = context.GetVar("title").ToString();
+            string author = context.GetVar("author").ToString();
+            string link = context.GetVar("link").ToString();
+            titlePage.gameObject.SetActive(true);
+            titlePage.SetTitlePage(title, author, link);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("HideTitlePage");
+        f.code = (context, partialResult) =>
+        {
+            titlePanel.gameObject.SetActive(false);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("PlayAudio");
+        f.AddParam("audioname", "");
+        f.AddParam("begin", 0);
+        f.AddParam("end", 0);
+        f.code = (context, partialResult) =>
+        {
+            string audioname = context.GetVar("audioname").ToString();
+            float fBegin = context.GetVar("begin").FloatValue();
+            float fEnd = context.GetVar("end").FloatValue();
+            audioPlayer.PlayAudio(audioname, fBegin, fEnd);
+            return new Intrinsic.Result(ValNumber.one);
+        };
         f = Intrinsic.Create("PlayAudio");
         f.AddParam("audioname", "");
         f.AddParam("begin", 0);
@@ -407,7 +440,7 @@ public class PRScript : MonoBehaviour
         
         storyStepsUI.SelectStep(nCurrentStep);
         ExecuteStep(nCurrentStep);
-        SetButtonsAccordingToCurrentStep();
+        SetUIAccordingToCurrentStep();
     }
     
     public void NextStep()
@@ -417,7 +450,7 @@ public class PRScript : MonoBehaviour
             return;
         storyStepsUI.SelectStep(nCurrentStep);
         ExecuteStep(nCurrentStep);
-        SetButtonsAccordingToCurrentStep();
+        SetUIAccordingToCurrentStep();
     }
 
     public void Home()
@@ -429,26 +462,29 @@ public class PRScript : MonoBehaviour
     public void ReplayCurrenStep()
     {
         ExecuteStep(nCurrentStep);
-        SetButtonsAccordingToCurrentStep();
+        SetUIAccordingToCurrentStep();
     }
 
     private void GotoStep(string label)
     {
-        SetButtonsAccordingToCurrentStep();
+        SetUIAccordingToCurrentStep();
     }
 
     
-    private void SetButtonsAccordingToCurrentStep()
+    private void SetUIAccordingToCurrentStep()
     {
         if (nCurrentStep <= 0)
             SetActiveButtons("Prev", false);
         else
             SetActiveButtons("Prev", true);
-        
+
         if (nCurrentStep >= _scriptlets.Count - 1)
             SetActiveButtons("Next", false);
         else
             SetActiveButtons("Next", true);
+            
+
+        
     }
 
     private void SetActiveButtons(string message, bool bActive)

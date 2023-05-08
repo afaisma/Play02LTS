@@ -39,7 +39,9 @@ public class AudioAndTextPlayer : MonoBehaviour
     {
         currentWordIndex = 0;
         StopAllCoroutines();
-        StartCoroutine(LoadAudioAndTimings(baseURL + audioURL, baseURL + jsonTimingsURL));
+        StartCoroutine(LoadAudioAndTimings(
+            audioURL != "" ? baseURL + audioURL: "", 
+            jsonTimingsURL != "" ? baseURL + jsonTimingsURL: ""));
     }
     
     public void SetActive(bool bActive)
@@ -94,20 +96,25 @@ public class AudioAndTextPlayer : MonoBehaviour
                     Debug.LogError($"Error loading audio clip: {www.error}");
                 }
             }
-            using (UnityWebRequest www = UnityWebRequest.Get(jsonTimingsURL))
-            {
-                yield return www.SendWebRequest();
 
-                if (www.result == UnityWebRequest.Result.ConnectionError ||
-                    www.result == UnityWebRequest.Result.ProtocolError)
+            // could be just an audio file without timings
+            if (jsonTimingsURL != "")
+            {
+                using (UnityWebRequest www = UnityWebRequest.Get(jsonTimingsURL))
                 {
-                    Debug.LogError(www.error);
-                }
-                else
-                {
-                    timings = JSON.Parse(www.downloadHandler.text);
-                    ParseTimings(timings);
-                    audioAndTimingsStruct.jsonNodeTimings = timings;
+                    yield return www.SendWebRequest();
+
+                    if (www.result == UnityWebRequest.Result.ConnectionError ||
+                        www.result == UnityWebRequest.Result.ProtocolError)
+                    {
+                        Debug.Log(www.error);
+                    }
+                    else
+                    {
+                        timings = JSON.Parse(www.downloadHandler.text);
+                        ParseTimings(timings);
+                        audioAndTimingsStruct.jsonNodeTimings = timings;
+                    }
                 }
             }
 
@@ -117,14 +124,18 @@ public class AudioAndTextPlayer : MonoBehaviour
         audioSource.clip = audioAndTimingsStruct.audioClip;
         audioSource.Play();
 
-        while (audioSource.isPlaying)
+        if (jsonTimingsURL != "")
         {
-            UpdateHighlightedText(audioSource.time * 1000); // Convert to milliseconds
-            yield return null;
+            while (audioSource.isPlaying)
+            {
+                UpdateHighlightedText(audioSource.time * 1000); // Convert to milliseconds
+                yield return null;
+            }
+
+            // to reset the text to its original state
+            UpdateHighlightedText(0, false);
+            //uiText.text = ""; // Reset the text to its original state.
         }
-        // to reset the text to its original state
-        UpdateHighlightedText(0, false);
-        //uiText.text = ""; // Reset the text to its original state.
     }
     
     private static void AddToCache(string audioURL, AudioAndTimingsStruct audioAndTimingsStruct)
