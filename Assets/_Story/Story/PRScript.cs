@@ -34,7 +34,7 @@ public class PRScript : MonoBehaviour
 {
     public string scriptURL;
     public string convGoodPeople = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
-    public string convPeterRabbit = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script.tx";
+    public string convPeterRabbit = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
     public string convSeaStoryEn = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
     public string convSeaStoryRu = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
     public string convSeaTAHF = "http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt";
@@ -333,6 +333,22 @@ public class PRScript : MonoBehaviour
         {
             string audioname = context.GetVar("audioname").ToString();
             string timings = context.GetVar("timings").ToString();
+            string content = context.GetVar("content").ToString();
+            audioAndTextPlayer.SetActive(true);
+            audioAndTextPlayer.Play(audioname, timings); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("PlayAudioAndText");
+        f.AddParam("chunkname", "");
+        f.AddParam("content", "");
+        f.code = (context, partialResult) =>
+        {
+            // chunk_1
+            // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
+            // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
+            string chunkname = context.GetVar("chunkname").ToString();
+            string audioname = $"{chunkname}_{Globals.g_Rate}.mp3";  ;
+            string timings = $"{chunkname}_{Globals.g_Rate}_timings.json"; 
             string content = context.GetVar("content").ToString();
             audioAndTextPlayer.SetActive(true);
             audioAndTextPlayer.Play(audioname, timings); 

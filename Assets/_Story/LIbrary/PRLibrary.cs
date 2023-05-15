@@ -13,8 +13,9 @@ public class PRLibrary : MonoBehaviour
     public List<PRBook> prbooks;
     [SerializeField] BooksScrollView booksScrollView;
     public static string baseURL;
-    
+
     public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
+    public string convinienceS3 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
     public string convinienceEC2 = "http://35.90.126.120:8080/api/files/download/stories/stories.csv";
     
     private void Start()

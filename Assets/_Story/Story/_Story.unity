@@ -156,9 +156,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c288363d4dc342b9a19df720b1895fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scriptURL: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
+  scriptURL: http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt
   convGoodPeople: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
-  convPeterRabbit: http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script.tx
+  convPeterRabbit: http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt
   convSeaStoryEn: http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt
   convSeaStoryRu: http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt
   convSeaTAHF: http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt

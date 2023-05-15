@@ -8,6 +8,7 @@ using UnityEngine.SceneManagement;
 public class Globals : MonoBehaviour
 {
     public static string g_scriptName;
+    public static string g_Rate = "10";
 
     Dictionary<string, string> mapImages = new Dictionary<string, string>();
 

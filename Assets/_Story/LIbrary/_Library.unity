@@ -451,10 +451,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2de527ce3789457fa3c178784512ec3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  csvUrl: http://localhost:8080/api/files/download/stories/stories.csv
+  csvUrl: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv
   prbooks: []
   booksScrollView: {fileID: 1326057711}
   convinienceLocal: http://localhost:8080/api/files/download/stories/stories.csv
+  convinienceS3: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv
   convinienceEC2: http://35.90.126.120:8080/api/files/download/stories/stories.csv
 --- !u!4 &471121938
 Transform:
