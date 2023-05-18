@@ -112,7 +112,6 @@ public class AudioAndTextPlayer : MonoBehaviour
                     else
                     {
                         timings = JSON.Parse(www.downloadHandler.text);
-                        ParseTimings(timings);
                         audioAndTimingsStruct.jsonNodeTimings = timings;
                     }
                 }
@@ -121,6 +120,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             AddToCache(audioURL, audioAndTimingsStruct);
         }
 
+        ParseTimings(audioAndTimingsStruct.jsonNodeTimings);
         audioSource.clip = audioAndTimingsStruct.audioClip;
         audioSource.Play();
 
@@ -150,6 +150,9 @@ public class AudioAndTextPlayer : MonoBehaviour
     
     private void ParseTimings(JSONNode timings)
     {
+        if (timings == null)
+            return;
+
         wordTimings.Clear();
 
         foreach (JSONNode timing in timings)
@@ -174,6 +177,9 @@ public class AudioAndTextPlayer : MonoBehaviour
     
     private void UpdateHighlightedText(float currentAudioTime, bool bHilight = true)
     {
+        if (wordTimings == null)
+            return;
+        
         for (int i = currentWordIndex; i < wordTimings.Count; i++)
         {
             if (wordTimings[i].Time > currentAudioTime)

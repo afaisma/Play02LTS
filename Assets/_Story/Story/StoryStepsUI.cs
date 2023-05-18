@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using QFSW.QC;
 using TMPro;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 class StoryStepPlate
@@ -26,7 +27,7 @@ public class StoryStepsUI : MonoBehaviour
     public Canvas canvasMain;
 
     public Image imgBackgound;
-    public Image imgMain;
+    public Gallery gallery;
     public TextMeshProUGUI txtTitle;
 
     public PRScript prScript;
@@ -129,7 +130,7 @@ public class StoryStepsUI : MonoBehaviour
     [Command]
     public void DisplayMainImage(string imageUrl)
     {
-        StartCoroutine(PRUtils.DownloadImage(prScript.baseURL + imageUrl, imgMain));
+        gallery.DisplayMainImage(prScript.baseURL + imageUrl);
     }
 
     public void DisplaybackgoundImage(string imageUrl)
@@ -247,6 +248,14 @@ public class StoryStepsUI : MonoBehaviour
             prScript.OnButtonClick(customString);
         }
     }
-
+    
+    public void AddGalleryImage(string url)
+    {
+       gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Image);
+    }
+    public void AddGalleryVideo(string url)
+    {
+        gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Video);
+    }
 
 }

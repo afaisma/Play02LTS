@@ -274,6 +274,14 @@ public class PRScript : MonoBehaviour
             storyStepsUI.DisplayMainImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("AddGalleryImage");
+        f.AddParam("url", "");
+        f.code = (context, partialResult) =>
+        {
+            string url = context.GetVar("url").ToString();
+            storyStepsUI.AddGalleryImage(url);
+            return new Intrinsic.Result(ValNumber.one);
+        };
         f = Intrinsic.Create("DisplayBackgroundImage");
         f.AddParam("url", "");
         f.code = (context, partialResult) =>

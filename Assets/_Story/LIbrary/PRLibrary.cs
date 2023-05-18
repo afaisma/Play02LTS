@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 
 public class PRLibrary : MonoBehaviour
@@ -102,6 +103,13 @@ public class PRLibrary : MonoBehaviour
     {
         return prbooks.FindAll(s => s.notesForParents.ToLower().Contains(notesForParents.ToLower()));
     }   
+    
+    public void Settings()
+    {
+        SceneManager.LoadScene("_Settings");
+    }
+
+
 }
 
 [Serializable]
