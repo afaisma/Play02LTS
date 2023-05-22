@@ -253,6 +253,11 @@ public class StoryStepsUI : MonoBehaviour
     {
        gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Image);
     }
+    public void AddGallerySound(string url)
+    {
+        gallery.addGallerySound(prScript.baseURL + url);
+    }
+
     public void AddGalleryVideo(string url)
     {
         gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Video);

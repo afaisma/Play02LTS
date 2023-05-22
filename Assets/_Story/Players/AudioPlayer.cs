@@ -7,7 +7,7 @@ using System.Threading;
 using QFSW.QC;
 using UnityEngine.Networking;
 
-public struct AudioClipStruct
+struct AudioClipStruct
 {
     public string audioClipName;
     public string audioClipURL;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,14 +13,25 @@ class GalleryItem
 {
     public string url;
     public GalleryItemType type;
+    public List<string> _sounds = new List<string>();
+    public void AddSound(string sound)
+    {
+        _sounds.Add(sound);
+    }
 }
 public class Gallery : MonoBehaviour
 {
+    public SoundBar _soundBar;
     private List<GalleryItem> _galleryItems = new List<GalleryItem>();
     int _currentGalleryItemIndex = 0;
     public Image imgMain;
     public Button btnPrevious;
     public Button btnNext;
+
+    private void Start()
+    {
+        SetupUI();
+    }
 
     public void addGalleryItem(string url, GalleryItemType type)
     {
@@ -29,10 +41,17 @@ public class Gallery : MonoBehaviour
         _galleryItems.Add(galleryItem);
         SetupUI();
     }
-    
+
+    public void addGallerySound(string url)
+    {
+        _soundBar.AddSound(url); 
+    }
+
     public void clearUpGalleryItems()
     {
+        _currentGalleryItemIndex = 0;
         _galleryItems.Clear();
+        _soundBar.Clear();
     }
 
     public void DisplayCurrentItem()
@@ -55,6 +74,7 @@ public class Gallery : MonoBehaviour
             btnPrevious.gameObject.SetActive(true);
         else
             btnPrevious.gameObject.SetActive(false);
+        
     } 
     
     public void DisplayNextItem()

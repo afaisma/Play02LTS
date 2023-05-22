@@ -33,11 +33,13 @@ public class ButtonStruct
 public class PRScript : MonoBehaviour
 {
     public string scriptURL;
-    public string convGoodPeople = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
-    public string convPeterRabbit = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
-    public string convSeaStoryEn = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
-    public string convSeaStoryRu = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
-    public string convSeaTAHF = "http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt";
+    public string convGoodPeopleLocal = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
+    public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
+    public string convSeaStoryEnLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
+    public string convSeaStoryRuLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
+    public string convHumanSoundsLocal = "http://localhost:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
+    public string convTAHFS3 = "http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt";
+    public string convHumanSoundsS3 = "http://35.90.126.120:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
     public StoryStepsUI storyStepsUI;
     public AudioPlayer audioPlayer;
     public PRVideoPlayer videoPlayer;
@@ -280,6 +282,14 @@ public class PRScript : MonoBehaviour
         {
             string url = context.GetVar("url").ToString();
             storyStepsUI.AddGalleryImage(url);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("AddGallerySound");
+        f.AddParam("url", "");
+        f.code = (context, partialResult) =>
+        {
+            string url = context.GetVar("url").ToString();
+            storyStepsUI.AddGallerySound(url);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("DisplayBackgroundImage");
