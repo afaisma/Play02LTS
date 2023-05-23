@@ -46,6 +46,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     
     public void SetActive(bool bActive)
     {
+        Debug.Log("AudioAndTextPlayer::SetActive " + bActive);
         uiForeground.gameObject.SetActive(bActive);
         uiBackground.gameObject.SetActive(bActive);
     }
@@ -93,7 +94,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogError($"Error loading audio clip: {www.error}");
+                    Debug.LogError($"Error loading audio clip {audioURL}: {www.error}");
                 }
             }
 

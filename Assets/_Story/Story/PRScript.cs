@@ -61,6 +61,7 @@ public class PRScript : MonoBehaviour
     
     private void parse(string script)
     {
+        Debug.Log("PRScript::parse: " + script);
         List<string> lines = PRUtils.SplitStringIntoLines(script);
 
         _settings = new Settings();
@@ -135,6 +136,7 @@ public class PRScript : MonoBehaviour
 
     void SetupInterpreter()
     {
+        Debug.Log("PRScript::SetupInterpreter");
         _interpreter = new Interpreter();
         Intrinsic f = Intrinsic.Create("DisplayTitle");
         f.AddParam("title", "");
@@ -161,7 +163,7 @@ public class PRScript : MonoBehaviour
         f.code = (context, partialResult) =>
         {
             string charname = context.GetVar("charname").ToString();
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             string text = context.GetVar("text").ToString();
             PRCharacter prCharacter = new PRCharacter();
             prCharacter.name = charname;
@@ -182,7 +184,7 @@ public class PRScript : MonoBehaviour
             float x = context.GetVar("x").FloatValue();
             float y = context.GetVar("y").FloatValue();
             float width = context.GetVar("width").FloatValue();
-            string imageURL = context.GetVar("imageURL").ToString();
+            string imageURL = NormalizeUrl(context.GetVar("imageURL").ToString());
             string msg = context.GetVar("message").ToString();
             Button btn = storyStepsUI.CreateButton( x, y, width, NormalizeURL(imageURL), msg);
             buttonStructs.Add(new ButtonStruct() { button = btn, message = msg });
@@ -202,6 +204,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("label", "");
         f.code = (context, partialResult) =>
         {
+            Debug.Log("PRScript::Script GoTo");
             string label = context.GetVar("label").ToString();
             if (label.ToLower() == "next")
                 NextStep();
@@ -241,7 +244,7 @@ public class PRScript : MonoBehaviour
         f.code = (context, partialResult) =>
         {
             string audioname = context.GetVar("audioname").ToString();
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             StartCoroutine(audioPlayer.LoadAudioClip(audioname, url));
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -249,7 +252,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
         {
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             parentalGate.url = url;
             if (url != "")
                 buttonParentalGate.gameObject.SetActive(true);
@@ -264,7 +267,7 @@ public class PRScript : MonoBehaviour
         f.code = (context, partialResult) =>
         {
             string videoname = context.GetVar("videoname").ToString();
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             videoPlayer.LoadVideo(url);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -272,7 +275,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
         {
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.DisplayMainImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -280,7 +283,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
         {
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.AddGalleryImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -288,7 +291,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
         {
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.AddGallerySound(url);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -296,7 +299,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
         {
-            string url = context.GetVar("url").ToString();
+            string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.DisplaybackgoundImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -364,7 +367,7 @@ public class PRScript : MonoBehaviour
             // chunk_1
             // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
             // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
-            string chunkname = context.GetVar("chunkname").ToString();
+            string chunkname = NormalizeUrl(context.GetVar("chunkname").ToString());
             string audioname = $"{chunkname}_{Globals.g_Rate}.mp3";  ;
             string timings = $"{chunkname}_{Globals.g_Rate}_timings.json"; 
             string content = context.GetVar("content").ToString();
@@ -404,7 +407,8 @@ public class PRScript : MonoBehaviour
         SetupInterpreter();
         _interpreter.Reset(script);
         _interpreter.Compile();
-        _interpreter.RunUntilDone(0.01);
+        Debug.Log("PRScript::RunScript " + script);
+        _interpreter.RunUntilDone(10);
     }
 
     public void ExecuteStep(int index)
@@ -418,6 +422,8 @@ public class PRScript : MonoBehaviour
 
     void ExecuteScriptlet(string scriptlet)
     {
+        Debug.Log("PRScript::ExecuteScriptlet " + scriptlet);
+
         RunScript(scriptlet);
         // if (scriptlet == null)
         //     return;
@@ -459,7 +465,7 @@ public class PRScript : MonoBehaviour
         if (index >= 0 && index < _scriptlets.Count)
         {
             nCurrentStep = index;
-            Debug.Log($"Current step was set to " + index);
+            //Debug.Log($"Current step was set to " + index);
             return true;
         }
         Debug.Log($"Could not set step to " + index);
@@ -516,9 +522,8 @@ public class PRScript : MonoBehaviour
             SetActiveButtons("Next", false);
         else
             SetActiveButtons("Next", true);
-            
 
-        
+        AlertDialogManager.Instance.CloseAlertDialog();
     }
 
     private void SetActiveButtons(string message, bool bActive)
@@ -553,6 +558,16 @@ public class PRScript : MonoBehaviour
             url = baseURL + url;
         }
         return url;
+    }
+    
+    string NormalizeUrl(string url)
+    {
+        if (url == null)
+            return "";
+        string ret = url.Replace("//", "/");
+        ret = ret.Replace("http:/", "http://");
+        ret = ret.Replace("https:/", "https://");
+        return ret;
     }
 
 

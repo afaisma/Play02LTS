@@ -75,6 +75,7 @@ public class SoundBar : MonoBehaviour
 
     public void Clear()
     {
+        audioSource.Stop();
         for (int i = 0; i < _buttons.Count; i++)
         {
             _buttons[i].gameObject.SetActive(false);

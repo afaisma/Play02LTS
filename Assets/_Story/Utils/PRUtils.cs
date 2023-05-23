@@ -111,6 +111,7 @@ public class PRUtils
         {
             Debug.Log($"Failed to download image {url}: " + request.error);
             AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
+            image.sprite = Resources.Load<Sprite>("NotFound");;
         }
         else
         {

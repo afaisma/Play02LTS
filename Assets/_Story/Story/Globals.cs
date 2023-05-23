@@ -10,12 +10,17 @@ public class Globals : MonoBehaviour
     public static string g_scriptName;
     public static string g_Rate = "10";
     public Slider sliderRate;
-
+    public TMP_Text versionText;
+    
+    
     Dictionary<string, string> mapImages = new Dictionary<string, string>();
 
 
     void Start()
     {
+        if (versionText != null)
+            versionText.text = "Version: " + Application.version;
+        
         mapImages.Add("Book1", "Assets/_Story/Scripts/Book1.cs");
         mapImages.Add("Book2", "Assets/_Story/Scripts/Book2.cs");
         mapImages.Add("Book3", "Assets/_Story/Scripts/Book3.cs");

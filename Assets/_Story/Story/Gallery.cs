@@ -44,7 +44,12 @@ public class Gallery : MonoBehaviour
 
     public void addGallerySound(string url)
     {
-        _soundBar.AddSound(url); 
+        if (_galleryItems.Count == 0)
+            return;
+        Debug.Log("addGallerySound " + url);
+        GalleryItem galleryItem = _galleryItems[_galleryItems.Count - 1];
+        galleryItem.AddSound(url);
+        SetupSounds();
     }
 
     public void clearUpGalleryItems()
@@ -63,6 +68,18 @@ public class Gallery : MonoBehaviour
             StartCoroutine(PRUtils.DownloadImage( _galleryItems[_currentGalleryItemIndex].url, imgMain));
     }
 
+    public void SetupSounds()
+    {
+        _soundBar.Clear();
+        if (_galleryItems.Count == 0)
+            return;
+        
+        foreach (var url in _galleryItems[_currentGalleryItemIndex]._sounds)
+        {   
+            _soundBar.AddSound(url);
+        }
+    }
+    
     public void SetupUI()
     {
         if (_currentGalleryItemIndex < _galleryItems.Count - 1)
@@ -74,13 +91,13 @@ public class Gallery : MonoBehaviour
             btnPrevious.gameObject.SetActive(true);
         else
             btnPrevious.gameObject.SetActive(false);
-        
+        SetupSounds();
     } 
     
     public void DisplayNextItem()
     {
         _currentGalleryItemIndex++;
-        if (_currentGalleryItemIndex >= _galleryItems.Count)
+        if (_currentGalleryItemIndex > _galleryItems.Count - 1)
             _currentGalleryItemIndex = 0;
         SetupUI();
         DisplayCurrentItem();
@@ -90,16 +107,18 @@ public class Gallery : MonoBehaviour
     {
         _currentGalleryItemIndex--;
         if (_currentGalleryItemIndex < 0)
-            _currentGalleryItemIndex = _galleryItems.Count - 1;
+            _currentGalleryItemIndex = 0;
+        SetupUI();
         DisplayCurrentItem();
     }
     
     public void DisplayMainImage(string imageUrl)
     {
+        Debug.Log("DisplayMainImage " + imageUrl);
         clearUpGalleryItems();
         addGalleryItem(imageUrl, GalleryItemType.Image);
-        DisplayCurrentItem();
         SetupUI();
+        DisplayCurrentItem();
     }
 
 
