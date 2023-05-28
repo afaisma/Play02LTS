@@ -478,7 +478,7 @@ public class PRScript : MonoBehaviour
         if (!bStepChanged)
             return;
         
-        storyStepsUI.SelectStep(nCurrentStep);
+        storyStepsUI.SetStep(nCurrentStep);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
     }
@@ -488,7 +488,7 @@ public class PRScript : MonoBehaviour
         bool bStepChanged = SetCurrentStep(nCurrentStep + 1);
         if (!bStepChanged)
             return;
-        storyStepsUI.SelectStep(nCurrentStep);
+        storyStepsUI.SetStep(nCurrentStep);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
     }

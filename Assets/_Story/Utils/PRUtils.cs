@@ -11,16 +11,17 @@ public class PRUtils
     public static int maxCacheImagesSize = 30;
     private static  OrderedDictionary cacheImages = new OrderedDictionary();
 
+    public static float alpha = 0.35f;
     static Dictionary<string, Color> pastelColors = new Dictionary<string, Color>
     {
-        {"Pastel Pink", new Color(1, 0.7137f, 0.7569f, 1)},
-        {"Pastel Blue", new Color(0.6824f, 0.7765f, 0.8118f, 1)},
-        {"Pastel Green", new Color(0.5961f, 0.9843f, 0.5961f, 1)},
-        {"Pastel Yellow", new Color(0.9922f, 0.9647f, 0.8902f, 1)},
-        {"Pastel Orange", new Color(1, 0.7059f, 0.5098f, 1)},
-        {"Pastel Purple", new Color(0.8392f, 0.7216f, 0.8549f, 1)},
-        {"Pastel Mint", new Color(0.6784f, 1, 0.8039f, 1)},
-        {"Pastel Lavender", new Color(0.9019f, 0.7451f, 1, 1)}
+        {"Pastel Pink", new Color(1, 0.7137f, 0.7569f, alpha)},
+        {"Pastel Blue", new Color(0.6824f, 0.7765f, 0.8118f, alpha)},
+        {"Pastel Green", new Color(0.5961f, 0.9843f, 0.5961f, alpha)},
+        {"Pastel Yellow", new Color(0.9922f, 0.9647f, 0.8902f, alpha)},
+        {"Pastel Orange", new Color(1, 0.7059f, 0.5098f, alpha)},
+        {"Pastel Purple", new Color(0.8392f, 0.7216f, 0.8549f, alpha)},
+        {"Pastel Mint", new Color(0.6784f, 1, 0.8039f, alpha)},
+        {"Pastel Lavender", new Color(0.9019f, 0.7451f, alpha, alpha)}
     };
     static List<Color> pastelColorList = new List<Color>(pastelColors.Values);
     

@@ -40,6 +40,8 @@ public class Gallery : MonoBehaviour
         galleryItem.type = type;
         _galleryItems.Add(galleryItem);
         SetupUI();
+        
+        DisplayCurrentItem();
     }
 
     public void addGallerySound(string url)
@@ -117,8 +119,8 @@ public class Gallery : MonoBehaviour
         Debug.Log("DisplayMainImage " + imageUrl);
         clearUpGalleryItems();
         addGalleryItem(imageUrl, GalleryItemType.Image);
-        SetupUI();
-        DisplayCurrentItem();
+        //SetupUI();
+        //DisplayCurrentItem();
     }
 
 

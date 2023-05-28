@@ -66,8 +66,10 @@ public class StoryStepsUI : MonoBehaviour
     }
     
     [Command]
-    public void SelectStep(int index)
+    public void SetStep(int index)
     {
+        gallery.clearUpGalleryItems();
+        
         if (index >= 0 && index < _alStoryPlates.Count)
         {
             if (prScript.nCurrentStep >= 0 &&prScript.nCurrentStep < _alStoryPlates.Count && prScript.nCurrentStep != index)
