@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using QFSW.QC;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
@@ -139,6 +140,12 @@ public class StoryStepsUI : MonoBehaviour
     {
         CleanupBackgoundImage();
         StartCoroutine(PRUtils.DownloadImage(prScript.baseURL + imageUrl, imgBackgound.GetComponent<Image>(), false));
+        imgBackgound.gameObject.SetActive(true);
+    }
+
+    public void DisplaybackgoundColor(Color color)
+    {
+        imgBackgound.GetComponent<Image>().color = color;
         imgBackgound.gameObject.SetActive(true);
     }
 

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: d70aa6fc0d8e446e8a24b2751418dde1
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - pressSound: {instanceID: 0}
+  - releaseSound: {instanceID: 0}
+  - disabledSound: {instanceID: 0}
+  - pressEffect: {instanceID: 0}
+  - releaseEffect: {instanceID: 0}
+  - disabledEffect: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

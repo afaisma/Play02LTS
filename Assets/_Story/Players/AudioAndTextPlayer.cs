@@ -51,7 +51,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         uiBackground.gameObject.SetActive(bActive);
     }
     
-    public void SetFont( string fontName, int size)
+    public void SetFont( string fontName, int size, Color color)
     {
         if (fontName != "")
         {
@@ -63,6 +63,11 @@ public class AudioAndTextPlayer : MonoBehaviour
         {
             uiForeground.fontSize = size;
             uiBackground.fontSize = size;
+        }
+        if (color != null)
+        {
+            uiForeground.color = color;
+            uiBackground.color = color;
         }
     }
 
@@ -207,8 +212,8 @@ public class AudioAndTextPlayer : MonoBehaviour
 
             if (i < wordTimings.Count - 1 && !IsWordPunctuation(i + 1))
             {
-                newForegroundText += " ";
-                newBsckgroundText += " ";
+                //newForegroundText += " ";
+                //newBsckgroundText += " ";
             }
         }
 

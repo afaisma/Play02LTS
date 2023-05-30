@@ -33,6 +33,7 @@ public class ButtonStruct
 public class PRScript : MonoBehaviour
 {
     public string scriptURL;
+    public string convRedRidingHoodLocal = "http://localhost:8080/api/files/download/stories/RedRidingHood/RedRidingHood_chunks_script.txt";
     public string convGoodPeopleLocal = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
     public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
     public string convSeaStoryEnLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
@@ -302,6 +303,14 @@ public class PRScript : MonoBehaviour
             string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.DisplaybackgoundImage(url);
             return new Intrinsic.Result(ValNumber.one);
+        }; 
+        f = Intrinsic.Create("DisplayBackgroundColor");
+        f.AddParam("color", "");
+        f.code = (context, partialResult) =>
+        {
+            string color = context.GetVar("color").ToString();
+            storyStepsUI.DisplaybackgoundColor( PRUtils.StringToColor(color));
+            return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("DisplayTitlePage");
         f.AddParam("title", "");
@@ -378,11 +387,13 @@ public class PRScript : MonoBehaviour
         f = Intrinsic.Create("SetAudioTextFont");
         f.AddParam("fontname", "");
         f.AddParam("fontsize", 20);
+        f.AddParam("fontcolor", "");
         f.code = (context, partialResult) =>
         {
             string fontname = context.GetVar("fontname").ToString();
             int fontsize = context.GetVar("fontsize").IntValue();
-            audioAndTextPlayer.SetFont(fontname, fontsize); 
+            string fontColor = context.GetVar("fontcolor").ToString();
+            audioAndTextPlayer.SetFont(fontname, fontsize, PRUtils.StringToColor(fontColor)); 
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("PlayVideo");

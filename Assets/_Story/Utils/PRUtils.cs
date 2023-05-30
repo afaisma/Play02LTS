@@ -25,6 +25,37 @@ public class PRUtils
     };
     static List<Color> pastelColorList = new List<Color>(pastelColors.Values);
     
+    // string colorString = "255,0,0"; // Bright red
+    public static Color StringToColor(string rgb)
+    {
+        try
+        {
+            // Split the string into the components
+            string[] parts = rgb.Split(',');
+
+            // If the format is not correct, return white as a default color
+            if (parts.Length != 3)
+            {
+                Debug.Log("Invalid format! The string should be in the format \"R,G,B\".");
+                return Color.white;
+            }
+
+            // Parse each part, and divide by 255 to get a value between 0 and 1
+            float r = int.Parse(parts[0]) / 255f;
+            float g = int.Parse(parts[1]) / 255f;
+            float b = int.Parse(parts[2]) / 255f;
+
+            // Create and return the color
+            return new Color(r, g, b);
+        }
+        catch (Exception e) 
+        {
+            Debug.Log("Error parsing color string: " + e.Message);
+            return Color.white;
+        }
+        
+    }
+    
     public static string RemoveFileNameFromUrl(string url)
     {
         Uri uri = new Uri(url);
@@ -171,6 +202,24 @@ public class PRUtils
         float g = color.g * factor;
         float b = color.b * factor;
         return new Color(r, g, b, color.a);
+    }
+    
+    public static void SetImageColor(Image image, int r, int g, int b, int a)
+    {
+        r = Mathf.Clamp(r, 0, 255);
+        g = Mathf.Clamp(g, 0, 255);
+        b = Mathf.Clamp(b, 0, 255);
+        a = Mathf.Clamp(a, 0, 255);
+
+        image.color = new Color(r / 255f, g / 255f, b / 255f, a / 255f);
+    }
+
+    public static void SetImageAlpha( Image image, int a)
+    {
+        a = Mathf.Clamp(a, 0, 255);
+        Color newColor = image.color;
+        newColor.a = a / 255f;
+        image.color = newColor;
     }
 }
 

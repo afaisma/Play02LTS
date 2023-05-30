@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
+using UnityEngine.UI;
 
 public class PRLibrary : MonoBehaviour
 {
@@ -18,6 +19,10 @@ public class PRLibrary : MonoBehaviour
     public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
     public string convinienceS3 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
     public string convinienceEC2 = "http://35.90.126.120:8080/api/files/download/stories/stories.csv";
+    
+    Toggle toggleFairytales;
+    Toggle toggleScience;
+    Toggle toggleSounds;
     
     private void Start()
     {
@@ -79,6 +84,44 @@ public class PRLibrary : MonoBehaviour
 
             parsedPRBooks.Add(book);
             //Debug.Log("Added book: " + book.bookName + "");
+        }
+
+        return parsedPRBooks;
+    }
+
+    private List<PRBook> ParseCSV(string csv, int filterAgeFrom, int filterAgeTo, string filterGenre)
+    {
+        List<PRBook> parsedPRBooks = new List<PRBook>();
+        StringReader reader = new StringReader(csv);
+        reader.ReadLine(); // Skip header line
+
+        string line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            string[] values = line.Split(',');
+
+            PRBook book = new PRBook
+            {
+                bookName = values[0].Trim(),
+                bookAuthor = values[1].Trim(),
+                bookImageUrl = values[2].Trim(),
+                bookUrl = values[3].Trim(),
+                ageFrom = int.Parse(values[4].Trim()),
+                ageTo = int.Parse(values[5].Trim()),
+                genre = values[6].Trim(),
+                notesForParents = values[7].Trim(),
+            };
+            book.bookFullUrl = book.bookUrl;
+            if (book.bookFullUrl.StartsWith("http") == false)
+            {
+                book.bookFullUrl = baseURL + book.bookFullUrl;
+            }
+
+            // Apply filtering here
+            if (book.ageFrom >= filterAgeFrom && book.ageTo <= filterAgeTo && book.genre == filterGenre)
+            {
+                parsedPRBooks.Add(book);
+            }
         }
 
         return parsedPRBooks;
