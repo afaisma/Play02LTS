@@ -343,18 +343,6 @@ public class PRScript : MonoBehaviour
             audioPlayer.PlayAudio(audioname, fBegin, fEnd);
             return new Intrinsic.Result(ValNumber.one);
         };
-        f = Intrinsic.Create("PlayAudio");
-        f.AddParam("audioname", "");
-        f.AddParam("begin", 0);
-        f.AddParam("end", 0);
-        f.code = (context, partialResult) =>
-        {
-            string audioname = context.GetVar("audioname").ToString();
-            float fBegin = context.GetVar("begin").FloatValue();
-            float fEnd = context.GetVar("end").FloatValue();
-            audioPlayer.PlayAudio(audioname, fBegin, fEnd);
-            return new Intrinsic.Result(ValNumber.one);
-        };
         f = Intrinsic.Create("PlayAudioText");
         f.AddParam("audioname", "");
         f.AddParam("timings", "");
