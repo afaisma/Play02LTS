@@ -61,6 +61,7 @@ public class PRLibrary : MonoBehaviour
         reader.ReadLine(); // Skip header line
 
         string line;
+        int counter = 0;
         while ((line = reader.ReadLine()) != null)
         {
             string[] values = line.Split(',');
@@ -75,6 +76,7 @@ public class PRLibrary : MonoBehaviour
                 ageTo = int.Parse(values[5].Trim()),
                 genre = values[6].Trim(),
                 notesForParents = values[7].Trim(),
+                number = counter++
             };
             book.bookFullUrl = book.bookUrl;
             if (book.bookFullUrl.StartsWith("http") == false)
@@ -167,4 +169,5 @@ public class PRBook
     public string genre;
     public string notesForParents;
     public string bookFullUrl;
+    public int number;
 }

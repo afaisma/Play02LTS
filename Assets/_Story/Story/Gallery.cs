@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using QFSW.QC;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -121,6 +122,21 @@ public class Gallery : MonoBehaviour
         addGalleryItem(imageUrl, GalleryItemType.Image);
         //SetupUI();
         //DisplayCurrentItem();
+    }
+
+    [Command]
+    public void SetNextPrevImages(string imageUrl)
+    {
+        SetButtonImage(btnPrevious, imageUrl);
+        SetButtonImage(btnNext, imageUrl);
+    }
+    
+    public void SetButtonImage(Button buttonObj, string imageUrl)
+    {
+        // Download and set the button's image
+        Image buttonImage = buttonObj.GetComponent<Image>();
+        if (imageUrl != "")
+            StartCoroutine(PRUtils.DownloadImage(imageUrl, buttonImage));
     }
 
 

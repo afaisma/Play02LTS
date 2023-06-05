@@ -27,7 +27,7 @@ public class DraggableText : TextMeshProUGUI, IBeginDragHandler, IDragHandler, I
     Vector3 offset;
 
     public static DraggableText Create(string id, Canvas canvas, float x, float y, float width, float height, string text, bool bDraggable)
-    {
+    {       
         // Create new GameObject and attach DraggableText and a Rect Transform component
         GameObject go = new GameObject(id);
         go.transform.SetParent(canvas.transform);
@@ -53,6 +53,11 @@ public class DraggableText : TextMeshProUGUI, IBeginDragHandler, IDragHandler, I
     {
         this.font = fontAsset;
     }
+    
+    public void SetFontSize(int fontSize)
+    {
+        this.fontSize = fontSize;
+    }   
 
     public void SetColor(float r, float g, float b, float a)
     {

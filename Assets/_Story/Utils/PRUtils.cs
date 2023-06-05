@@ -12,7 +12,7 @@ public class PRUtils
     private static  OrderedDictionary cacheImages = new OrderedDictionary();
 
     public static float alpha = 0.35f;
-    static Dictionary<string, Color> pastelColors = new Dictionary<string, Color>
+    static public Dictionary<string, Color> pastelColors = new Dictionary<string, Color>
     {
         {"Pastel Pink", new Color(1, 0.7137f, 0.7569f, alpha)},
         {"Pastel Blue", new Color(0.6824f, 0.7765f, 0.8118f, alpha)},
@@ -54,6 +54,25 @@ public class PRUtils
             return Color.white;
         }
         
+    }
+    
+    public static Color GetNthPastelColor(int nColor)
+    {
+        // Convert the Dictionary to a List.
+        List<Color> colorList = new List<Color>(pastelColors.Values);
+        
+        int n = nColor % colorList.Count;
+
+        // Check if n is within the bounds of the list.
+        if(n >= 0 && n < colorList.Count)
+        {
+            // Return the nth color.
+            return colorList[n];
+        }
+        else
+        {
+            throw new IndexOutOfRangeException("Index is out of range of the colors dictionary");
+        }
     }
     
     public static string RemoveFileNameFromUrl(string url)
@@ -221,6 +240,7 @@ public class PRUtils
         newColor.a = a / 255f;
         image.color = newColor;
     }
+
 }
 
 
