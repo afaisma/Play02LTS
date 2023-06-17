@@ -51,7 +51,6 @@ public class PRScript : MonoBehaviour
     public GameObject titlePanel;
     public TitlePage titlePage;
     public int nCurrentStep = 0;
-
     private Interpreter _interpreter;
     private List<Scriptlet> _scriptlets;
     private Settings _settings;
@@ -59,6 +58,7 @@ public class PRScript : MonoBehaviour
     private List<ButtonStruct> buttonStructs = new List<ButtonStruct>();
 
     public string baseURL = "";
+    public ButtonController buttonController;
     
     private void parse(string script)
     {
@@ -473,6 +473,7 @@ public class PRScript : MonoBehaviour
 
     public void PrevStep()
     {
+        buttonController.DisableButtonsForTime(2f);
         bool bStepChanged = SetCurrentStep(nCurrentStep - 1);
         if (!bStepChanged)
             return;
@@ -484,6 +485,7 @@ public class PRScript : MonoBehaviour
     
     public void NextStep()
     {
+        buttonController.DisableButtonsForTime(2f);
         bool bStepChanged = SetCurrentStep(nCurrentStep + 1);
         if (!bStepChanged)
             return;
@@ -500,6 +502,7 @@ public class PRScript : MonoBehaviour
     
     public void ReplayCurrenStep()
     {
+        buttonController.DisableButtonsForTime(2f);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
     }

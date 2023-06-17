@@ -10,7 +10,9 @@ public class Globals : MonoBehaviour
 {
     public static string g_scriptName;
     public static string g_Rate = "10";
+    public static int g_bSetReadingSpeedByBooksAgeGroup;
     public Slider sliderRate;
+    public Toggle toggleSetReadingSpeedByBooksAgeGroup;
     public TMP_Text txtReadingSpeedDescr;
     public TMP_Text versionText;
     
@@ -21,6 +23,7 @@ public class Globals : MonoBehaviour
     void Start()
     {
         g_Rate = PlayerPrefs.GetString("g_Rate");
+        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup");
 
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
@@ -50,7 +53,7 @@ public class Globals : MonoBehaviour
                     break;
             }
         }
-
+        toggleSetReadingSpeedByBooksAgeGroup.isOn = g_bSetReadingSpeedByBooksAgeGroup == 1;
         DisplayReadingSpeedDescr();
 
     }
@@ -115,12 +118,30 @@ public class Globals : MonoBehaviour
         PlayerPrefs.SetString("g_Rate", g_Rate);
 
         DisplayReadingSpeedDescr();
-
     }
-    
+
+    public void HandleetReadingSpeedByBooksAgeGroupChange(Toggle toggle)
+    {
+        if (toggle.isOn)
+            g_bSetReadingSpeedByBooksAgeGroup = 1;
+        else
+            g_bSetReadingSpeedByBooksAgeGroup = 0;
+        PlayerPrefs.SetInt("g_bSetReadingSpeedByBooksAgeGroup", g_bSetReadingSpeedByBooksAgeGroup);
+    }
+
+
     public void Library()
     {
         SceneManager.LoadScene("_Library");
+    }
+
+    public static bool IsTablet()
+    {
+        // Calculate the screen's diagonal size in inches
+        float screenDiagonal = Mathf.Sqrt(Mathf.Pow(Screen.width / Screen.dpi, 2) + Mathf.Pow(Screen.height / Screen.dpi, 2));
+
+        // If the screen size is 6.5 inches or larger, consider it a tablet
+        return screenDiagonal >= 6.5f;
     }
 
 }

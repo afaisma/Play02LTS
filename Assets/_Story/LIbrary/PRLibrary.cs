@@ -8,6 +8,7 @@ using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
+using static UnityEngine.ScreenOrientation;
 
 public class PRLibrary : MonoBehaviour
 {
@@ -26,6 +27,14 @@ public class PRLibrary : MonoBehaviour
     
     private void Start()
     {
+        // if (Globals.IsTablet())
+        // {
+        //     Screen.orientation = LandscapeLeft;
+        // }
+        // else
+        // {
+        //     Screen.orientation = Portrait;
+        // }
         LoadBooksFromCSV(csvUrl);
     }
 

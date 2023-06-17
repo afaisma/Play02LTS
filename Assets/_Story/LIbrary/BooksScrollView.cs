@@ -21,7 +21,7 @@ public class BooksScrollView : MonoBehaviour
             item.prBook = prBook;
             string imageBookUrl = PRLibrary.baseURL + prBook.bookImageUrl;
             StartCoroutine(PRUtils.DownloadImage(imageBookUrl, item.imageBook));
-            item.SetBookNameAndAuthor(prBook);
+            item.SetBookProperties(prBook);
         }
     }
 
