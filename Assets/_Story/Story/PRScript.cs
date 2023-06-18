@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Miniscript;
 using QFSW.QC;
 using UnityEngine.SceneManagement;
@@ -53,6 +54,7 @@ public class PRScript : MonoBehaviour
     public int nCurrentStep = 0;
     private Interpreter _interpreter;
     private List<Scriptlet> _scriptlets;
+    Dictionary<string, Scriptlet> _mapEvents = new Dictionary<string, Scriptlet>();
     private Settings _settings;
     private List<PRCharacter> _characters;
     private List<ButtonStruct> buttonStructs = new List<ButtonStruct>();
@@ -68,31 +70,45 @@ public class PRScript : MonoBehaviour
         _settings = new Settings();
         _scriptlets = new List<Scriptlet>();
         _characters = new List<PRCharacter>();
+        _mapEvents = new Dictionary<string, Scriptlet>();
 
-        bool firstStepFound = false;
+        bool bSettingsSectionEnded = false;
         int index = 0;
         while (index < lines.Count)
         {
-            if (lines[index].StartsWith("Step") || lines[index].StartsWith("////////[chunk"))
+            if (lines[index].StartsWith("////////[chunk"))
             {
-                firstStepFound = true;
-                //index++;
+                bSettingsSectionEnded = true;
                 Scriptlet scriptlet = new Scriptlet();
                 scriptlet.Content = "";
-                
                 scriptlet.Content += lines[index] + "\n";
                 index++;
-                while (index < lines.Count && !lines[index].StartsWith("Step") && !lines[index].StartsWith("////////[chunk"))
+                while (index < lines.Count && !lines[index].StartsWith("////////["))
                 {
                     scriptlet.Content += lines[index] + "\n";
                     index++;
                 }
-
                 _scriptlets.Add(scriptlet);
+            }
+            else if (lines[index].StartsWith("////////[event"))
+            {
+                Match match = Regex.Match(lines[index], @"\[event (\w+)");
+                string eventName = match.Groups[1].Value;
+                bSettingsSectionEnded = true;
+                Scriptlet scriptlet = new Scriptlet();
+                scriptlet.Content = "";
+                scriptlet.Content += lines[index] + "\n";
+                index++;
+                while (index < lines.Count && !lines[index].StartsWith("////////["))
+                {
+                    scriptlet.Content += lines[index] + "\n";
+                    index++;
+                }
+                _mapEvents[eventName] = scriptlet;
             }
             else
             {
-                if (!firstStepFound)
+                if (!bSettingsSectionEnded)
                 {
                     _settings.Content += lines[index] + "\n";
                 }
@@ -145,6 +161,14 @@ public class PRScript : MonoBehaviour
         {
             string title = context.GetVar("title").ToString();
             storyStepsUI.DisplayTitle(title);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("DebugLog");
+        f.AddParam("message", "");
+        f.code = (context, partialResult) =>
+        {
+            string message = context.GetVar("message").ToString();
+            Debug.Log(message);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("Characters");
@@ -365,8 +389,8 @@ public class PRScript : MonoBehaviour
             // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
             // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
             string chunkname = NormalizeUrl(context.GetVar("chunkname").ToString());
-            string audioname = $"{chunkname}_{Globals.g_Rate}.mp3";  ;
-            string timings = $"{chunkname}_{Globals.g_Rate}_timings.json"; 
+            string audioname = $"{chunkname}_{Globals.getReadingRate()}.mp3";  ;
+            string timings = $"{chunkname}_{Globals.getReadingRate()}_timings.json"; 
             string content = context.GetVar("content").ToString();
             audioAndTextPlayer.SetActive(true);
             audioAndTextPlayer.Play(audioname, timings); 
@@ -382,6 +406,32 @@ public class PRScript : MonoBehaviour
             int fontsize = context.GetVar("fontsize").IntValue();
             string fontColor = context.GetVar("fontcolor").ToString();
             audioAndTextPlayer.SetFont(fontname, fontsize, PRUtils.StringToColor(fontColor)); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetAudioTextAlignment");
+        f.AddParam("alignment", "");
+        f.code = (context, partialResult) =>
+        {
+            string alignment = context.GetVar("alignment").ToString();
+            audioAndTextPlayer.SetTextAlignment(alignment); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetAudioTextFontSize");
+        f.AddParam("fontsize", 20);
+        f.code = (context, partialResult) =>
+        {
+            int fontsize = context.GetVar("fontsize").IntValue();
+            audioAndTextPlayer.SetFontSize(fontsize); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetAudioTextHilightColors");
+        f.AddParam("textcolor", "");
+        f.AddParam("backcolor", "");
+        f.code = (context, partialResult) =>
+        {
+            string textcolor = context.GetVar("textcolor").ToString();
+            string backcolor = context.GetVar("backcolor").ToString();
+            audioAndTextPlayer.SetAudioTextHilightColors(textcolor, backcolor); 
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("PlayVideo");
@@ -406,6 +456,8 @@ public class PRScript : MonoBehaviour
         SetupInterpreter();
         _interpreter.Reset(script);
         _interpreter.Compile();
+  //      _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep)); 
+  //      _interpreter.SetGlobalValue("stepsCount", new ValNumber(this._scriptlets.Count)); 
         Debug.Log("PRScript::RunScript " + script);
         _interpreter.RunUntilDone(10);
     }

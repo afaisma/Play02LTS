@@ -25,8 +25,24 @@ public class PRUtils
     };
     static List<Color> pastelColorList = new List<Color>(pastelColors.Values);
     
+    public static Color StringToColor(string rgba)
+    {
+        if (rgba.Contains(","))
+            return StringToColor1(rgba);
+        Color color;
+        // Add hashtag for HTML-style color
+        string htmlColor = "#" + rgba;
+
+        if (!ColorUtility.TryParseHtmlString(htmlColor, out color))
+        {
+            Debug.Log("Invalid color string: " + rgba);
+        }
+
+        return color;
+    }
+    
     // string colorString = "255,0,0"; // Bright red
-    public static Color StringToColor(string rgb)
+    public static Color StringToColor1(string rgb)
     {
         try
         {
@@ -240,7 +256,19 @@ public class PRUtils
         newColor.a = a / 255f;
         image.color = newColor;
     }
+    public static string UrlUp(string url, int nSteps)
+    {
+        for (int i = 0; i < nSteps; i++)
+        {
+            int lastSlashPos = url.LastIndexOf('/');
+            // If there are no more slashes, we can't go up any further
+            if (lastSlashPos == -1)
+                return "";
+            url = url.Substring(0, lastSlashPos);
+        }
 
+        return url;
+    }
 }
 
 

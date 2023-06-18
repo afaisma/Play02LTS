@@ -139,7 +139,11 @@ public class StoryStepsUI : MonoBehaviour
     public void DisplaybackgoundImage(string imageUrl)
     {
         CleanupBackgoundImage();
-        StartCoroutine(PRUtils.DownloadImage(prScript.baseURL + imageUrl, imgBackgound.GetComponent<Image>(), false));
+        string imageFullPath = prScript.baseURL + imageUrl;
+        if (imageUrl.IndexOf('/') == -1)
+            imageFullPath = PRUtils.UrlUp(prScript.baseURL, 2) + "/defaultImages/" + imageUrl;
+        
+        StartCoroutine(PRUtils.DownloadImage(imageFullPath, imgBackgound.GetComponent<Image>(), false));
         imgBackgound.gameObject.SetActive(true);
     }
 

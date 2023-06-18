@@ -24,7 +24,7 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
     {
         txtBookName.text = prBook.bookName;
         txtBookAuthor.text = prBook.bookAuthor;
-        txtBookAgeGroup.text = ageGroupFromPRBook(prBook);
+        txtBookAgeGroup.text = Globals.ageGroupLabelFromPRBook(prBook);
         imageBaclground.color = PRUtils.GetNthPastelColor(prBook.number);//PRUtils.textToColor(prBook.bookName);
         Color opppositeColor = PRUtils.GetOppositeColor(imageBaclground.color);
         txtBookName.color =  PRUtils.DarkenColorByPercentage(opppositeColor, 0.4f);
@@ -34,6 +34,7 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
     public void OnPointerClick(PointerEventData eventData)
     {
         Globals.g_scriptName = prBook.bookFullUrl;
+        Globals.g_prbook = prBook;
         if (Globals.IsTablet())
         {
             SceneManager.LoadScene("_StoryTablet");
@@ -44,26 +45,5 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
         }        
     }
 
-    string ageGroupFromPRBook(PRBook prBook)
-    {
-        // Book level - add book level 2-3 YOA, 3-5YOA, 4-7YOA, 5-10YOA
-        string ageGroup = "Any Age";
-        if (prBook.ageFrom == 2)
-        {
-            ageGroup = "2-3 YOA";
-        }
-        else if (prBook.ageFrom == 3)
-        {
-            ageGroup = "3-5 YOA";
-        }
-        else if (prBook.ageFrom == 4)
-        {
-            ageGroup = "4-7 YOA";
-        }
-        else if (prBook.ageFrom == 5)
-        {
-            ageGroup = "5-10 YOA";
-        }
-        return ageGroup;
-    }
+
 }

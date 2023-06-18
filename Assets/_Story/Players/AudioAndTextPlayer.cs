@@ -22,6 +22,9 @@ public class AudioAndTextPlayer : MonoBehaviour
     [SerializeField] private TMP_Text uiForeground;
     [SerializeField] private TMP_Text uiBackground;
     
+    public string hilightTextColor = "FF55FF";
+    public string hilightBackColor = "00FF0033";
+    
     public static int maxCacheSize = 30;
     private static  OrderedDictionary cacheAcudioAndTimingsStructs = new OrderedDictionary();
 
@@ -68,6 +71,33 @@ public class AudioAndTextPlayer : MonoBehaviour
         {
             uiForeground.color = color;
             uiBackground.color = color;
+        }
+    }
+
+    public void SetFontSize( int size)
+    {
+        if (size > 0)
+        {
+            uiForeground.fontSize = size;
+            uiBackground.fontSize = size;
+        }
+    }
+    public void SetTextAlignment(string alignment)
+    {
+        if (alignment.ToLower() == "center")
+        {
+            uiForeground.alignment = TextAlignmentOptions.Center;
+            uiBackground.alignment = TextAlignmentOptions.Center;
+        }
+        else if (alignment.ToLower() == "right")
+        {
+            uiForeground.alignment = TextAlignmentOptions.Right;
+            uiBackground.alignment = TextAlignmentOptions.Right;
+        }
+        else
+        {
+            uiForeground.alignment = TextAlignmentOptions.Left;
+            uiBackground.alignment = TextAlignmentOptions.Left;
         }
     }
 
@@ -201,8 +231,8 @@ public class AudioAndTextPlayer : MonoBehaviour
         {
             if (bHilight && i == currentWordIndex - 1)
             {
-                newForegroundText += "<color=#FF55FF>" + wordTimings[i].Word + "</color>";
-                newBsckgroundText += "<mark=#00FF0033>" + wordTimings[i].Word + "</mark>";
+                newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
+                newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
             }
             else
             {
@@ -220,6 +250,12 @@ public class AudioAndTextPlayer : MonoBehaviour
         uiForeground.text = newForegroundText.TrimEnd();
         uiBackground.text = newBsckgroundText.TrimEnd();
         //Debug.Log(newText);
+    }
+
+    public void SetAudioTextHilightColors(string textColor, string backColor)
+    {
+        hilightTextColor = textColor;
+        hilightBackColor = backColor;
     }
 }
 

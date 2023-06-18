@@ -9,15 +9,15 @@ using UnityEngine.Serialization;
 public class Globals : MonoBehaviour
 {
     public static string g_scriptName;
-    public static string g_Rate = "10";
     public static int g_bSetReadingSpeedByBooksAgeGroup;
     public Slider sliderRate;
     public Toggle toggleSetReadingSpeedByBooksAgeGroup;
     public TMP_Text txtReadingSpeedDescr;
     public TMP_Text versionText;
-    
-    
     Dictionary<string, string> mapImages = new Dictionary<string, string>();
+    public static PRBook g_prbook;
+
+    static string g_Rate = "10";
 
 
     void Start()
@@ -144,4 +144,58 @@ public class Globals : MonoBehaviour
         return screenDiagonal >= 6.5f;
     }
 
+    public static string ageGroupLabelFromPRBook(PRBook prBook)
+    {
+        // Book level - add book level 2-3 YOA, 3-5YOA, 4-7YOA, 5-10YOA
+        string ageGroup = "Any Age";
+        if (prBook.ageFrom == 2)
+        {
+            ageGroup = "2-3 YOA";
+        }
+        else if (prBook.ageFrom == 3)
+        {
+            ageGroup = "3-5 YOA";
+        }
+        else if (prBook.ageFrom == 4)
+        {
+            ageGroup = "4-7 YOA";
+        }
+        else if (prBook.ageFrom == 5)
+        {
+            ageGroup = "5-10 YOA";
+        }
+        return ageGroup;
+    }
+    
+    public static int defaultAudioRateFromPRBook(PRBook prBook)
+    {
+        // Book level - add book level 2-3 YOA, 3-5YOA, 4-7YOA, 5-10YOA
+        int rate = -30;
+        if (prBook.ageFrom == 2)
+        {
+            rate = -20;
+        }
+        else if (prBook.ageFrom == 3)
+        {
+            rate = -10;
+        }
+        else if (prBook.ageFrom == 4)
+        {
+            rate = 0;
+        }
+        else if (prBook.ageFrom == 5)
+        {
+            rate = 10;
+        }
+
+        return rate;
+    }
+
+    public static string getReadingRate()
+    {
+        if (g_bSetReadingSpeedByBooksAgeGroup == 1)
+            return "" + defaultAudioRateFromPRBook(g_prbook);
+        else
+            return g_Rate;
+    }
 }
