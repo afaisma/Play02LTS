@@ -37,7 +37,8 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
         Globals.g_prbook = prBook;
         if (Globals.IsTablet())
         {
-            SceneManager.LoadScene("_StoryTablet");
+            //SceneManager.LoadScene("_StoryTablet");
+            SceneManager.LoadScene("_Story");
         }
         else
         {

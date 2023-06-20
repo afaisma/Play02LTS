@@ -15,14 +15,14 @@ public class ButtonController : MonoBehaviour
         {
             button.interactable = false;
         }
-        Debug.Log("DisableButtons");
+        //Debug.Log("DisableButtons");
     }
 
     // Method to disable buttons for a certain time
     public void DisableButtonsForTime(float timeInSec)
     {
         StartCoroutine(DisableButtonsCoroutine(timeInSec));
-        Debug.Log("DisableButtonsForTime " + timeInSec);
+        //Debug.Log("DisableButtonsForTime " + timeInSec);
     }
 
     // Coroutine to disable buttons and then enable them after a delay
@@ -40,6 +40,6 @@ public class ButtonController : MonoBehaviour
         {
             button.interactable = true;
         }
-        Debug.Log("EnableButtons");
+        //Debug.Log("EnableButtons");
     }
 }

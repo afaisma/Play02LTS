@@ -5,11 +5,35 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 
+public class Preferences
+{
+    private static Preferences instance;
+    public string g_Rate = "10";
+    public int g_bSetReadingSpeedByBooksAgeGroup;
+    
+    // Private constructor to prevent instantiation from outside the class
+    private Preferences()
+    {
+        g_Rate = PlayerPrefs.GetString("g_Rate");
+        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup");
+    }
+
+    // Public static method to get the instance of the singleton class
+    public static Preferences GetInstance()
+    {
+        if (instance == null)
+        {
+            instance = new Preferences();
+        }
+        
+        return instance;
+    }
+}
+
 
 public class Globals : MonoBehaviour
 {
     public static string g_scriptName;
-    public static int g_bSetReadingSpeedByBooksAgeGroup;
     public Slider sliderRate;
     public Toggle toggleSetReadingSpeedByBooksAgeGroup;
     public TMP_Text txtReadingSpeedDescr;
@@ -17,13 +41,11 @@ public class Globals : MonoBehaviour
     Dictionary<string, string> mapImages = new Dictionary<string, string>();
     public static PRBook g_prbook;
 
-    static string g_Rate = "10";
 
+    
 
     void Start()
     {
-        g_Rate = PlayerPrefs.GetString("g_Rate");
-        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup");
 
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
@@ -34,7 +56,7 @@ public class Globals : MonoBehaviour
 
         if (sliderRate != null)
         {
-            switch (g_Rate)
+            switch (Preferences.GetInstance().g_Rate)
             {
                 case "-30":
                     sliderRate.value = 0;
@@ -53,7 +75,7 @@ public class Globals : MonoBehaviour
                     break;
             }
         }
-        toggleSetReadingSpeedByBooksAgeGroup.isOn = g_bSetReadingSpeedByBooksAgeGroup == 1;
+        toggleSetReadingSpeedByBooksAgeGroup.isOn = Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1;
         DisplayReadingSpeedDescr();
 
     }
@@ -70,7 +92,7 @@ public class Globals : MonoBehaviour
         if (txtReadingSpeedDescr != null)
         {
             string descr = "";
-            switch (g_Rate)
+            switch (Preferences.GetInstance().g_Rate)
             {
                 case "-30":
                     descr = "Beginner";
@@ -97,25 +119,25 @@ public class Globals : MonoBehaviour
         switch (slider.value)
         {
             case 0:
-                g_Rate = "-30";
+                Preferences.GetInstance().g_Rate = "-30";
                 break;
             case 1:
-                g_Rate = "-20";
+                Preferences.GetInstance().g_Rate = "-20";
                 break;
             case 2:
-                g_Rate = "-10";
+                Preferences.GetInstance().g_Rate = "-10";
                 break;
             case 3:
-                g_Rate = "0";
+                Preferences.GetInstance().g_Rate = "0";
                 break;
             case 4:
-                g_Rate = "10";
+                Preferences.GetInstance().g_Rate = "10";
                 break;
             default:
-                g_Rate = "0";
+                Preferences.GetInstance().g_Rate = "0";
                 break;
         }
-        PlayerPrefs.SetString("g_Rate", g_Rate);
+        PlayerPrefs.SetString("g_Rate", Preferences.GetInstance().g_Rate);
 
         DisplayReadingSpeedDescr();
     }
@@ -123,10 +145,10 @@ public class Globals : MonoBehaviour
     public void HandleetReadingSpeedByBooksAgeGroupChange(Toggle toggle)
     {
         if (toggle.isOn)
-            g_bSetReadingSpeedByBooksAgeGroup = 1;
+            Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 1;
         else
-            g_bSetReadingSpeedByBooksAgeGroup = 0;
-        PlayerPrefs.SetInt("g_bSetReadingSpeedByBooksAgeGroup", g_bSetReadingSpeedByBooksAgeGroup);
+            Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 0;
+        PlayerPrefs.SetInt("g_bSetReadingSpeedByBooksAgeGroup", Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup);
     }
 
 
@@ -193,9 +215,9 @@ public class Globals : MonoBehaviour
 
     public static string getReadingRate()
     {
-        if (g_bSetReadingSpeedByBooksAgeGroup == 1)
+        if (Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1)
             return "" + defaultAudioRateFromPRBook(g_prbook);
         else
-            return g_Rate;
+            return Preferences.GetInstance().g_Rate;
     }
 }

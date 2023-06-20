@@ -37,7 +37,12 @@ public class AudioAndTextPlayer : MonoBehaviour
         wordTimings = new List<WordTiming>();
         currentWordIndex = 0;
     }
-
+    
+    private void OnDestroy()
+    {
+        StopAllCoroutines();
+    }
+    
     public void Play(string audioURL, string jsonTimingsURL)
     {
         currentWordIndex = 0;
@@ -49,7 +54,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     
     public void SetActive(bool bActive)
     {
-        Debug.Log("AudioAndTextPlayer::SetActive " + bActive);
+        //Debug.Log("AudioAndTextPlayer::SetActive " + bActive);
         uiForeground.gameObject.SetActive(bActive);
         uiBackground.gameObject.SetActive(bActive);
     }
@@ -89,6 +94,16 @@ public class AudioAndTextPlayer : MonoBehaviour
             uiForeground.alignment = TextAlignmentOptions.Center;
             uiBackground.alignment = TextAlignmentOptions.Center;
         }
+        else if (alignment.ToLower() == "top")
+        {
+            uiForeground.alignment = TextAlignmentOptions.Top;
+            uiBackground.alignment = TextAlignmentOptions.Top;
+        }
+        else if (alignment.ToLower() == "topleft")
+        {
+            uiForeground.alignment = TextAlignmentOptions.TopLeft;
+            uiBackground.alignment = TextAlignmentOptions.TopLeft;
+        }
         else if (alignment.ToLower() == "right")
         {
             uiForeground.alignment = TextAlignmentOptions.Right;
@@ -101,6 +116,18 @@ public class AudioAndTextPlayer : MonoBehaviour
         }
     }
 
+    public void EnableAutoSize(int enable, int fontSizeMin, int fontSizeMax)
+    {
+        bool bEnable = enable != 0;
+        uiForeground.enableAutoSizing = bEnable;
+        uiForeground.fontSizeMin = fontSizeMin;
+        uiForeground.fontSizeMax = fontSizeMax;
+        
+        uiBackground.enableAutoSizing = bEnable;
+        uiBackground.fontSizeMin = fontSizeMin;
+        uiBackground.fontSizeMax = fontSizeMax;
+    }
+    
     private IEnumerator LoadAudioAndTimings(string audioURL, string jsonTimingsURL)
     {
         JSONNode timings = null;
@@ -230,6 +257,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         for (int i = 0; i < wordTimings.Count; i++)
         {
             if (bHilight && i == currentWordIndex - 1)
+            //if (bHilight && i == currentWordIndex)
             {
                 newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
                 newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
@@ -240,11 +268,11 @@ public class AudioAndTextPlayer : MonoBehaviour
                 newBsckgroundText += wordTimings[i].Word;
             }
 
-            if (i < wordTimings.Count - 1 && !IsWordPunctuation(i + 1))
-            {
+            //if (i < wordTimings.Count - 1 && !IsWordPunctuation(i + 1))
+            //{
                 //newForegroundText += " ";
                 //newBsckgroundText += " ";
-            }
+            //}
         }
 
         uiForeground.text = newForegroundText.TrimEnd();

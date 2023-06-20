@@ -34,6 +34,7 @@ public class ButtonStruct
 public class PRScript : MonoBehaviour
 {
     public string scriptURL;
+    public string convCounting = "http://localhost:8080/api/files/download/stories/Counting/Counting_chunks_script.txt";
     public string convRedRidingHoodLocal = "http://localhost:8080/api/files/download/stories/RedRidingHood/RedRidingHood_chunks_script.txt";
     public string convGoodPeopleLocal = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
     public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
@@ -64,7 +65,7 @@ public class PRScript : MonoBehaviour
     
     private void parse(string script)
     {
-        Debug.Log("PRScript::parse: " + script);
+        //Debug.Log("PRScript::parse: " + script);
         List<string> lines = PRUtils.SplitStringIntoLines(script);
 
         _settings = new Settings();
@@ -153,7 +154,7 @@ public class PRScript : MonoBehaviour
 
     void SetupInterpreter()
     {
-        Debug.Log("PRScript::SetupInterpreter");
+        //Debug.Log("PRScript::SetupInterpreter");
         _interpreter = new Interpreter();
         Intrinsic f = Intrinsic.Create("DisplayTitle");
         f.AddParam("title", "");
@@ -161,14 +162,6 @@ public class PRScript : MonoBehaviour
         {
             string title = context.GetVar("title").ToString();
             storyStepsUI.DisplayTitle(title);
-            return new Intrinsic.Result(ValNumber.one);
-        };
-        f = Intrinsic.Create("DebugLog");
-        f.AddParam("message", "");
-        f.code = (context, partialResult) =>
-        {
-            string message = context.GetVar("message").ToString();
-            Debug.Log(message);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("Characters");
@@ -229,7 +222,7 @@ public class PRScript : MonoBehaviour
         f.AddParam("label", "");
         f.code = (context, partialResult) =>
         {
-            Debug.Log("PRScript::Script GoTo");
+            //Debug.Log("PRScript::Script GoTo");
             string label = context.GetVar("label").ToString();
             if (label.ToLower() == "next")
                 NextStep();
@@ -408,6 +401,18 @@ public class PRScript : MonoBehaviour
             audioAndTextPlayer.SetFont(fontname, fontsize, PRUtils.StringToColor(fontColor)); 
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("EnableAutoSize");
+        f.AddParam("enable", 0);
+        f.AddParam("fontMin", 20);
+        f.AddParam("fontMax", 25);
+        f.code = (context, partialResult) =>
+        {
+            int enable = context.GetVar("enable").IntValue();
+            int fontMin = context.GetVar("fontMin").IntValue();
+            int fontMax = context.GetVar("fontMax").IntValue();
+            audioAndTextPlayer.EnableAutoSize(enable, fontMin, fontMax); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
         f = Intrinsic.Create("SetAudioTextAlignment");
         f.AddParam("alignment", "");
         f.code = (context, partialResult) =>
@@ -456,8 +461,8 @@ public class PRScript : MonoBehaviour
         SetupInterpreter();
         _interpreter.Reset(script);
         _interpreter.Compile();
-  //      _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep)); 
-  //      _interpreter.SetGlobalValue("stepsCount", new ValNumber(this._scriptlets.Count)); 
+        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep)); 
+        _interpreter.SetGlobalValue("nSteps", new ValNumber(this._scriptlets.Count)); 
         Debug.Log("PRScript::RunScript " + script);
         _interpreter.RunUntilDone(10);
     }
@@ -467,15 +472,22 @@ public class PRScript : MonoBehaviour
         if (index < 0 || index >= _scriptlets.Count)
             return;
         bool bStepChanged = SetCurrentStep(index);
-        if (bStepChanged) 
+        if (bStepChanged)
+        {
+            if (_mapEvents.ContainsKey("OnExecuteStep"))
+            {
+                ExecuteScriptlet(_mapEvents["OnExecuteStep"].Content);
+            }
             ExecuteScriptlet(_scriptlets[nCurrentStep].Content);
+        }
     }
 
     void ExecuteScriptlet(string scriptlet)
     {
-        Debug.Log("PRScript::ExecuteScriptlet " + scriptlet);
+        //Debug.Log("PRScript::ExecuteScriptlet " + scriptlet);
 
         RunScript(scriptlet);
+        
         // if (scriptlet == null)
         //     return;
         //

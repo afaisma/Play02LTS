@@ -49,7 +49,7 @@ public class Gallery : MonoBehaviour
     {
         if (_galleryItems.Count == 0)
             return;
-        Debug.Log("addGallerySound " + url);
+        //Debug.Log("addGallerySound " + url);
         GalleryItem galleryItem = _galleryItems[_galleryItems.Count - 1];
         galleryItem.AddSound(url);
         SetupSounds();

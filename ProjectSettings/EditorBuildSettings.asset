@@ -11,4 +11,10 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Story/Story/_Story.unity
     guid: 83f433eb6f60c40bebd64d63527f9838
+  - enabled: 1
+    path: Assets/_Story/Settings/_Settings.unity
+    guid: 8a2194c1c4a5f4971a69daa6b21f2242
+  - enabled: 1
+    path: Assets/_Story/Story/_StoryTablet.unity
+    guid: f1c11790d0b204aef97c4e79dcb69f34
   m_configObjects: {}
