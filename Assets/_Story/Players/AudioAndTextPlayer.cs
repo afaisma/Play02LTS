@@ -87,8 +87,14 @@ public class AudioAndTextPlayer : MonoBehaviour
             uiBackground.fontSize = size;
         }
     }
-    public void SetTextAlignment(string alignment)
+    public void SetTextAlignment(string alignment, bool nClearText = true)
     {
+        if (nClearText)
+        {
+            uiForeground.text = "";
+            uiBackground.text = "";
+        }
+        
         if (alignment.ToLower() == "center")
         {
             uiForeground.alignment = TextAlignmentOptions.Center;

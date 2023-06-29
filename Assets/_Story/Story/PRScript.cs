@@ -37,7 +37,7 @@ public class PRScript : MonoBehaviour
     public string convCounting = "http://localhost:8080/api/files/download/stories/Counting/Counting_chunks_script.txt";
     public string convRedRidingHoodLocal = "http://localhost:8080/api/files/download/stories/RedRidingHood/RedRidingHood_chunks_script.txt";
     public string convGoodPeopleLocal = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
-    public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt";
+    public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/TheTaleOfPeterRabbit/pg14838-images-3_script_mp3.txt";
     public string convSeaStoryEnLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
     public string convSeaStoryRuLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
     public string convHumanSoundsLocal = "http://localhost:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
@@ -305,6 +305,12 @@ public class PRScript : MonoBehaviour
             storyStepsUI.AddGalleryImage(url);
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("MaximizeGallery");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.MaximizeGallery();
+            return new Intrinsic.Result(ValNumber.one);
+        };
         f = Intrinsic.Create("AddGallerySound");
         f.AddParam("url", "");
         f.code = (context, partialResult) =>
@@ -338,7 +344,8 @@ public class PRScript : MonoBehaviour
             string title = context.GetVar("title").ToString();
             string author = context.GetVar("author").ToString();
             string link = context.GetVar("link").ToString();
-            titlePage.gameObject.SetActive(true);
+            bool bShow = title != "" || author != "" || link != "";
+            titlePage.gameObject.SetActive(bShow);
             titlePage.SetTitlePage(title, author, link);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -415,10 +422,12 @@ public class PRScript : MonoBehaviour
         };
         f = Intrinsic.Create("SetAudioTextAlignment");
         f.AddParam("alignment", "");
+        f.AddParam("clearText", 1);
         f.code = (context, partialResult) =>
         {
             string alignment = context.GetVar("alignment").ToString();
-            audioAndTextPlayer.SetTextAlignment(alignment); 
+            int clearText = context.GetVar("clearText").IntValue();
+            audioAndTextPlayer.SetTextAlignment(alignment, clearText != 0); 
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetAudioTextFontSize");

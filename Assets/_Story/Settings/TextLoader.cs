@@ -1,8 +1,10 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 
 public class TextLoader : MonoBehaviour, IPointerClickHandler
 {
@@ -59,7 +61,23 @@ public class TextLoader : MonoBehaviour, IPointerClickHandler
 
     private void HandleLinkClick(string linkID)
     {
-        // Implement your custom logic here based on the clicked linkID
-        Debug.Log("Link clicked: " + linkID);
+        if (PRLibrary.prbooks == null)
+            return;
+        
+        List<PRBook> books = PRLibrary.FilterById(linkID);
+        if (books.Count == 0)
+            return;
+        PRBook prBook = books[0];
+        Globals.g_scriptName = prBook.bookFullUrl;
+        Globals.g_prbook = prBook;
+        if (Globals.IsTablet())
+        {
+            //SceneManager.LoadScene("_StoryTablet");
+            SceneManager.LoadScene("_Story");
+        }
+        else
+        {
+            SceneManager.LoadScene("_Story");
+        }        
     }
 }

@@ -276,4 +276,8 @@ public class StoryStepsUI : MonoBehaviour
         gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Video);
     }
 
+    public void MaximizeGallery()
+    {
+        PRUtils.ResizeUIElementToParentMax(gallery.gameObject);
+    }
 }

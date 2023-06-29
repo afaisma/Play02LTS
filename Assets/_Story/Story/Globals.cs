@@ -14,8 +14,8 @@ public class Preferences
     // Private constructor to prevent instantiation from outside the class
     private Preferences()
     {
-        g_Rate = PlayerPrefs.GetString("g_Rate");
-        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup");
+        g_Rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
+        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
     }
 
     // Public static method to get the instance of the singleton class
@@ -38,7 +38,6 @@ public class Globals : MonoBehaviour
     public Toggle toggleSetReadingSpeedByBooksAgeGroup;
     public TMP_Text txtReadingSpeedDescr;
     public TMP_Text versionText;
-    Dictionary<string, string> mapImages = new Dictionary<string, string>();
     public static PRBook g_prbook;
 
 
@@ -50,10 +49,6 @@ public class Globals : MonoBehaviour
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
         
-        mapImages.Add("Book1", "Assets/_Story/Scripts/Book1.cs");
-        mapImages.Add("Book2", "Assets/_Story/Scripts/Book2.cs");
-        mapImages.Add("Book3", "Assets/_Story/Scripts/Book3.cs");
-
         if (sliderRate != null)
         {
             switch (Preferences.GetInstance().g_Rate)
@@ -75,17 +70,11 @@ public class Globals : MonoBehaviour
                     break;
             }
         }
-        toggleSetReadingSpeedByBooksAgeGroup.isOn = Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1;
+        if (toggleSetReadingSpeedByBooksAgeGroup != null) 
+            toggleSetReadingSpeedByBooksAgeGroup.isOn = Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1;
         DisplayReadingSpeedDescr();
 
     }
-    /*
-     Beginner: Leisurely
-    Intermediate: Steady
-    Proficient: Quick
-    Advanced: Rapid
-    Expert: Lightning-fast
-     */
     
     public void DisplayReadingSpeedDescr()
     {
@@ -172,25 +161,28 @@ public class Globals : MonoBehaviour
         string ageGroup = "Any Age";
         if (prBook.ageFrom == 2)
         {
-            ageGroup = "2-3 YOA";
+            ageGroup = "2-3 years";
         }
         else if (prBook.ageFrom == 3)
         {
-            ageGroup = "3-5 YOA";
+            ageGroup = "3-5 years";
         }
         else if (prBook.ageFrom == 4)
         {
-            ageGroup = "4-7 YOA";
+            ageGroup = "4-7 years";
         }
         else if (prBook.ageFrom == 5)
         {
-            ageGroup = "5-10 YOA";
+            ageGroup = "5-10 years";
         }
         return ageGroup;
     }
     
     public static int defaultAudioRateFromPRBook(PRBook prBook)
     {
+        if (prBook == null)
+            return 0;
+        
         // Book level - add book level 2-3 YOA, 3-5YOA, 4-7YOA, 5-10YOA
         int rate = -30;
         if (prBook.ageFrom == 2)

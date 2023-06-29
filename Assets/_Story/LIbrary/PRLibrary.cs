@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using QFSW.QC;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
@@ -13,7 +14,7 @@ using static UnityEngine.ScreenOrientation;
 public class PRLibrary : MonoBehaviour
 {
     public string csvUrl;
-    public List<PRBook> prbooks;
+    public static List<PRBook> prbooks;
     [SerializeField] BooksScrollView booksScrollView;
     public static string baseURL;
 
@@ -35,16 +36,25 @@ public class PRLibrary : MonoBehaviour
         // {
         //     Screen.orientation = Portrait;
         // }
-        LoadBooksFromCSV(csvUrl);
+        LoadBooks();
     }
 
-    public void LoadBooksFromCSV(string url)
+    [Command()]
+    public void LoadBooks()
     {
-        baseURL = PRUtils.RemoveFileNameFromUrl(csvUrl); 
-        StartCoroutine(DownloadCSV(url, (csv) => {
-            prbooks = ParseCSV(csv);
+        baseURL = PRUtils.RemoveFileNameFromUrl(csvUrl);
+        if (prbooks == null)
+        {
+            StartCoroutine(DownloadCSV(csvUrl, (csv) =>
+            {
+                prbooks = ParseCSV(csv);
+                booksScrollView.AddBooks(prbooks);
+            }));
+        }
+        else
+        {
             booksScrollView.AddBooks(prbooks);
-        }));
+        }
     }
 
     private IEnumerator DownloadCSV(string url, Action<string> onComplete)
@@ -73,6 +83,8 @@ public class PRLibrary : MonoBehaviour
         int counter = 0;
         while ((line = reader.ReadLine()) != null)
         {
+            if (line.Trim() == "") continue;
+            
             string[] values = line.Split(',');
 
             PRBook book = new PRBook
@@ -85,6 +97,7 @@ public class PRLibrary : MonoBehaviour
                 ageTo = int.Parse(values[5].Trim()),
                 genre = values[6].Trim(),
                 notesForParents = values[7].Trim(),
+                id = values[8].Trim(),
                 number = counter++
             };
             book.bookFullUrl = book.bookUrl;
@@ -100,60 +113,27 @@ public class PRLibrary : MonoBehaviour
         return parsedPRBooks;
     }
 
-    private List<PRBook> ParseCSV(string csv, int filterAgeFrom, int filterAgeTo, string filterGenre)
-    {
-        List<PRBook> parsedPRBooks = new List<PRBook>();
-        StringReader reader = new StringReader(csv);
-        reader.ReadLine(); // Skip header line
-
-        string line;
-        while ((line = reader.ReadLine()) != null)
-        {
-            string[] values = line.Split(',');
-
-            PRBook book = new PRBook
-            {
-                bookName = values[0].Trim(),
-                bookAuthor = values[1].Trim(),
-                bookImageUrl = values[2].Trim(),
-                bookUrl = values[3].Trim(),
-                ageFrom = int.Parse(values[4].Trim()),
-                ageTo = int.Parse(values[5].Trim()),
-                genre = values[6].Trim(),
-                notesForParents = values[7].Trim(),
-            };
-            book.bookFullUrl = book.bookUrl;
-            if (book.bookFullUrl.StartsWith("http") == false)
-            {
-                book.bookFullUrl = baseURL + book.bookFullUrl;
-            }
-
-            // Apply filtering here
-            if (book.ageFrom >= filterAgeFrom && book.ageTo <= filterAgeTo && book.genre == filterGenre)
-            {
-                parsedPRBooks.Add(book);
-            }
-        }
-
-        return parsedPRBooks;
-    }
-
-    public List<PRBook> FilterByName(string name)
+    public static List<PRBook> FilterByName(string name)
     {
         return prbooks.FindAll(s => s.bookName.ToLower().Contains(name.ToLower()));
     }
 
-    public List<PRBook> FilterByAge(int age)
+    public static List<PRBook> FilterById(string id)
+    {
+        return prbooks.FindAll(s => s.id == id);
+    }
+
+    public static List<PRBook> FilterByAge(int age)
     {
         return prbooks.FindAll(s => s.ageFrom <= age && s.ageTo >= age);
     }
 
-    public List<PRBook> FilterByGenre(string genre)
+    public static List<PRBook> FilterByGenre(string genre)
     {
         return prbooks.FindAll(s => s.genre.ToLower().Equals(genre.ToLower()));
     }
 
-    public List<PRBook> FilterByNotesForParents(string notesForParents)
+    public static List<PRBook> FilterByNotesForParents(string notesForParents)
     {
         return prbooks.FindAll(s => s.notesForParents.ToLower().Contains(notesForParents.ToLower()));
     }   
@@ -163,6 +143,10 @@ public class PRLibrary : MonoBehaviour
         SceneManager.LoadScene("_Settings");
     }
 
+    public void Parents()
+    {
+        SceneManager.LoadScene("_Parents");
+    }
 
 }
 
@@ -178,5 +162,6 @@ public class PRBook
     public string genre;
     public string notesForParents;
     public string bookFullUrl;
+    public string id;
     public int number;
 }

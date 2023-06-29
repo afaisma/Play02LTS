@@ -24,7 +24,9 @@ public class PRUtils
         {"Pastel Lavender", new Color(0.9019f, 0.7451f, alpha, alpha)}
     };
     static List<Color> pastelColorList = new List<Color>(pastelColors.Values);
-    
+    static string[] unitsMap = { "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen" };
+    static string[] tensMap = { "Zero", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety" };
+
     public static Color StringToColor(string rgba)
     {
         if (rgba.Contains(","))
@@ -269,6 +271,32 @@ public class PRUtils
 
         return url;
     }
+    
+    public static void ResizeUIElementToParentMax(GameObject goToBeResized)
+    {
+        if (goToBeResized == null || goToBeResized.transform.parent == null) return;
+
+        RectTransform parentRectTransform = goToBeResized.transform.parent.GetComponent<RectTransform>();
+        RectTransform rectTransform = goToBeResized.GetComponent<RectTransform>();
+
+        rectTransform.anchorMin = new Vector2(0, 0.07f);
+        rectTransform.anchorMax = new Vector2(1, 1);
+        rectTransform.offsetMin = new Vector2(0, 0);
+        rectTransform.offsetMax = new Vector2(0, 0);
+
+        //rectTransform.anchoredPosition = new Vector2(parentRectTransform.rect.width / 2, parentRectTransform.rect.height / 2);
+        // rectTransform.sizeDelta = new Vector2(parentRectTransform.rect.width, parentRectTransform.rect.height);
+    }
+    
+    public static string Convert(int number)
+    {
+        if (number == 0) return unitsMap[0];
+        if (number < 20) return unitsMap[number];
+        if (number < 100) return tensMap[number / 10] + ((number % 10 > 0) ? " " + Convert(number % 10) : "");
+        if (number < 1000) return unitsMap[number / 100] + " Hundred" + ((number % 100 > 0) ? " and " + Convert(number % 100) : "");
+        return unitsMap[number / 1000] + " Thousand" + ((number % 1000 > 0) ? " " + Convert(number % 1000) : "");
+    }
+
 }
 
 
