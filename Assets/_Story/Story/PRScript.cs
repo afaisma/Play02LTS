@@ -681,7 +681,7 @@ public class PRScript : MonoBehaviour
             NextStep();
         }
     }
-
+//
     public void RightSwipe(SwipeableObject swipeable)
     {
         Debug.Log("LeftSwipe " + swipeable.name);
