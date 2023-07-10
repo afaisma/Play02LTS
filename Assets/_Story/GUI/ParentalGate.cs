@@ -12,15 +12,39 @@ public class ParentalGate : MonoBehaviour
     public Button cancelButton;
     public string url = "";
 
+    public string question =
+        "Please type in the number twenty five to proceed to the Amazon store to purchase the paper book or the ebook.";
+    public string answer1 = "25";
+    public string answer2 = "twenty five";
+
     private int correctAnswer;
 
     void Start()
     {
-        GenerateQuestion();
+        GenerateQuestionText();
         cancelButton.onClick.AddListener(Cancel);
     }
 
-    void GenerateQuestion()
+    void GenerateQuestionText()
+    {
+        questionText.text = question;
+    }
+
+    public void CheckAnswerText()
+    {
+        string playerAnswer = answerInputField.text;
+        if (playerAnswer.Trim() == answer1 || playerAnswer.Trim() == answer2)
+        {
+            Application.OpenURL(url);
+            parentalGatePanel.SetActive(false);
+        }
+        else
+        {
+            answerInputField.text = "";
+        }
+    }
+
+    void GenerateQuestionCounting()
     {
         int num1 = Random.Range(1, 10);
         int num2 = Random.Range(1, 10);
@@ -29,8 +53,8 @@ public class ParentalGate : MonoBehaviour
 
         questionText.text = $"What is {num1} * {num2}?";
     }
-
-    public void CheckAnswer()
+    
+    public void CheckAnswerCounting()
     {
         int playerAnswer = int.Parse(answerInputField.text);
 
@@ -42,7 +66,7 @@ public class ParentalGate : MonoBehaviour
         else
         {
             answerInputField.text = "";
-            GenerateQuestion();
+            GenerateQuestionCounting();
         }
     }
 

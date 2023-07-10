@@ -602,7 +602,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 5121909027277107018}
         m_TargetAssemblyTypeName: ParentalGate, Assembly-CSharp
-        m_MethodName: CheckAnswer
+        m_MethodName: CheckAnswerCounting
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

@@ -296,6 +296,11 @@ public class PRUtils
         if (number < 1000) return unitsMap[number / 100] + " Hundred" + ((number % 100 > 0) ? " and " + Convert(number % 100) : "");
         return unitsMap[number / 1000] + " Thousand" + ((number % 1000 > 0) ? " " + Convert(number % 1000) : "");
     }
+    
+    public static bool AlmostEqual(float num1, float num2, float delta)
+    {
+        return Math.Abs(num1 - num2) <= delta;
+    }
 
 }
 

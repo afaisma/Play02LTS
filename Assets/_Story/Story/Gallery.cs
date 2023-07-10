@@ -10,7 +10,7 @@ public enum GalleryItemType
     Image,
     Video
 }
-class GalleryItem
+public class GalleryItem
 {
     public string url;
     public GalleryItemType type;
@@ -23,8 +23,8 @@ class GalleryItem
 public class Gallery : MonoBehaviour
 {
     public SoundBar _soundBar;
-    private List<GalleryItem> _galleryItems = new List<GalleryItem>();
-    int _currentGalleryItemIndex = 0;
+    public List<GalleryItem> _galleryItems = new List<GalleryItem>();
+    public int _currentGalleryItemIndex = 0;
     public Image imgMain;
     public Button btnPrevious;
     public Button btnNext;
@@ -138,6 +138,7 @@ public class Gallery : MonoBehaviour
         if (imageUrl != "")
             StartCoroutine(PRUtils.DownloadImage(imageUrl, buttonImage));
     }
+
 
 
 }

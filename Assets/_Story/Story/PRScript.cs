@@ -63,6 +63,17 @@ public class PRScript : MonoBehaviour
     public string baseURL = "";
     public ButtonController buttonController;
     
+        
+    string currentVoice = "";
+    string getCurrentVoicePostfix()
+    {
+        if (currentVoice == "")
+            return "";
+        
+        return "_" + currentVoice;
+    } 
+    
+    
     private void parse(string script)
     {
         //Debug.Log("PRScript::parse: " + script);
@@ -389,11 +400,19 @@ public class PRScript : MonoBehaviour
             // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
             // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
             string chunkname = NormalizeUrl(context.GetVar("chunkname").ToString());
-            string audioname = $"{chunkname}_{Globals.getReadingRate()}.mp3";  ;
-            string timings = $"{chunkname}_{Globals.getReadingRate()}_timings.json"; 
+            string audioname = $"{chunkname}_{Globals.getReadingRate()}{getCurrentVoicePostfix()}.mp3";  ;
+            string timings = $"{chunkname}_{Globals.getReadingRate()}_timings{getCurrentVoicePostfix()}.json"; 
             string content = context.GetVar("content").ToString();
             audioAndTextPlayer.SetActive(true);
             audioAndTextPlayer.Play(audioname, timings); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetCurrentVoice");
+        f.AddParam("voice", "");
+        f.code = (context, partialResult) =>
+        {
+            string voice = context.GetVar("voice").ToString();
+            currentVoice = voice;
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetAudioTextFont");
@@ -644,6 +663,41 @@ public class PRScript : MonoBehaviour
         ret = ret.Replace("https:/", "https://");
         return ret;
     }
+    
+    public void LeftSwipe(SwipeableObject swipeable)
+    {
+        Debug.Log("LeftSwipe " + swipeable.name);
+        if (swipeable.name.ToLower() == "gallery")
+        {
+            if (storyStepsUI.gallery._currentGalleryItemIndex == storyStepsUI.gallery._galleryItems.Count - 1)
+                return;
+            if (storyStepsUI.gallery._galleryItems.Count > 1)
+                storyStepsUI.gallery.DisplayNextItem();
+            else
+                NextStep();
+        }
+        else if (swipeable.name.ToLower() == "textforeground")
+        {
+            NextStep();
+        }
+    }
 
+    public void RightSwipe(SwipeableObject swipeable)
+    {
+        Debug.Log("LeftSwipe " + swipeable.name);
+        if (swipeable.name.ToLower() == "gallery") 
+        {
+            if (storyStepsUI.gallery._currentGalleryItemIndex == 0)
+                return;
+            if (storyStepsUI.gallery._galleryItems.Count > 1)
+                storyStepsUI.gallery.DisplayPreviousItem();
+            else
+                PrevStep();
+        }
+        else if (swipeable.name.ToLower() == "textforeground")
+        {
+            PrevStep();
+        }
+    }
 
 }

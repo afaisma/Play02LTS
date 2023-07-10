@@ -191,6 +191,7 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         ParseTimings(audioAndTimingsStruct.jsonNodeTimings);
         audioSource.clip = audioAndTimingsStruct.audioClip;
+        yield return new WaitForSeconds(0.5f);
         audioSource.Play();
 
         if (jsonTimingsURL != "")
@@ -224,14 +225,19 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         wordTimings.Clear();
 
+        WordTiming wordTiming = null;
         foreach (JSONNode timing in timings)
         {
-            WordTiming wordTiming = new WordTiming
+            wordTiming = new WordTiming
             {
                 Word = timing["word"].Value,
                 Time = timing["time"].AsFloat
             };
             wordTimings.Add(wordTiming);
+        }
+        if (wordTiming != null)
+        {
+            wordTiming.Word = wordTiming.Word.Trim();
         }
     }
 
@@ -252,6 +258,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         for (int i = currentWordIndex; i < wordTimings.Count; i++)
         {
             if (wordTimings[i].Time > currentAudioTime)
+            //if (PRUtils.AlmostEqual(wordTimings[i].Time, currentAudioTime, 0.1f))
             {
                 currentWordIndex = i;
                 break;
@@ -262,11 +269,12 @@ public class AudioAndTextPlayer : MonoBehaviour
         string newBsckgroundText = "";
         for (int i = 0; i < wordTimings.Count; i++)
         {
-            if (bHilight && i == currentWordIndex - 1)
-            //if (bHilight && i == currentWordIndex)
+            //if (bHilight && i == currentWordIndex - 1)
+            if (bHilight && i == currentWordIndex)
             {
                 newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
                 newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
+                //Debug.Log("Hilight: " + wordTimings[i].Word);
             }
             else
             {

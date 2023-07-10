@@ -24,12 +24,17 @@ public class UIManager : MonoBehaviour
 
     public void MoveIn()
     {
-        rectTransformFilter.DOAnchorPos(Vector2.zero, 0.25f);
+        rectTransformFilter.DOAnchorPos(Vector2.zero, 0.35f);
     }
 
     public void MoveOut()
     {
-        rectTransformFilter.DOAnchorPos(initialRectTransformFilterPosition, 0.25f);
+        Invoke("_MoveOut", 2f); 
+    }
+
+    public void _MoveOut()
+    {
+        rectTransformFilter.DOAnchorPos(initialRectTransformFilterPosition, 3.5f);
     }
 
 }

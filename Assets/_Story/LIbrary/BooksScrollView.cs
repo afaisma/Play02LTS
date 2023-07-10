@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using QFSW.QC;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
@@ -105,6 +104,7 @@ public class BooksScrollView : MonoBehaviour
     public void SetFilter(int ageFrom, int ageTo, String genre)
     {
         filter.SetFilter(ageFrom, ageTo, genre);
+        Debug.Log("Set filter: " + ageFrom + " " + ageTo + " " + genre);
         ShowBooks(filter);
     }
 }

@@ -161,19 +161,19 @@ public class Globals : MonoBehaviour
         string ageGroup = "Any Age";
         if (prBook.ageFrom == 2)
         {
-            ageGroup = "2-3 years";
+            ageGroup = "2-4 years";
         }
         else if (prBook.ageFrom == 3)
         {
-            ageGroup = "3-5 years";
+            ageGroup = "3-6 years";
         }
         else if (prBook.ageFrom == 4)
         {
-            ageGroup = "4-7 years";
+            ageGroup = "4-8 years";
         }
         else if (prBook.ageFrom == 5)
         {
-            ageGroup = "5-10 years";
+            ageGroup = "5-12 years";
         }
         return ageGroup;
     }
