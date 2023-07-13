@@ -301,6 +301,28 @@ public class PRUtils
     {
         return Math.Abs(num1 - num2) <= delta;
     }
+    
+    public static void RateUs()
+    {
+#if UNITY_IOS
+        float version = float.Parse(UnityEngine.iOS.Device.systemVersion.Split('.')[0] + "." + UnityEngine.iOS.Device.systemVersion.Split('.')[1]);
+        if(version >= 10.3f)
+        {
+            UnityEngine.iOS.Device.RequestStoreReview();
+        }
+        else
+        {
+            // For iOS versions less than 10.3
+            Application.OpenURL("itms-apps://itunes.apple.com/app/id6449234127");
+        }
+#elif UNITY_ANDROID
+        // For Google Play Store
+        Application.OpenURL("market://details?id=" + Application.identifier);
+#else
+        // For Amazon Store or other platforms
+        Application.OpenURL("amzn://apps/android?p=" + Application.identifier);
+#endif
+    }
 
 }
 

@@ -76,6 +76,9 @@ public class PRScript : MonoBehaviour
     
     private void parse(string script)
     {
+        Globals.g_openedStoriesCount = PlayerPrefs.GetInt("g_openedStoriesCount", 0);
+        PlayerPrefs.SetInt("g_openedStoriesCount", Globals.g_openedStoriesCount + 1);
+        
         //Debug.Log("PRScript::parse: " + script);
         List<string> lines = PRUtils.SplitStringIntoLines(script);
 

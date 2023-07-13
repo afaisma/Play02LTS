@@ -55,6 +55,13 @@ public class PRLibrary : MonoBehaviour
         {
             booksScrollView.AddBooks(prbooks);
         }
+        Globals.g_openedStoriesCount = PlayerPrefs.GetInt("g_openedStoriesCount", 0);
+        Globals.g_askedToBeRated  = PlayerPrefs.GetInt("g_askedToBeRated", 0);
+        if (Globals.g_openedStoriesCount > 2 && Globals.g_askedToBeRated == 0)
+        {
+            PRUtils.RateUs();
+            PlayerPrefs.SetInt("g_askedToBeRated", 1);
+        }
     }
 
     private IEnumerator DownloadCSV(string url, Action<string> onComplete)

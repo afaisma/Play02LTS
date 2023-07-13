@@ -34,14 +34,14 @@ public class Preferences
 public class Globals : MonoBehaviour
 {
     public static string g_scriptName;
+    public static int g_openedStoriesCount;
     public Slider sliderRate;
     public Toggle toggleSetReadingSpeedByBooksAgeGroup;
     public TMP_Text txtReadingSpeedDescr;
     public TMP_Text versionText;
     public static PRBook g_prbook;
+    public static int g_askedToBeRated;
 
-
-    
 
     void Start()
     {
@@ -70,8 +70,16 @@ public class Globals : MonoBehaviour
                     break;
             }
         }
-        if (toggleSetReadingSpeedByBooksAgeGroup != null) 
+
+        if (toggleSetReadingSpeedByBooksAgeGroup != null)
+        {
             toggleSetReadingSpeedByBooksAgeGroup.isOn = Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1;
+            if (toggleSetReadingSpeedByBooksAgeGroup.isOn)
+                sliderRate.interactable = false;
+            else
+                sliderRate.interactable = true;
+        }
+
         DisplayReadingSpeedDescr();
 
     }
@@ -134,9 +142,16 @@ public class Globals : MonoBehaviour
     public void HandleetReadingSpeedByBooksAgeGroupChange(Toggle toggle)
     {
         if (toggle.isOn)
+        {
             Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 1;
+            sliderRate.interactable = false;
+        }
         else
+        {
             Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 0;
+            sliderRate.interactable = true;
+        }
+
         PlayerPrefs.SetInt("g_bSetReadingSpeedByBooksAgeGroup", Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup);
     }
 
