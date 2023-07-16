@@ -4,18 +4,34 @@ using UnityEngine;
 
 public class VSprite : MonoBehaviour
 {
+    public enum DragType
+    {
+        NoDragging,  // Disable dragging
+        Free,       // Allow dragging in all directions
+        Horizontal, // Allow dragging only in horizontal direction
+        Vertical,   // Allow dragging only in vertical direction
+        Range       // Allow dragging within specified bounds
+    }
+
+    public string url;
+    public DragType dragType = DragType.Free;
+    public Vector2 minPosition;
+    public Vector2 maxPosition;
+
+    public float minHorizontalPosition = -5f;
+    public float maxHorizontalPosition = 5f;
+
+    public float minVerticalPosition = -5f;
+    public float maxVerticalPosition = 5f;
+
     private Vector2 offset;
     public bool isDragging;
     public int nhits = 0;
-    void Start()
-    {
-        
-    }
 
   private void Update()
     {
-        // If left mouse button is pressed and we're not already dragging
-        if (Input.GetMouseButtonDown(0) && !isDragging)
+        // If left mouse button is pressed, we're not already dragging and dragging is allowed
+        if (Input.GetMouseButtonDown(0) && !isDragging && dragType != DragType.NoDragging)
         {
             // Convert the mouse position to world position
             Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
@@ -28,11 +44,6 @@ public class VSprite : MonoBehaviour
             {
                 if (hit.collider != null && hit.collider.gameObject == gameObject)
                 {
-                    // If a higher sorting object has been clicked, don't proceed
-                    // if (HigherSortingObjectClicked(hits, hit.collider.gameObject.GetComponent<SpriteRenderer>()))
-                    // {
-                    //     return;
-                    // }
                     if (HigherSortingObjectClickedByZ(hits, hit.collider.gameObject))
                     {
                         return;
@@ -52,11 +63,38 @@ public class VSprite : MonoBehaviour
             if (Input.GetMouseButton(0))
             {
                 Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-                transform.position = new Vector3(mouseWorldPos.x + offset.x, mouseWorldPos.y + offset.y,
-                    transform.position.z);  
+
+                // Depending on the drag type, restrict the movement
+                Vector3 targetPosition;
+                switch (dragType)
+                {
+                    case DragType.Horizontal:
+                        targetPosition = new Vector3(
+                            Mathf.Clamp(mouseWorldPos.x + offset.x, minHorizontalPosition, maxHorizontalPosition),
+                            transform.position.y, 
+                            transform.position.z);
+                        break;
+                    case DragType.Vertical:
+                        targetPosition = new Vector3(
+                            transform.position.x,
+                            Mathf.Clamp(mouseWorldPos.y + offset.y, minVerticalPosition, maxVerticalPosition),
+                            transform.position.z);
+                        break;
+                    case DragType.Range:
+                        targetPosition = new Vector3(
+                            Mathf.Clamp(mouseWorldPos.x + offset.x, minPosition.x, maxPosition.x),
+                            Mathf.Clamp(mouseWorldPos.y + offset.y, minPosition.y, maxPosition.y),
+                            transform.position.z
+                        );
+                        break;
+                    default: // DragType.Free or DragType.NoDragging
+                        targetPosition = new Vector3(mouseWorldPos.x + offset.x, mouseWorldPos.y + offset.y, transform.position.z);
+                        break;
+                }
+                transform.position = targetPosition;
             }
-            // If left mouse button was released
-            else if (Input.GetMouseButtonUp(0))
+            // If left mouse button was released or dragging is not allowed
+            else if (Input.GetMouseButtonUp(0) || dragType == DragType.NoDragging)
             {
                 isDragging = false;
             }
@@ -74,20 +112,26 @@ public class VSprite : MonoBehaviour
       }
       return false;
   }
-    private bool HigherSortingObjectClicked(RaycastHit2D[] hits, SpriteRenderer currentSpriteRenderer)
-    {
-        nhits = hits.Length;
-        foreach (RaycastHit2D hit in hits)
-        {
-            SpriteRenderer hitSpriteRenderer = hit.collider.gameObject.GetComponent<SpriteRenderer>();
-            if (hitSpriteRenderer != null &&
-                hitSpriteRenderer.sortingLayerID >= currentSpriteRenderer.sortingLayerID &&
-                hitSpriteRenderer.sortingOrder > currentSpriteRenderer.sortingOrder)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-}
+  
+  public void SetDragType(DragType type, float minX = 0, float maxX = 0, float minY = 0, float maxY = 0)
+  {
+      dragType = type;
+
+      switch(type)
+      {
+          case DragType.Horizontal:
+              minPosition.x = minX;
+              maxPosition.x = maxX;
+              break;
+          case DragType.Vertical:
+              minPosition.y = minY;
+              maxPosition.y = maxY;
+              break;
+          case DragType.Range:
+              minPosition = new Vector2(minX, minY);
+              maxPosition = new Vector2(maxX, maxY);
+              break;
+          default: // NoDragging or Free, no action required
+              break;
+      }
+  }}
