@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public class VSprite : MonoBehaviour
 {
@@ -13,6 +14,7 @@ public class VSprite : MonoBehaviour
         Range       // Allow dragging within specified bounds
     }
 
+    public bool isReady = false;
     public string url;
     public DragType dragType = DragType.Free;
     public Vector2 minPosition;
@@ -42,9 +44,14 @@ public class VSprite : MonoBehaviour
             // Go through all objects hit by the raycast
             foreach (RaycastHit2D hit in hits)
             {
+                if (gameObject.GetComponent<Renderer>() == null)
+                    return;
+                if (gameObject.GetComponent<Renderer>().enabled == false)
+                    return;
+
                 if (hit.collider != null && hit.collider.gameObject == gameObject)
                 {
-                    if (HigherSortingObjectClickedByZ(hits, hit.collider.gameObject))
+                    if (HigherSortingObjectClickedByZ(hits, gameObject))
                     {
                         return;
                     }
@@ -105,11 +112,20 @@ public class VSprite : MonoBehaviour
       nhits = hits.Length;
       foreach (RaycastHit2D hit in hits)
       {
+          if (gameObject.GetComponent<Renderer>() == null) return true;
+          if (!gameObject.GetComponent<Renderer>().enabled) return true;
           if (hit.collider.gameObject.transform.position.z < currentGameObject.transform.position.z)
           {
               return true;
           }
       }
+
+      // Check if the mouse pointer is over a UI element.
+      if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+      {
+          return true;
+      }
+
       return false;
   }
   

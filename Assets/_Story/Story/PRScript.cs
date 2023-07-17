@@ -16,6 +16,37 @@ public class Settings
 public class Scriptlet
 {
     public string Content;
+    Dictionary<string, string> titleValues = new Dictionary<string, string>();
+
+    public Scriptlet(string titleString)
+    {
+        ParseTitleString(titleString);
+    }
+    public string GetName()
+    {
+        string name;
+        if (titleValues.TryGetValue("name", out name))
+            return name;
+        else
+            return string.Empty;
+    }
+    public void ParseTitleString(string titleString)
+    {
+        // Get the part of the string after the first right bracket ']' and trim any whitespace.
+        string keyValuePart = titleString.Split(new[] { ']' }, 2)[1].Trim();
+
+        // Split the key-value part by spaces.
+        string[] keyValuePairs = keyValuePart.Split(' ');
+
+        foreach (string pair in keyValuePairs)
+        {
+            // Split each pair by the equal sign.
+            string[] keyValue = pair.Split('=');
+
+            // Add key-value pair to dictionary.
+            titleValues[keyValue[0].Trim()] = keyValue[1].Trim();
+        }
+    }
 }
 
 public class PRCharacter
@@ -94,7 +125,7 @@ public class PRScript : MonoBehaviour
             if (lines[index].StartsWith("////////[chunk"))
             {
                 bSettingsSectionEnded = true;
-                Scriptlet scriptlet = new Scriptlet();
+                Scriptlet scriptlet = new Scriptlet(lines[index]);
                 scriptlet.Content = "";
                 scriptlet.Content += lines[index] + "\n";
                 index++;
@@ -110,7 +141,7 @@ public class PRScript : MonoBehaviour
                 Match match = Regex.Match(lines[index], @"\[event (\w+)");
                 string eventName = match.Groups[1].Value;
                 bSettingsSectionEnded = true;
-                Scriptlet scriptlet = new Scriptlet();
+                Scriptlet scriptlet = new Scriptlet(lines[index]);
                 scriptlet.Content = "";
                 scriptlet.Content += lines[index] + "\n";
                 index++;
