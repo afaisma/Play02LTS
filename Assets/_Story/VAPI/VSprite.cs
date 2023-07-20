@@ -7,11 +7,11 @@ public class VSprite : MonoBehaviour
 {
     public enum DragType
     {
-        NoDragging,  // Disable dragging
-        Free,       // Allow dragging in all directions
+        NoDragging, // Disable dragging
+        Free, // Allow dragging in all directions
         Horizontal, // Allow dragging only in horizontal direction
-        Vertical,   // Allow dragging only in vertical direction
-        Range       // Allow dragging within specified bounds
+        Vertical, // Allow dragging only in vertical direction
+        Range // Allow dragging within specified bounds
     }
 
     public bool isReady = false;
@@ -29,8 +29,16 @@ public class VSprite : MonoBehaviour
     private Vector2 offset;
     public bool isDragging;
     public int nhits = 0;
+    public static int instanceCounter = 0;
+    public int _instanceId;
 
-  private void Update()
+    private void Awake()
+    {
+        _instanceId = instanceCounter++;
+    }
+
+
+    private void Update()
     {
         // If left mouse button is pressed, we're not already dragging and dragging is allowed
         if (Input.GetMouseButtonDown(0) && !isDragging && dragType != DragType.NoDragging)
@@ -78,7 +86,7 @@ public class VSprite : MonoBehaviour
                     case DragType.Horizontal:
                         targetPosition = new Vector3(
                             Mathf.Clamp(mouseWorldPos.x + offset.x, minHorizontalPosition, maxHorizontalPosition),
-                            transform.position.y, 
+                            transform.position.y,
                             transform.position.z);
                         break;
                     case DragType.Vertical:
@@ -95,9 +103,11 @@ public class VSprite : MonoBehaviour
                         );
                         break;
                     default: // DragType.Free or DragType.NoDragging
-                        targetPosition = new Vector3(mouseWorldPos.x + offset.x, mouseWorldPos.y + offset.y, transform.position.z);
+                        targetPosition = new Vector3(mouseWorldPos.x + offset.x, mouseWorldPos.y + offset.y,
+                            transform.position.z);
                         break;
                 }
+
                 transform.position = targetPosition;
             }
             // If left mouse button was released or dragging is not allowed
@@ -107,47 +117,66 @@ public class VSprite : MonoBehaviour
             }
         }
     }
-  private bool HigherSortingObjectClickedByZ(RaycastHit2D[] hits, GameObject currentGameObject)
-  {
-      nhits = hits.Length;
-      foreach (RaycastHit2D hit in hits)
-      {
-          if (gameObject.GetComponent<Renderer>() == null) return true;
-          if (!gameObject.GetComponent<Renderer>().enabled) return true;
-          if (hit.collider.gameObject.transform.position.z < currentGameObject.transform.position.z)
-          {
-              return true;
-          }
-      }
 
-      // Check if the mouse pointer is over a UI element.
-      if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
-      {
-          return true;
-      }
+    private bool HigherSortingObjectClickedByZ(RaycastHit2D[] hits, GameObject currentGameObject)
+    {
+        nhits = hits.Length;
+        foreach (RaycastHit2D hit in hits)
+        {
+            if (gameObject.GetComponent<Renderer>() == null) return true;
+            if (!gameObject.GetComponent<Renderer>().enabled) return true;
+            if (hit.collider.gameObject.transform.position.z < currentGameObject.transform.position.z)
+            {
+                return true;
+            }
+        }
 
-      return false;
-  }
-  
-  public void SetDragType(DragType type, float minX = 0, float maxX = 0, float minY = 0, float maxY = 0)
-  {
-      dragType = type;
+        // Check if the mouse pointer is over a UI element.
+        if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+        {
+            return true;
+        }
 
-      switch(type)
-      {
-          case DragType.Horizontal:
-              minPosition.x = minX;
-              maxPosition.x = maxX;
-              break;
-          case DragType.Vertical:
-              minPosition.y = minY;
-              maxPosition.y = maxY;
-              break;
-          case DragType.Range:
-              minPosition = new Vector2(minX, minY);
-              maxPosition = new Vector2(maxX, maxY);
-              break;
-          default: // NoDragging or Free, no action required
-              break;
-      }
-  }}
+        return false;
+    }
+
+    void SetDragType(DragType type, float minX = 0, float maxX = 0, float minY = 0, float maxY = 0)
+    {
+        dragType = type;
+
+        switch (type)
+        {
+            case DragType.Horizontal:
+                minPosition.x = minX;
+                maxPosition.x = maxX;
+                break;
+            case DragType.Vertical:
+                minPosition.y = minY;
+                maxPosition.y = maxY;
+                break;
+            case DragType.Range:
+                minPosition = new Vector2(minX, minY);
+                maxPosition = new Vector2(maxX, maxY);
+                break;
+            default: // NoDragging or Free, no action required
+                break;
+        }
+    }
+
+    public void SetVSpriteDragType(string type, float minX = 0, float minY = 0, float maxX = 0, float maxY = 0)
+    {
+        VSprite.DragType dragType;
+
+        try
+        {
+            dragType = (VSprite.DragType)System.Enum.Parse(typeof(VSprite.DragType), type, true);
+        }
+        catch (System.ArgumentException)
+        {
+            Debug.LogError($"Invalid drag type: {type}");
+            return;
+        }
+
+        SetDragType(dragType, minX, maxX, minY, maxY);
+    }
+}

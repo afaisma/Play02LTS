@@ -27,21 +27,20 @@ public class VVScene : MonoBehaviour
     Dictionary<string, Scriptlet> _mapEvents = new Dictionary<string, Scriptlet>();
     public string baseURL = "";
     public string convScene = "http://localhost:8080/api/files/download/stories/VScene/VScene.txt";
-    [Multiline]
-    public string embeddedScript;
+    [Multiline] public string embeddedScript;
     readonly int _maxCacheImagesSize = 30;
     static readonly OrderedDictionary CacheImages = new OrderedDictionary();
     GameObject _goX0Y0, _goX0Y1, _goX1Y0, _goX1Y1;
     Vector2 _v2X0Y0, _v2X1Y1;
     private Interpreter _interpreter;
-    private readonly Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>();
+    public readonly Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>();
     private Dictionary<string, System.Object> _scriptVars = new Dictionary<string, System.Object>();
     readonly float _textZOffset = -0.0001f;
     readonly float _spriteZOffset = -0.0005f;
     float _lastSpriteZ = -2;
+    VAPI vapi;
 
-    public Slider slider;
-    
+
     float NextSpriteZ()
     {
         _lastSpriteZ += _spriteZOffset;
@@ -50,17 +49,18 @@ public class VVScene : MonoBehaviour
 
     public void Start()
     {
+        vapi = gameObject.GetComponent<VAPI>();
         PositionSpheresAtCorners();
         AddToGoMap("", gameObject);
         baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         StartCoroutine(PRUtils.DownloadFile(scriptURL, (content) => { parse(content); }));
     }
 
-        private void parse(string script)
+    private void parse(string script)
     {
         Globals.g_openedStoriesCount = PlayerPrefs.GetInt("g_openedStoriesCount", 0);
         PlayerPrefs.SetInt("g_openedStoriesCount", Globals.g_openedStoriesCount + 1);
-        
+
         //Debug.Log("PRScript::parse: " + script);
         List<string> lines = PRUtils.SplitStringIntoLines(script);
 
@@ -84,6 +84,7 @@ public class VVScene : MonoBehaviour
                     scriptlet.Content += lines[index] + "\n";
                     index++;
                 }
+
                 _scriptlets.Add(scriptlet);
             }
             else if (lines[index].StartsWith("////////[event"))
@@ -100,6 +101,7 @@ public class VVScene : MonoBehaviour
                     scriptlet.Content += lines[index] + "\n";
                     index++;
                 }
+
                 _mapEvents[eventName] = scriptlet;
             }
             else
@@ -135,18 +137,26 @@ public class VVScene : MonoBehaviour
         }
     }
 
-    // Remove a GameObject from the map by ID
-    public void RemoveFromGoMap(string id)
+    public void RemoveFromGoMapAndDestroy(string id)
     {
-        if (_gameObjectMap.ContainsKey(id))
+        if (!id.EndsWith("*"))
+            id = id + "*";
+        string pattern = "^" + Regex.Escape(id).Replace("\\*", ".*") + "$";
+    
+        List<string> keysToRemove = new List<string>();
+
+        foreach(var pair in _gameObjectMap)
         {
-            GameObject toBeDeleted = _gameObjectMap[id];
-            _gameObjectMap.Remove(id);
-            GameObject.Destroy(toBeDeleted); // Destroy the GameObject
+            if(Regex.IsMatch(pair.Key, pattern))
+            {
+                keysToRemove.Add(pair.Key);
+                Destroy(pair.Value); // Unity's method to destroy GameObjects
+            }
         }
-        else
+    
+        foreach(string key in keysToRemove)
         {
-            Debug.Log($"No GameObject found with ID {id}.");
+            _gameObjectMap.Remove(key);
         }
     }
 
@@ -162,7 +172,7 @@ public class VVScene : MonoBehaviour
             return null;
         }
     }
-    
+
     public void CleanUp()
     {
         foreach (var goentry in _gameObjectMap)
@@ -173,6 +183,7 @@ public class VVScene : MonoBehaviour
                 Destroy(toBeDeleted); // Destroy the GameObject
             }
         }
+
         _gameObjectMap.Clear();
         AddToGoMap("", gameObject);
     }
@@ -181,7 +192,7 @@ public class VVScene : MonoBehaviour
     void OnDestroy()
     {
         _interpreter?.Reset();
-        Debug.Log("OnDestroy PRScript");
+        Debug.Log("OnDestroy VVScene");
     }
 
     void RunScript(string sScript)
@@ -194,8 +205,11 @@ public class VVScene : MonoBehaviour
 
     public void DisplayError(string runnedScript, string message)
     {
-        AlertDialogManager.Instance.ShowAlertDialog(message + " error in script: " + runnedScript + "\n The script content:\n <color=#bb00bb>" + _interpreter.source +"</color>");
+        AlertDialogManager.Instance.ShowAlertDialog(message + " error in script: " + runnedScript +
+                                                    "\n The script content:\n <color=#bb00bb>" + _interpreter.source +
+                                                    "</color>");
     }
+
     public bool existingId(string id)
     {
         GameObject go = FindInGoMap(id);
@@ -203,15 +217,16 @@ public class VVScene : MonoBehaviour
         {
             return false;
         }
+
         return true;
     }
-    
+
     void SetupInterpreter()
     {
         _interpreter = new Interpreter();
         Intrinsic f = Intrinsic.Create("AddVSprite");
         f.AddParam("id", "");
-        f.AddParam("idParent", "");
+        f.AddParam("parentId", "");
         f.AddParam("url", "");
         f.AddParam("x0", 0f);
         f.AddParam("y0", 0f);
@@ -221,24 +236,26 @@ public class VVScene : MonoBehaviour
         f.code = (context, partialResult) =>
         {
             string id = context.GetVar("id").ToString();
-            string idParent = context.GetVar("idParent").ToString();
+            string parentId = context.GetVar("parentId").ToString();
             string url = context.GetVar("url").ToString();
             float x0 = context.GetVar("x0").FloatValue();
             float y0 = context.GetVar("y0").FloatValue();
             float x1 = context.GetVar("x1").FloatValue();
             float y1 = context.GetVar("y1").FloatValue();
             int keepAspect = context.GetVar("keepAspect").IntValue();
-            if (!existingId(idParent))
+            if (!existingId(parentId))
             {
-                DisplayError(embeddedScript, "could not find parent" + idParent);
+                DisplayError(embeddedScript, "could not find parent" + parentId);
                 return new Intrinsic.Result(ValNumber.one);
             }
+
             if (existingId(id))
             {
                 DisplayError(embeddedScript, "VSprite " + id + " already exists ");
                 return new Intrinsic.Result(ValNumber.one);
             }
-            AddVSprite(id, idParent, url, XFromGrid(x0), YFromGrid(y0), XFromGrid(x1), YFromGrid(y1), keepAspect != 0);
+
+            AddVSprite(id, parentId, url, XFromGrid(x0), YFromGrid(y0), XFromGrid(x1), YFromGrid(y1), keepAspect != 0);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("PositionSphere");
@@ -248,37 +265,38 @@ public class VVScene : MonoBehaviour
         {
             float x = context.GetVar("x").FloatValue();
             float y = context.GetVar("y").FloatValue();
-            PositionSphere(XFromGrid(x), YFromGrid(y), "Sphere_"+ x+"_"+y);
+            PositionSphere(XFromGrid(x), YFromGrid(y), "Sphere_" + x + "_" + y);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("AddText");
         f.AddParam("idText", "");
-        f.AddParam("idParent", "");
+        f.AddParam("parentId", "");
         f.AddParam("text", "");
         f.AddParam("fontsize", 20);
         f.code = (context, partialResult) =>
         {
             string idText = context.GetVar("idText").ToString();
-            string idParent = context.GetVar("idParent").ToString();
+            string parentId = context.GetVar("parentId").ToString();
             string text = context.GetVar("text").ToString();
             int fontsize = context.GetVar("fontsize").IntValue();
-            if (!existingId(idParent))
+            if (!existingId(parentId))
             {
-                DisplayError(embeddedScript, "could not find parent" + idParent);
+                DisplayError(embeddedScript, "could not find parent" + parentId);
                 return new Intrinsic.Result(ValNumber.one);
             }
+
             if (existingId(idText))
             {
                 DisplayError(embeddedScript, " id already exists " + idText);
                 return new Intrinsic.Result(ValNumber.one);
             }
 
-            AddText(idText, idParent, text, fontsize);
+            AddText(idText, parentId, text, fontsize);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("AddLight");
         f.AddParam("idLight", "");
-        f.AddParam("idParent", "");
+        f.AddParam("parentId", "");
         f.AddParam("lightType", "");
         f.AddParam("intensity", 0f);
         f.AddParam("innerRadius", 0f);
@@ -287,24 +305,26 @@ public class VVScene : MonoBehaviour
         f.code = (context, partialResult) =>
         {
             string idLight = context.GetVar("idLight").ToString();
-            string idParent = context.GetVar("idParent").ToString();
+            string parentId = context.GetVar("parentId").ToString();
             string lightType = context.GetVar("lightType").ToString();
             float intensity = context.GetVar("intensity").FloatValue();
             float innerRadius = context.GetVar("innerRadius").FloatValue();
             float outerRadius = context.GetVar("outerRadius").FloatValue();
             float fallOffStrength = context.GetVar("fallOffStrength").FloatValue();
-            if (!existingId(idParent))
+            if (!existingId(parentId))
             {
-                DisplayError(embeddedScript, "couldnot find parent" + idParent);
+                DisplayError(embeddedScript, "couldnot find parent" + parentId);
                 return new Intrinsic.Result(ValNumber.one);
             }
+
             if (existingId(idLight))
             {
                 DisplayError(embeddedScript, " id already exists " + idLight);
                 return new Intrinsic.Result(ValNumber.one);
             }
 
-            AddLight(FindInGoMap(idParent), idLight, lightType, intensity, WidthFromGrid(innerRadius), WidthFromGrid(outerRadius), fallOffStrength);
+            AddLight(FindInGoMap(parentId), idLight, lightType, intensity, WidthFromGrid(innerRadius),
+                WidthFromGrid(outerRadius), fallOffStrength);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("AddHoveringBehaviour");
@@ -325,7 +345,9 @@ public class VVScene : MonoBehaviour
                 DisplayError(embeddedScript, " Could not find id " + id);
                 return new Intrinsic.Result(ValNumber.one);
             }
-            AddHovering(FindInGoMap(id), hoverSpeed, WidthFromGrid(hoverRadius), HeightFromGrid(hoverHeight), randomFactor);
+
+            AddHovering(FindInGoMap(id), hoverSpeed, WidthFromGrid(hoverRadius), HeightFromGrid(hoverHeight),
+                randomFactor);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetVSpriteDragType");
@@ -348,7 +370,9 @@ public class VVScene : MonoBehaviour
                 DisplayError(embeddedScript, " Could not find id " + id);
                 return new Intrinsic.Result(ValNumber.one);
             }
-            SetVSpriteDragType(FindInGoMap(id), dragType, XFromGrid(minX), YFromGrid(minY), XFromGrid(maxX), YFromGrid(maxY));
+
+            SetVSpriteDragType(FindInGoMap(id), dragType, XFromGrid(minX), YFromGrid(minY), XFromGrid(maxX),
+                YFromGrid(maxY));
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("CreateVSpriteGrid");
@@ -365,6 +389,7 @@ public class VVScene : MonoBehaviour
                 DisplayError(embeddedScript, " Could not find id " + id);
                 return new Intrinsic.Result(ValNumber.one);
             }
+
             CreateVSpriteGrid(id, nx, ny);
             return new Intrinsic.Result(ValNumber.one);
         };
@@ -375,7 +400,7 @@ public class VVScene : MonoBehaviour
         {
             string id = context.GetVar("id").ToString();
             int bShow = context.GetVar("bShow").IntValue();
-            ShowGObjects(id, bShow);        
+            ShowGObjects(id, bShow);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetInt");
@@ -386,7 +411,7 @@ public class VVScene : MonoBehaviour
             string id = context.GetVar("id").ToString();
             int val = context.GetVar("val").IntValue();
             _scriptVars[id] = val;
-            _interpreter.SetGlobalValue(id, new ValNumber(val)); 
+            _interpreter.SetGlobalValue(id, new ValNumber(val));
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetStr");
@@ -397,7 +422,7 @@ public class VVScene : MonoBehaviour
             string id = context.GetVar("id").ToString();
             string val = context.GetVar("val").ToString();
             _scriptVars[name] = val;
-            _interpreter.SetGlobalValue(id, new ValString(val)); 
+            _interpreter.SetGlobalValue(id, new ValString(val));
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("RunScriptlet");
@@ -407,47 +432,14 @@ public class VVScene : MonoBehaviour
             string id = context.GetVar("id").ToString();
             if (string.IsNullOrEmpty(name))
                 return new Intrinsic.Result(ValNumber.one);
-            Scriptlet scriptlet = _scriptlets.FirstOrDefault(scriptlet => string.Equals(scriptlet.GetName(), id, StringComparison.OrdinalIgnoreCase));
+            Scriptlet scriptlet = _scriptlets.FirstOrDefault(scriptlet =>
+                string.Equals(scriptlet.GetName(), id, StringComparison.OrdinalIgnoreCase));
             if (scriptlet == null)
                 return new Intrinsic.Result(ValNumber.one);
             RunScript(scriptlet.Content);
             return new Intrinsic.Result(ValNumber.one);
         };
-        f = Intrinsic.Create("MoveObjectsForward");
-        f.code = (context, partialResult) =>
-        {
-            MoveCurveBehaviourObjectsForward();
-            return new Intrinsic.Result(ValNumber.one);
-        };
-        f = Intrinsic.Create("MoveObjectsBackward");
-        f.code = (context, partialResult) =>
-        {
-            MoveCurveBehaviourObjectsBackward();
-            return new Intrinsic.Result(ValNumber.one);
-        };
-        f = Intrinsic.Create("WaitForAllReady");
-        f.code = (context, result) =>
-        {
-            StartCoroutine(CheckAllReadyCoroutine(10f, result =>
-            {
-                if (result)
-                {
-                    Debug.Log("All VSprite components are ready.");
-                }
-                else
-                {
-                    Debug.Log("Not all VSprite components are ready.");
-                }
-            }));
-            return new Intrinsic.Result(ValNumber.one);
-        };
-        f = Intrinsic.Create("Test");
-        f.code = (context, result) =>
-        {
-            return new Intrinsic.Result(ValNumber.one);
-        };
-        
-        
+
         // Populate the existing global variables
         foreach (KeyValuePair<string, object> pair in _scriptVars)
         {
@@ -460,77 +452,23 @@ public class VVScene : MonoBehaviour
                 _interpreter.SetGlobalValue(pair.Key, new Miniscript.ValString((string)pair.Value));
             }
         }
-        
+
         ConfigOutput();
     }
 
-    private void ShowGObjects(string id, int bShow)
+    public void ShowGObjects(string id, int bShow)
     {
-        var matchingObjects = id.EndsWith("*") 
-            ? _gameObjectMap.Where(pair => pair.Key.StartsWith(id.TrimEnd('*'))).Select(pair => pair.Value).ToList()
-            : new List<GameObject> { _gameObjectMap.GetValueOrDefault(id) };
-        foreach (GameObject go in matchingObjects)
+        List<GameObject> gameObjects = VAPI.GetAllChildGameObjects(gameObject);
+        foreach (GameObject go in gameObjects)
         {
-            if (go.GetComponent<Renderer>() != null)
-            {
-                go.GetComponent<Renderer>().enabled = (bShow != 0);
-            }
+            if (VAPI.IsMatch(id, go.name))
+                if (go.GetComponent<Renderer>() != null)
+                {
+                    go.GetComponent<Renderer>().enabled = (bShow != 0);
+                }
         }
     }
 
-    private void CreateVSpriteGrid(string id, int nx, int ny)
-    {
-        GameObject goParent = FindInGoMap(id);
-        SpriteRenderer spriteRenderer = goParent.GetComponent<SpriteRenderer>();
-        float width = spriteRenderer.bounds.size.x;
-        float height = spriteRenderer.bounds.size.y;
-        float cellWidth = width / nx;
-        float cellHeight = height / ny;
-        
-        VSprite vSprite = goParent.GetComponent<VSprite>();
-        if (vSprite == null)
-        {
-            DisplayError(embeddedScript, "could not find VSprite for " + id);
-            return;
-        }
-        string url = vSprite.url;
-        Sprite originalSprite = CacheImages[url] as Sprite;
-        if (originalSprite == null)
-        {
-            DisplayError(embeddedScript, "could not find cached sprite for " + url);
-            return;
-        }
-        for (int iy = 0; iy < ny; iy++)
-        {
-            for (int ix = 0; ix < nx; ix++)
-            {
-                string cellId = id + "_" + ix + "_" + iy;
-                Sprite cellSprite = CreateSubspriteCell(originalSprite, ix, iy, nx, ny);
-                GameObject goCell = new GameObject(cellId);
-                GameObject parent = FindInGoMap(id);
-                if (parent != null)
-                    goCell.transform.parent = parent.transform;
-                else
-                    goCell.transform.parent = transform;
-                goCell.transform.Translate(cellWidth*ix + cellWidth/2- width/2, cellHeight*iy  + cellHeight/2 - height/2, NextSpriteZ());
-                SpriteRenderer spriteRendererCell = goCell.AddComponent<SpriteRenderer>();
-                spriteRendererCell.sprite = cellSprite;
-                VSprite vsprite = goCell.AddComponent<VSprite>();
-                vsprite.url = url;
-                goCell.transform.localScale = new Vector3(1, 1, 1);
-                
-                CurveBehaviour curveBehaviour = goCell.AddComponent<CurveBehaviour>();
-                curveBehaviour.speed = 10f + UnityEngine.Random.Range(-1f, 1f);;
-                var position = goCell.transform.position;
-                Vector3 waypoint1 = new Vector3(position.x, position.y, position.z);
-                Vector3 waypoint3 = new Vector3(position.x, -10, position.x + UnityEngine.Random.Range(-1f, 1f));
-                curveBehaviour.WavyMovement(waypoint1, waypoint3, 3 + (int)UnityEngine.Random.Range(-1f, 1f), UnityEngine.Random.Range(0, 2));
-                vsprite.isReady = true;
-                goCell.AddComponent<BoxCollider2D>();
-                AddToGoMap(cellId, goCell);
-            }
-        }
-    }
 
     void ConfigOutput()
     {
@@ -538,9 +476,9 @@ public class VVScene : MonoBehaviour
         _interpreter.implicitOutput = (s) => Debug.Log("<color=#66bb66>" + s + "</color>");
         _interpreter.errorOutput = (s) =>
         {
-            AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s + 
-                                                        "\n The script content:\n <color=#bb00bb>" + 
-                                                        _interpreter.source +"</color>");
+            AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s +
+                                                        "\n The script content:\n <color=#bb00bb>" +
+                                                        _interpreter.source + "</color>");
             Debug.LogWarning(s);
             Debug.Log("<color=red>" + s + "</color>");
             // ...and in case of error, we'll also stop the interpreter.
@@ -548,28 +486,30 @@ public class VVScene : MonoBehaviour
         };
     }
 
-    float XFromGrid(float xgrid)
+    public float XFromGrid(float xgrid)
     {
         float x = (_v2X1Y1.x - _v2X0Y0.x) * (xgrid / 1000) + _v2X0Y0.x;
         return x;
     }
-    
-    float YFromGrid(float ygrid)
+
+    public float YFromGrid(float ygrid)
     {
         float y = (_v2X1Y1.y - _v2X0Y0.y) * (ygrid / 1000) + _v2X0Y0.y;
         return y;
     }
-    float WidthFromGrid(float xgrid)
+
+    public float WidthFromGrid(float xgrid)
     {
-        float x = (_v2X1Y1.x - _v2X0Y0.x) * (xgrid/1000);
+        float x = (_v2X1Y1.x - _v2X0Y0.x) * (xgrid / 1000);
         return x;
     }
-    
-    float HeightFromGrid(float ygrid)
+
+    public float HeightFromGrid(float ygrid)
     {
-        float y = (_v2X1Y1.y - _v2X0Y0.y) * (ygrid/1000);
+        float y = (_v2X1Y1.y - _v2X0Y0.y) * (ygrid / 1000);
         return y;
     }
+
     public void PositionSphere(float x, float y, string goname)
     {
         GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -590,23 +530,27 @@ public class VVScene : MonoBehaviour
             Camera.main.ScreenToWorldPoint(new Vector3(screenWidth, screenHeight, Camera.main.nearClipPlane));
 
         _goX0Y0 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _goX0Y0.transform.parent = gameObject.transform;
         _goX0Y0.name = "_x0Y0";
         _goX0Y0.transform.position = new Vector3(x0Y0Corner.x, x0Y0Corner.y, 0f);
         _goX0Y0.transform.localScale = new Vector3(2f, 2f, 2f);
-        _v2X0Y0 = new Vector2(x0Y0Corner.x, x0Y0Corner.y); 
+        _v2X0Y0 = new Vector2(x0Y0Corner.x, x0Y0Corner.y);
 
         _goX0Y1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _goX0Y1.transform.parent = gameObject.transform;
         _goX0Y1.name = "_x0Y1";
         _goX0Y1.transform.position = new Vector3(x0Y0Corner.x, x0Y1Corner.y, 0f);
         _goX0Y1.transform.localScale = new Vector3(2f, 2f, 2f);
 
         _goX1Y1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _goX1Y1.transform.parent = gameObject.transform;
         _goX1Y1.name = "_x1Y1";
         _goX1Y1.transform.position = new Vector3(x1Y1Corner.x, x0Y1Corner.y, 0f);
         _goX1Y1.transform.localScale = new Vector3(2f, 2f, 2f);
         _v2X1Y1 = new Vector2(x1Y1Corner.x, x0Y1Corner.y);
-            
+
         _goX1Y0 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _goX1Y0.transform.parent = gameObject.transform;
         _goX1Y0.name = "_x1Y0";
         _goX1Y0.transform.position = new Vector3(x1Y1Corner.x, x0Y0Corner.y, 0f);
         _goX1Y0.transform.localScale = new Vector3(2f, 2f, 2f);
@@ -616,43 +560,80 @@ public class VVScene : MonoBehaviour
     {
         RunScript(embeddedScript);
     }
-    
-    void AddVSprite(string id, string idParent, string url, float x0, float y0, float x1, float y1, bool keepAspect = true, CellStructure cellStructure = null)
+
+    public static string GetFullId(string shortId, string parentId)
     {
+        if (parentId == null)
+            return shortId; 
+        if (parentId == "")
+            return shortId; 
+        
+        return parentId + "_" + shortId;
+    }
+    public GameObject AddVSprite(string shortId, string parentId, string url, float x0, float y0, float x1, float y1,
+        bool keepAspect = true, CellStructure cellStructure = null)
+    {
+        string id = GetFullId(shortId, parentId); 
         string imageFullPath = baseURL + url;
         if (url.IndexOf('/') == -1)
             imageFullPath = PRUtils.UrlUp(baseURL, 2) + "/defaultImages/" + url;
 
-        if (!existingId(idParent) || existingId(id))
-            return;
+        if (!existingId(parentId) || existingId(id))
+            return null;
         GameObject go = new GameObject(id);
-        GameObject parent = FindInGoMap(idParent);
+        GameObject parent = FindInGoMap(parentId);
         if (parent != null)
             go.transform.parent = parent.transform;
         else
             go.transform.parent = transform;
         AddToGoMap(id, go);
 
-        StartCoroutine(CoAddVSprite(go, idParent, imageFullPath, x0, y0, x1, y1, keepAspect, cellStructure));
+        StartCoroutine(CoAddVSprite(go, imageFullPath, x0, y0, x1, y1, keepAspect, cellStructure));
+        return go;
     }
 
-    public void AddText(string id, string idParent, string text, int fontSize)
+    public IEnumerator AddVSpriteCoroutine(string shortId, string parentId, string url, float x0, float y0, float x1,
+        float y1,
+        bool keepAspect = true, CellStructure cellStructure = null)
     {
-        GameObject goParent = FindInGoMap(idParent);
+        string id = GetFullId(shortId, parentId); 
+        string imageFullPath = baseURL + url;
+        if (url.IndexOf('/') == -1)
+            imageFullPath = PRUtils.UrlUp(baseURL, 2) + "/defaultImages/" + url;
+
+        if (!existingId(parentId) || existingId(id))
+            yield break;
+        GameObject go = new GameObject(id);
+        GameObject parent = FindInGoMap(parentId);
+        if (parent != null)
+            go.transform.parent = parent.transform;
+        else
+            go.transform.parent = transform;
+        AddToGoMap(id, go);
+
+        yield return StartCoroutine(
+            CoAddVSprite(go, imageFullPath, x0, y0, x1, y1, keepAspect, cellStructure));
+    }
+
+
+    public void AddText(string shortId, string parentId, string text, int fontSize)
+    {
+        string id = GetFullId(shortId, parentId); 
+        GameObject goParent = FindInGoMap(parentId);
         if (goParent == null)
             return;
 
         AddText(goParent, id, text, fontSize);
     }
-    
-    public IEnumerator CoAddVSprite(GameObject go, string idParent, string url, float x0, float y0, float x1, float y1,
+
+    public IEnumerator CoAddVSprite(GameObject go, string url, float x0, float y0, float x1, float y1,
         bool keepAspect = true, CellStructure cellStructure = null)
     {
         SpriteRenderer spriteRenderer = go.AddComponent<SpriteRenderer>();
         StartCoroutine(DownloadSprite(url, go, x0, y0, x1, y1, keepAspect, cellStructure));
         VSprite vsprite = go.AddComponent<VSprite>();
         vsprite.url = url;
-        
+
         yield return null;
     }
 
@@ -667,16 +648,18 @@ public class VVScene : MonoBehaviour
         go.AddComponent<BoxCollider2D>();
     }
 
-    IEnumerator DownloadSprite(string url, GameObject go, float x0, float y0, float x1, float y1, bool keepAspect = true, CellStructure cellStructure = null)
+    IEnumerator DownloadSprite(string url, GameObject go, float x0, float y0, float x1, float y1,
+        bool keepAspect = true, CellStructure cellStructure = null)
     {
         SpriteRenderer spriteRenderer = go.GetComponent<SpriteRenderer>();
         if (CacheImages.Contains(url))
         {
             Sprite sprite = CacheImages[url] as Sprite;
-            if (cellStructure == null)            
+            if (cellStructure == null)
                 spriteRenderer.sprite = sprite;
-            else 
-                spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX, cellStructure.nY);
+            else
+                spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX,
+                    cellStructure.nY);
             spriteRenderer.sprite = sprite;
             PostDownload(go, x0, y0, x1, y1, keepAspect);
             yield return sprite;
@@ -695,12 +678,14 @@ public class VVScene : MonoBehaviour
         {
             // CreateSubspriteCell(Sprite originalSprite, int x, int y, int nX, int nY)
             Texture2D texture = DownloadHandlerTexture.GetContent(www);
-            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100.0f);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f), 100.0f);
             AddToCacheImages(url, sprite);
-            if (cellStructure == null)            
+            if (cellStructure == null)
                 spriteRenderer.sprite = sprite;
-            else 
-                spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX, cellStructure.nY);
+            else
+                spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX,
+                    cellStructure.nY);
             PostDownload(go, x0, y0, x1, y1, keepAspect);
 
             // Yield the sprite to the caller
@@ -724,7 +709,7 @@ public class VVScene : MonoBehaviour
         Vector2 size = new Vector2(Mathf.Abs(x1Y1.x - x0Y0.x), Mathf.Abs(x1Y1.y - x0Y0.y));
 
         // Set the position of the GameObject
-        go.transform.position = new Vector3(position.x, position.y, go.transform.position.z+ NextSpriteZ());
+        go.transform.position = new Vector3(position.x, position.y, go.transform.position.z + NextSpriteZ());
 
         // Calculate the scale of the sprite based on the size
         float spriteWidth = spriteRenderer.sprite.bounds.size.x;
@@ -802,8 +787,9 @@ public class VVScene : MonoBehaviour
         // Set color to black
         tmp.color = Color.white;
     }
-    
-    public void AddLight(GameObject go, string id, string lightType, float intensity, float innerRadius, float outerRadius, float fallOffStrength)
+
+    public void AddLight(GameObject go, string id, string lightType, float intensity, float innerRadius,
+        float outerRadius, float fallOffStrength)
     {
         GameObject lightObject = new GameObject(id);
         _gameObjectMap.Add(id, lightObject);
@@ -837,15 +823,18 @@ public class VVScene : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("The GameObject does not have a SpriteRenderer component. Cannot use sprite light type.");
+                    Debug.LogWarning(
+                        "The GameObject does not have a SpriteRenderer component. Cannot use sprite light type.");
                 }
+
                 break;
             default:
-                Debug.LogWarning("Invalid light type passed. Please use either 'global', 'spot', 'freeform', or 'sprite'.");
+                Debug.LogWarning(
+                    "Invalid light type passed. Please use either 'global', 'spot', 'freeform', or 'sprite'.");
                 break;
         }
     }
-    
+
     public void AddHovering(GameObject go, float hoverSpeed, float hoverRadius, float hoverHeight, float randomFactor)
     {
         if (go.GetComponent<HoveringBehavior2D>() != null)
@@ -863,28 +852,12 @@ public class VVScene : MonoBehaviour
         hoveringBehavior.hoverHeight = hoverHeight;
         hoveringBehavior.randomFactor = randomFactor;
     }
-    
+
     void SetVSpriteDragType(GameObject go, string type, float minX = 0, float minY = 0, float maxX = 0, float maxY = 0)
     {
         VSprite vSprite = go.GetComponent<VSprite>();
-
-        if (vSprite != null)
-        {
-            VSprite.DragType dragType;
-        
-            try 
-            {
-                dragType = (VSprite.DragType)System.Enum.Parse(typeof(VSprite.DragType), type, true);
-            }
-            catch (System.ArgumentException)
-            {
-                Debug.LogError($"Invalid drag type: {type}");
-                return;
-            }
-
-            vSprite.SetDragType(dragType, minX, maxX, minY, maxY);
-        }
-        else
+        vSprite.SetVSpriteDragType(type, minX, minY, maxX, maxY);
+        if (vSprite == null)
         {
             Debug.Log("GameObject does not have a VSprite component.");
         }
@@ -899,13 +872,13 @@ public class VVScene : MonoBehaviour
 
         return new Rect(x, y, maxX - x, maxY - y);
     }
+
     Sprite CreateSubSprite(Sprite originalSprite, float x, float y, float width, float height)
     {
         Texture2D spriteTexture = originalSprite.texture;
         Rect spriteRect = new Rect(x, y, width, height);
         Vector2 pivot = new Vector2(0.5f, 0.5f); // Pivot in the center
         Sprite newSprite = Sprite.Create(spriteTexture, RoundRect(spriteRect), pivot, originalSprite.pixelsPerUnit);
-
         return newSprite;
     }
 
@@ -943,92 +916,54 @@ public class VVScene : MonoBehaviour
         return subsprites;
     }
 
-    
-    public void MoveCurveBehaviourObjectsForward()
+    public void CreateVSpriteGrid(string id, int nx, int ny)
     {
-        StartCoroutine(MoveCurveBehaviourObjectsCoroutine(true));
-    }
+        GameObject goParent = FindInGoMap(id);
+        SpriteRenderer spriteRenderer = goParent.GetComponent<SpriteRenderer>();
+        float width = spriteRenderer.bounds.size.x;
+        float height = spriteRenderer.bounds.size.y;
+        float cellWidth = width / nx;
+        float cellHeight = height / ny;
 
-    public void MoveCurveBehaviourObjectsBackward()
-    {
-        StartCoroutine(MoveCurveBehaviourObjectsCoroutine(false));
-    }
-
-    public void MoveCurveBehaviourObjectsTo()
-    {
-        float proportionOfTheWay = 0;
-        if (slider!= null) proportionOfTheWay = slider.value;
-        Debug.Log($"Moving CurveBehaviour objects to {proportionOfTheWay}");
-        CurveBehaviour[] curveBehaviours = GameObject.FindObjectsOfType<CurveBehaviour>();
-        foreach (CurveBehaviour curveBehaviour in curveBehaviours)
+        VSprite vSprite = goParent.GetComponent<VSprite>();
+        if (vSprite == null)
         {
-            curveBehaviour.MoveTo(proportionOfTheWay);
-        }
-    }
-
-    public IEnumerator MoveCurveBehaviourObjectsCoroutine(bool bForward)
-    {
-        CurveBehaviour[] curveBehaviours = GameObject.FindObjectsOfType<CurveBehaviour>();
-        foreach (CurveBehaviour curveBehaviour in curveBehaviours)
-        {
-            if (bForward)
-                curveBehaviour.MoveForward();
-            else
-                curveBehaviour.MoveBackward();
-        }
-        yield return null;
-    }        
-    
-    public IEnumerator CheckAllReadyCoroutine(float timeout, Action<bool> callback)
-    {
-        float timeElapsed = 0f;
-        
-        while (timeElapsed < timeout)
-        {
-            bool allReady = true;
-            
-            foreach (KeyValuePair<string, GameObject> kvp in _gameObjectMap)
-            {
-                VSprite vSpriteComponent = kvp.Value.GetComponent<VSprite>();
-                if (vSpriteComponent != null && !vSpriteComponent.isReady)
-                {
-                    allReady = false;
-                    break;
-                }
-            }
-
-            if (allReady)
-            {
-                callback.Invoke(true);
-                yield break;
-            }
-
-            yield return null;
-
-            timeElapsed += Time.deltaTime;
+            DisplayError(embeddedScript, "could not find VSprite for " + id);
+            return;
         }
 
-        callback.Invoke(false);
-    }
-
-    public void TestGallery()
-    {
-        AddVSprite("background", "", "Bg1.jpg", XFromGrid(0), YFromGrid(0), XFromGrid(1000), YFromGrid(1000), false);
-        StartCoroutine(CheckAllReadyCoroutine(10f, result =>
+        string url = vSprite.url;
+        Sprite originalSprite = CacheImages[url] as Sprite;
+        if (originalSprite == null)
         {
-            if (result)
-            {
-                Debug.Log("All VSprite components are ready.");
-                ShowGObjects("background", 0);
-                CreateVSpriteGrid("background", 100, 10);
-                MoveCurveBehaviourObjectsForward();
-            }
-            else
-            {
-                Debug.Log("Not all VSprite components are ready.");
-            }
-        }));
+            DisplayError(embeddedScript, "could not find cached sprite for " + url);
+            return;
+        }
 
+        for (int iy = 0; iy < ny; iy++)
+        {
+            for (int ix = 0; ix < nx; ix++)
+            {
+                //string cellId = id + "_" + ix + "_" + iy;
+                string cellId = GetFullId("_cell" + ix + "_" + iy, id); 
+                Sprite cellSprite = CreateSubspriteCell(originalSprite, ix, iy, nx, ny);
+                GameObject goCell = new GameObject(cellId);
+                GameObject parent = FindInGoMap(id);
+                if (parent != null)
+                    goCell.transform.parent = parent.transform;
+                else
+                    goCell.transform.parent = transform;
+                goCell.transform.Translate(cellWidth * ix + cellWidth / 2 - width / 2,
+                    cellHeight * iy + cellHeight / 2 - height / 2, NextSpriteZ());
+                SpriteRenderer spriteRendererCell = goCell.AddComponent<SpriteRenderer>();
+                spriteRendererCell.sprite = cellSprite;
+                VSprite vsprite = goCell.AddComponent<VSprite>();
+                vsprite.url = url;
+                goCell.transform.localScale = new Vector3(1, 1, 1);
+                vsprite.isReady = true;
+                goCell.AddComponent<BoxCollider2D>();
+                AddToGoMap(cellId, goCell);
+            }
+        }
     }
-
 }
