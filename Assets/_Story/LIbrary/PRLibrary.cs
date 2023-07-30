@@ -105,7 +105,9 @@ public class PRLibrary : MonoBehaviour
                 genre = values[6].Trim(),
                 notesForParents = values[7].Trim(),
                 id = values[8].Trim(),
-                number = counter++
+                number = counter++,
+                currentPage = Globals.Prefs_Get_Book_Page(values[3].Trim()),
+                book_done = Globals.Prefs_Get_Book_Done(values[3].Trim())
             };
             book.bookFullUrl = book.bookUrl;
             if (book.bookFullUrl.StartsWith("http") == false)
@@ -171,4 +173,17 @@ public class PRBook
     public string bookFullUrl;
     public string id;
     public int number;
+    public int book_done;
+    public int currentPage;
+
+    public void SetAndSaveCurrentPage(int nPage)
+    {
+        currentPage = nPage;
+        Globals.Prefs_Set_Book_Page(bookUrl, currentPage);
+    }
+
+    public void SetBookDone(int i)
+    {
+        Globals.Prefs_Set_Book_Done(bookUrl, i);
+    }
 }

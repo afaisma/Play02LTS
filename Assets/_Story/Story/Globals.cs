@@ -227,4 +227,34 @@ public class Globals : MonoBehaviour
         else
             return Preferences.GetInstance().g_Rate;
     }
+    
+    public static string Prefs_BookUrl_To_Page_Key(string book_url)
+    {
+        return book_url + "_" + "page";
+    }
+    
+    public static string Prefs_BookUrl_To_BookDone_Key(string book_url)
+    {
+        return book_url + "_" + "done";
+    }
+    
+    public static void Prefs_Set_Book_Page(string book_url, int page)
+    {
+        PlayerPrefs.SetInt(Prefs_BookUrl_To_Page_Key(book_url), page);
+    }    
+    public static int Prefs_Get_Book_Page(string book_url)
+    { 
+        int page = PlayerPrefs.GetInt(Prefs_BookUrl_To_Page_Key(book_url),0);
+        return page;
+    }    
+
+    public static void Prefs_Set_Book_Done(string book_url, int done)
+    {
+        PlayerPrefs.SetInt(Prefs_BookUrl_To_BookDone_Key(book_url), done);
+    }    
+    public static int Prefs_Get_Book_Done(string book_url)
+    { 
+        int done = PlayerPrefs.GetInt(Prefs_BookUrl_To_BookDone_Key(book_url),0);
+        return done;
+    }    
 }

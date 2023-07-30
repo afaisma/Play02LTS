@@ -6,7 +6,6 @@ using DG.Tweening;
 
 public class FilterContainer : MonoBehaviour
 {
-    //public List<string> filtersSelected = new List<string>();
     public BooksScrollView booksScrollView;
     public RectTransform rectTransformFilter;
     public string currentFilter = "";
@@ -33,12 +32,6 @@ public class FilterContainer : MonoBehaviour
                 currentFilter = filterItem.filter.ToLower();
                 OnFilterChanged();
             }
-            // If the toggle is turned off, remove the filter from the list of selected filters
-            //else
-            //{
-            //    currentFilter = "";
-            //    OnFilterChanged();
-            //}
         }
         
         MoveOut();

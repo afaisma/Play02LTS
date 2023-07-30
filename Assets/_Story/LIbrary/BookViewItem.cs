@@ -11,6 +11,7 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField] public Image imageBook;
     [SerializeField] public Image imageBaclground;
+    [SerializeField] public Image imageStatus;
     [SerializeField] public  TextMeshProUGUI txtBookName;
     [SerializeField] public  TextMeshProUGUI txtBookAuthor;
     [SerializeField] public  TextMeshProUGUI txtBookAgeGroup;
@@ -26,10 +27,12 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
         txtBookAuthor.text = prBook.bookAuthor;
         txtBookAgeGroup.text = Globals.ageGroupLabelFromPRBook(prBook);
         imageBaclground.color = PRUtils.GetNthPastelColor(prBook.number);//PRUtils.textToColor(prBook.bookName);
-        Color opppositeColor = PRUtils.GetOppositeColor(imageBaclground.color);
-        txtBookName.color =  PRUtils.DarkenColorByPercentage(opppositeColor, 0.4f);
+        //Color opppositeColor = PRUtils.GetOppositeColor(imageBaclground.color);
+        //txtBookName.color =  PRUtils.DarkenColorByPercentage(opppositeColor, 0.4f);
         txtBookName.color = new Color(0.4f, 0.15f, 0.15f, 1f);
-    } //
+        imageStatus.gameObject.SetActive(prBook.currentPage != 0);
+        imageStatus.color = this.prBook.book_done != 0 ? new Color(0.40f, 1f, 0.40f, 1f) : new Color(0.10f, 0.7f, 0.10f, 1f);
+    } 
 
     public void OnPointerClick(PointerEventData eventData)
     {

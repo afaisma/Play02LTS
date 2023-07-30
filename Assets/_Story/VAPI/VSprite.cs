@@ -172,7 +172,7 @@ public class VSprite : MonoBehaviour
             dragType = (VSprite.DragType)System.Enum.Parse(typeof(VSprite.DragType), type, true);
         }
         catch (System.ArgumentException)
-        {
+        {   
             Debug.LogError($"Invalid drag type: {type}");
             return;
         }

@@ -24,19 +24,6 @@ public class GameAssets : MonoBehaviour {
         }
     }
 
-
-    public SoundAudioClip[] soundAudioClipArray;
-
-    [System.Serializable]
-    public class SoundAudioClip {
-        public SoundManager.Sound sound;
-        public AudioClip audioClip;
-    }
-
-
-
-
-
     #region Default
     [HideInInspector]public Sprite codeMonkeyHeadSprite;
 

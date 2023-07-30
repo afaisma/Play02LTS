@@ -32,6 +32,8 @@ public class AudioAndTextPlayer : MonoBehaviour
     private int currentWordIndex;
     public string baseURL;
 
+    DateTime dtWasPlaying = DateTime.MinValue;
+
     private void Start()
     {
         wordTimings = new List<WordTiming>();
@@ -196,13 +198,17 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         if (jsonTimingsURL != "")
         {
+            if (audioSource.isPlaying)
+                dtWasPlaying = DateTime.Now;
+
             while (audioSource.isPlaying)
             {
-                UpdateHighlightedText(audioSource.time * 1000); // Convert to milliseconds
+                UpdateHighlightedText(audioSource.time * 1000 - 500); // Convert to milliseconds, offset playtime back a bit
                 yield return null;
             }
 
             // to reset the text to its original state
+            //if ((dtWasPlaying != DateTime.MinValue) && (DateTime.Now - dtWasPlaying > TimeSpan.FromSeconds(2)))
             UpdateHighlightedText(0, false);
             //uiText.text = ""; // Reset the text to its original state.
         }
@@ -243,9 +249,9 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     Boolean IsWordPunctuation(int i)
     {
-        if (i < 0 || i >= wordTimings.Count)
-            return false;
-        if (wordTimings[i].Word.Length == 1 && Char.IsPunctuation(wordTimings[i].Word.ToCharArray()[0]))
+        // if (i < 0 || i >= wordTimings.Count)
+        //     return false;
+        if (wordTimings[i].Word.Trim().Length == 1 && Char.IsPunctuation(wordTimings[i].Word.Trim().ToCharArray()[0]))
             return true;
         return false;
     }
@@ -265,16 +271,20 @@ public class AudioAndTextPlayer : MonoBehaviour
             }
         }
 
+        // Debug.Log("UpdateHighlightedText1: currentAudioTime = " + currentAudioTime + 
+        //           ", currentWordIndex = " + currentWordIndex + ", bHilight = " + bHilight + ", " + 
+        //           wordTimings[currentWordIndex].Word);
+
         string newForegroundText = "";
         string newBsckgroundText = "";
         for (int i = 0; i < wordTimings.Count; i++)
         {
             //if (bHilight && i == currentWordIndex - 1)
-            if (bHilight && i == currentWordIndex)
+            if (bHilight && i == currentWordIndex && !IsWordPunctuation(i))
             {
                 newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
                 newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
-                //Debug.Log("Hilight: " + wordTimings[i].Word);
+                //Debug.Log("UpdateHighlightedText2: " + wordTimings[i].Word);
             }
             else
             {

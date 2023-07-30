@@ -158,7 +158,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c288363d4dc342b9a19df720b1895fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scriptURL: http://localhost:8080/api/files/download/stories/SingingBirds/SingingBirds_chunks_script.txt
+  scriptURL: http://localhost:8080/api/files/download/stories/WeWashThings/WeWashThings_chunks_script.txt
   convCounting: http://localhost:8080/api/files/download/stories/Counting/Counting_chunks_script.txt
   convRedRidingHoodLocal: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
   convGoodPeopleLocal: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt

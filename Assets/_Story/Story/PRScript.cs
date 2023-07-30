@@ -33,7 +33,8 @@ public class Scriptlet
     public void ParseTitleString(string titleString)
     {
         // Get the part of the string after the first right bracket ']' and trim any whitespace.
-        string keyValuePart = titleString.Split(new[] { ']' }, 2)[1].Trim();
+        //string keyValuePart = titleString.Split(new[] { ']' }, 2)[1].Trim();
+        string keyValuePart = titleString.Split(new[] { ']' }, 2)[0].Trim();
 
         // Split the key-value part by spaces.
         string[] keyValuePairs = keyValuePart.Split(' ');
@@ -44,7 +45,8 @@ public class Scriptlet
             string[] keyValue = pair.Split('=');
 
             // Add key-value pair to dictionary.
-            titleValues[keyValue[0].Trim()] = keyValue[1].Trim();
+            if (keyValue.Length > 1)
+                titleValues[keyValue[0].Trim()] = keyValue[1].Trim();
         }
     }
 }
@@ -590,7 +592,13 @@ public class PRScript : MonoBehaviour
         if (index >= 0 && index < _scriptlets.Count)
         {
             nCurrentStep = index;
-            //Debug.Log($"Current step was set to " + index);
+            Globals.g_prbook.SetAndSaveCurrentPage(index);
+            if (index == _scriptlets.Count - 1)
+            {
+                Globals.g_prbook.SetBookDone(1);
+            }
+
+            Debug.Log($"Current step was set to " + index + ",scriptURL=" + scriptURL);
             return true;
         }
         Debug.Log($"Could not set step to " + index);

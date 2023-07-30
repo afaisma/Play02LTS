@@ -1,77 +1,97 @@
-﻿/* 
-    ------------------- Code Monkey -------------------
-
-    Thank you for downloading this package
-    I hope you find it useful in your projects
-    If you have any questions let me know
-    Cheers!
-
-               unitycodemonkey.com
-    --------------------------------------------------
- */
-
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using CodeMonkey.Utils;
 
-public static class SoundManager {
+public class SoundManager : MonoBehaviour {
 
-    public enum Sound {
-        PlayerMove,
-        PlayerAttack,
-        EnemyHit,
-        EnemyDie,
-        Treasure,
-        ButtonOver,
-        ButtonClick,
+    public enum SoundType {
+        Birds,
+        Animals,
+        Humans,
+        Noises,
+        Ocean,
+        ClicksAndMoves
     }
 
-    private static Dictionary<Sound, float> soundTimerDictionary;
-    private static GameObject oneShotGameObject;
-    private static AudioSource oneShotAudioSource;
+    [System.Serializable]
+    public struct SoundScheduleSettings {
+        public SoundType soundType;
+        public float minDelay;
+        public float maxDelay;
+        public float volume;
+        public bool isEnabled;
 
-    public static void Initialize() {
-        soundTimerDictionary = new Dictionary<Sound, float>();
-        soundTimerDictionary[Sound.PlayerMove] = 0f;
+        public SoundScheduleSettings(SoundType soundType) {
+            this.soundType = soundType;
+            minDelay = 1.0f;      // minimum delay of 1 second between sounds
+            maxDelay = 5.0f;      // maximum delay of 5 seconds between sounds
+            volume = 0.5f;        // half of the maximum volume
+            isEnabled = true;     // by default, sounds are enabled
+        }
+    }
+    
+    [System.Serializable]
+    public class SoundAudioClip {
+        public SoundType soundType;
+        public List<AudioClip> audioClips;
     }
 
-    public static void PlaySound(Sound sound, Vector3 position) {
-        if (CanPlaySound(sound)) {
+    public SoundAudioClip[] soundAudioClipArray;
+    public List<SoundScheduleSettings> soundScheduleSettingsList;
+
+    private Dictionary<SoundType, float> soundTimerDictionary;
+    private GameObject oneShotGameObject;
+
+    private void Start() {
+        Initialize();
+        // Schedule sounds based on settings
+        foreach (SoundScheduleSettings settings in soundScheduleSettingsList) {
+            if(settings.isEnabled) {
+                ScheduleSound(settings.soundType, settings.minDelay, settings.maxDelay);
+            }
+        }
+    }
+
+    private void Initialize() {
+        soundTimerDictionary = new Dictionary<SoundType, float>();
+        foreach (SoundType soundType in System.Enum.GetValues(typeof(SoundType)))
+        {
+            soundTimerDictionary[soundType] = 0f;
+        }
+    }
+
+    public void PlaySound(SoundType soundType, Vector3 position) {
+        if (CanPlaySound(soundType))
+        {
+            AudioClip clip = GetAudioClip(soundType);
+            if (clip == null)
+                return;
             GameObject soundGameObject = new GameObject("Sound");
             soundGameObject.transform.position = position;
             AudioSource audioSource = soundGameObject.AddComponent<AudioSource>();
-            audioSource.clip = GetAudioClip(sound);
+            audioSource.clip = clip;
+            audioSource.volume = GetVolumeBySoundType(soundType);
+            Debug.Log("oneShotAudioSource.volume=" + audioSource.volume );
             audioSource.maxDistance = 100f;
             audioSource.spatialBlend = 1f;
             audioSource.rolloffMode = AudioRolloffMode.Linear;
             audioSource.dopplerLevel = 0f;
             audioSource.Play();
 
-            Object.Destroy(soundGameObject, audioSource.clip.length);
+            Destroy(soundGameObject, audioSource.clip.length);
         }
     }
 
-    public static void PlaySound(Sound sound) {
-        if (CanPlaySound(sound)) {
-            if (oneShotGameObject == null) {
-                oneShotGameObject = new GameObject("One Shot Sound");
-                oneShotAudioSource = oneShotGameObject.AddComponent<AudioSource>();
-            }
-            oneShotAudioSource.PlayOneShot(GetAudioClip(sound));
-        }
-    }
-
-    private static bool CanPlaySound(Sound sound) {
-        switch (sound) {
+    private bool CanPlaySound(SoundType soundType) {
+        switch (soundType) {
         default:
             return true;
-        case Sound.PlayerMove:
-            if (soundTimerDictionary.ContainsKey(sound)) {
-                float lastTimePlayed = soundTimerDictionary[sound];
+        case SoundType.ClicksAndMoves:
+            if (soundTimerDictionary.ContainsKey(soundType)) {
+                float lastTimePlayed = soundTimerDictionary[soundType];
                 float playerMoveTimerMax = .15f;
                 if (lastTimePlayed + playerMoveTimerMax < Time.time) {
-                    soundTimerDictionary[sound] = Time.time;
+                    soundTimerDictionary[soundType] = Time.time;
                     return true;
                 } else {
                     return false;
@@ -79,22 +99,42 @@ public static class SoundManager {
             } else {
                 return true;
             }
-            //break;
         }
     }
 
-    private static AudioClip GetAudioClip(Sound sound) {
-        foreach (GameAssets.SoundAudioClip soundAudioClip in GameAssets.i.soundAudioClipArray) {
-            if (soundAudioClip.sound == sound) {
-                return soundAudioClip.audioClip;
+    private AudioClip GetAudioClip(SoundType soundType) {
+        foreach (SoundAudioClip soundAudioClip in soundAudioClipArray) {
+            if (soundAudioClip.soundType == soundType) {
+                if (soundAudioClip.audioClips.Count > 0) {
+                    int index = Random.Range(0, soundAudioClip.audioClips.Count);
+                    return soundAudioClip.audioClips[index];
+                }
             }
         }
-        Debug.LogError("Sound " + sound + " not found!");
         return null;
     }
+    
+    public void ScheduleSound(SoundType soundType, float minDelay, float maxDelay)
+    {
+        StartCoroutine(PlaySoundOccasionally(soundType, minDelay, maxDelay));
+    }
 
-    public static void AddButtonSounds(this Button_UI buttonUI) {
-        buttonUI.ClickFunc += () => SoundManager.PlaySound(Sound.ButtonClick);
-        buttonUI.MouseOverOnceFunc += () => SoundManager.PlaySound(Sound.ButtonOver);
+    private IEnumerator PlaySoundOccasionally(SoundType soundType, float minDelay, float maxDelay)
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(Random.Range(minDelay, maxDelay));
+
+            PlaySound(soundType, new Vector3());
+        }
+    }
+    
+    private float GetVolumeBySoundType(SoundType soundType) {
+        foreach (SoundScheduleSettings settings in soundScheduleSettingsList) {
+            if (settings.soundType == soundType) {
+                return settings.volume;
+            }
+        }
+        return 1.0f; // return default volume if not found
     }
 }
