@@ -36,18 +36,7 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        Globals.g_scriptName = prBook.bookFullUrl;
-        Globals.g_prbook = prBook;
-        if (Globals.IsTablet())
-        {
-            //SceneManager.LoadScene("_StoryTablet");
-            SceneManager.LoadScene("_Story");
-        }
-        else
-        {
-            SceneManager.LoadScene("_Story");
-        }        
+        Globals.GotoPrBook(prBook);
     }
-
-
+    
 }

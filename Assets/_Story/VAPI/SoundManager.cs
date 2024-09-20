@@ -71,7 +71,7 @@ public class SoundManager : MonoBehaviour {
             AudioSource audioSource = soundGameObject.AddComponent<AudioSource>();
             audioSource.clip = clip;
             audioSource.volume = GetVolumeBySoundType(soundType);
-            Debug.Log("oneShotAudioSource.volume=" + audioSource.volume );
+            //Debug.Log("oneShotAudioSource.volume=" + audioSource.volume );
             audioSource.maxDistance = 100f;
             audioSource.spatialBlend = 1f;
             audioSource.rolloffMode = AudioRolloffMode.Linear;

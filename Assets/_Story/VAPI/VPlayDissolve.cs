@@ -31,8 +31,6 @@ public class VPlayDissolve : MonoBehaviour
         matDissolving.SetFloat("_DissolveAmount", dissolveAmount);
     }
     
-    
-
     IEnumerator ToggleDissolveRoutine()
     {
         while (true)

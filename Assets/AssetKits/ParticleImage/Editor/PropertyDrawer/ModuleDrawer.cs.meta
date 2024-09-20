@@ -9,3 +9,10 @@ MonoImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235001
+  packageName: UI Particle Image
+  packageVersion: 1.2.2
+  assetPath: Assets/AssetKits/ParticleImage/Editor/PropertyDrawer/ModuleDrawer.cs
+  uploadId: 620919

@@ -6,6 +6,24 @@ using System.Collections;
 using UnityEngine.UI;
 using System.Collections.Specialized;
 
+
+public static class GameObjectExtensions
+{
+    public static T AddComponentOrReturnExisting<T>(this GameObject obj) where T : Component
+    {
+        // Check if the component already exists on the GameObject.
+        T component = obj.GetComponent<T>();
+
+        // If it doesn't exist, add and return it.
+        if (component == null)
+        {
+            component = obj.AddComponent<T>();
+        }
+
+        // Return the existing or newly added component.
+        return component;
+    }
+}
 public class PRUtils
 {
     public static int maxCacheImagesSize = 30;
@@ -95,15 +113,38 @@ public class PRUtils
     
     public static string RemoveFileNameFromUrl(string url)
     {
-        Uri uri = new Uri(url);
-        string[] pathSegments = uri.AbsolutePath.Split('/');
-        Array.Resize(ref pathSegments, pathSegments.Length - 1);
-        string newPath = string.Join("/", pathSegments);
-        return uri.GetLeftPart(UriPartial.Authority) + newPath + "/";
+        try
+        {
+            Uri uri = new Uri(url);
+            string[] pathSegments = uri.AbsolutePath.Split('/');
+            Array.Resize(ref pathSegments, pathSegments.Length - 1);
+            string newPath = string.Join("/", pathSegments);
+            return uri.GetLeftPart(UriPartial.Authority) + newPath + "/";
+        }
+        catch (Exception e)
+        {
+            return url;
+        }
     }
     
     public static IEnumerator DownloadFile(string url, System.Action<string> onComplete)
     {
+        if (!url.StartsWith("http:"))
+        {
+            // Load from Resources
+            string resourcePath = url.Replace("resources:", "").TrimStart('/'); // Removing the "resources:" prefix and any starting slashes
+            TextAsset asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset != null)
+            {
+                onComplete?.Invoke(asset.text);
+            }
+            else
+            {
+                Debug.LogError($"Error: Could not find local resource at {resourcePath}");
+            }
+            yield break; // Ends the coroutine here for local resources.
+        }
+
         UnityWebRequest request = UnityWebRequest.Get(url);
         request.certificateHandler = new AcceptAllCertificatesHandler(); // Add this line
 
@@ -327,6 +368,14 @@ public class PRUtils
         // For Amazon Store or other platforms
         Application.OpenURL("amzn://apps/android?p=" + Application.identifier);
 #endif
+    }
+    
+    public static string CapitalizeFirstLetter(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return string.Empty;
+
+        return char.ToUpper(input[0]) + input.Substring(1);
     }
 
 }

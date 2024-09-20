@@ -95,7 +95,7 @@ public class PRScript : MonoBehaviour
 
     public string baseURL = "";
     public ButtonController buttonController;
-    
+    [FormerlySerializedAs("voiceSelectionController")] public ButtonSelectionController buttonSelectionController;
         
     string currentVoice = "";
     string getCurrentVoicePostfix()
@@ -105,7 +105,6 @@ public class PRScript : MonoBehaviour
         
         return "_" + currentVoice;
     } 
-    
     
     private void parse(string script)
     {
@@ -185,6 +184,7 @@ public class PRScript : MonoBehaviour
         audioPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         videoPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioAndTextPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
+        VoiceOptions(new bool[] { false, true, true });
         Reload();
     }
     void OnDestroy()
@@ -414,17 +414,29 @@ public class PRScript : MonoBehaviour
             audioPlayer.PlayAudio(audioname, fBegin, fEnd);
             return new Intrinsic.Result(ValNumber.one);
         };
-        f = Intrinsic.Create("PlayAudioText");
-        f.AddParam("audioname", "");
-        f.AddParam("timings", "");
-        f.AddParam("content", "");
+        // f = Intrinsic.Create("PlayAudioText");
+        // f.AddParam("audioname", "");
+        // f.AddParam("timings", "");
+        // f.AddParam("content", "");
+        // f.code = (context, partialResult) =>
+        // {
+        //     string audioname = context.GetVar("audioname").ToString();
+        //     string timings = context.GetVar("timings").ToString();
+        //     string content = context.GetVar("content").ToString();
+        //     audioAndTextPlayer.SetActive(true);
+        //     audioAndTextPlayer.Play(audioname, timings, content); 
+        //     return new Intrinsic.Result(ValNumber.one);
+        // };
+        f = Intrinsic.Create("VoiceOptions");
+        f.AddParam("human", 0);
+        f.AddParam("computer", 0);
+        f.AddParam("novoice", 0);
         f.code = (context, partialResult) =>
         {
-            string audioname = context.GetVar("audioname").ToString();
-            string timings = context.GetVar("timings").ToString();
-            string content = context.GetVar("content").ToString();
-            audioAndTextPlayer.SetActive(true);
-            audioAndTextPlayer.Play(audioname, timings); 
+            int human = context.GetVar("human").IntValue();
+            int computer = context.GetVar("computer").IntValue();
+            int novoice = context.GetVar("novoice").IntValue();
+            VoiceOptions(new bool[] { human != 0, computer != 0, novoice != 0}); 
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("PlayAudioAndText");
@@ -436,11 +448,9 @@ public class PRScript : MonoBehaviour
             // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
             // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
             string chunkname = NormalizeUrl(context.GetVar("chunkname").ToString());
-            string audioname = $"{chunkname}_{Globals.getReadingRate()}{getCurrentVoicePostfix()}.mp3";  ;
-            string timings = $"{chunkname}_{Globals.getReadingRate()}_timings{getCurrentVoicePostfix()}.json"; 
             string content = context.GetVar("content").ToString();
             audioAndTextPlayer.SetActive(true);
-            audioAndTextPlayer.Play(audioname, timings); 
+            audioAndTextPlayer.Play(chunkname, getCurrentVoicePostfix(), content); 
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetCurrentVoice");
@@ -549,17 +559,7 @@ public class PRScript : MonoBehaviour
     void ExecuteScriptlet(string scriptlet)
     {
         //Debug.Log("PRScript::ExecuteScriptlet " + scriptlet);
-
         RunScript(scriptlet);
-        
-        // if (scriptlet == null)
-        //     return;
-        //
-        // List<string> lines = PRUtils.SplitStringIntoLines(scriptlet);
-        // foreach (string s in lines)
-        // {
-        //     RunScript(s);
-        // }
     }
 
     void ConfigOutput()
@@ -592,10 +592,13 @@ public class PRScript : MonoBehaviour
         if (index >= 0 && index < _scriptlets.Count)
         {
             nCurrentStep = index;
-            Globals.g_prbook.SetAndSaveCurrentPage(index);
+            Globals.g_prbook?.
+                SetAndSaveCurrentPage(index);
+            
             if (index == _scriptlets.Count - 1)
             {
-                Globals.g_prbook.SetBookDone(1);
+                if (Globals.g_prbook != null)
+                    Globals.g_prbook.SetBookDone(1);
             }
 
             Debug.Log($"Current step was set to " + index + ",scriptURL=" + scriptURL);
@@ -607,7 +610,7 @@ public class PRScript : MonoBehaviour
 
     public void PrevStep()
     {
-        buttonController.DisableButtonsForTime(2f);
+        buttonController.DisableButtonsForTime(1f);
         bool bStepChanged = SetCurrentStep(nCurrentStep - 1);
         if (!bStepChanged)
             return;
@@ -619,7 +622,7 @@ public class PRScript : MonoBehaviour
     
     public void NextStep()
     {
-        buttonController.DisableButtonsForTime(2f);
+        buttonController.DisableButtonsForTime(1f);
         bool bStepChanged = SetCurrentStep(nCurrentStep + 1);
         if (!bStepChanged)
             return;
@@ -634,9 +637,15 @@ public class PRScript : MonoBehaviour
         SceneManager.LoadScene("_Library");
     }
     
+    public void Map()
+    {
+        Globals.g_scriptName = "";
+        SceneManager.LoadScene("_Map");
+    }
+    
     public void ReplayCurrenStep()
     {
-        buttonController.DisableButtonsForTime(2f);
+        buttonController.DisableButtonsForTime(1f);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
     }
@@ -742,4 +751,9 @@ public class PRScript : MonoBehaviour
         }
     }
 
+    public void VoiceOptions(bool[] visibilityStates)
+    {
+        buttonSelectionController.ButtonOptions(visibilityStates);
+    }
+    
 }

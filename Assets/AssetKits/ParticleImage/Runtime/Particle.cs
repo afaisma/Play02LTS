@@ -1,31 +1,31 @@
-// Version: 1.1.0
+// Version: 1.2.0
 using System.Collections.Generic;
 using AssetKits.ParticleImage.Enumerations;
+using Unity.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
 namespace AssetKits.ParticleImage {
     public class Particle
     {
         private ParticleImage _source;
-
+        private Transform _transform;
+        
         private Vector2 _modifiedPosition;
         private Vector2 _position;
         private Vector2 _startVelocity;
-        private Vector2 _noiseVelocity;
-        private Vector2 _veloVelocity;
         private Vector2 _gravityVelocity;
-        private Vector2 _finalVelocity;
+        private Vector2 _velocity;
         private Vector3 _startRotation;
         private Vector3 _startSize;
-        private Vector3 _size;
         private float _time;
-        private Color _color;
+        private float _normalizedTime;
         private Color _startColor;
-        private Transform _transform;
-        private List<SpriteSheet> _sheetsList;
         private float _lifetime;
+        
+        private Vector3 _size;
+        private Color _color;
+        private Vector3 _rotation;
 
         private float _sizeLerp;
         private float _colorLerp;
@@ -34,42 +34,47 @@ namespace AssetKits.ParticleImage {
         private float _gravityLerp;
         private float _vortexLerp;
         private float _frameOverTimeLerp;
-        private float _velocityXLerp;
-        private float _velocityYLerp;
+        private float _velocityLerp;
         private float _speedLerp;
         private float _startFrameLerp;
         private float _ratioRandom;
-
-        private Vector3 rot;
-
         private Vector2 _attractorTargetPoint;
 
-        private Vector3 _lastPosition;
-        private Quaternion _lastRotation;
-        private Vector3 _deltaRotation;
+        private Vector3 _lastTransformPosition;
+        private Quaternion _lastTransformRotation;
+        
+        private Vector3 _transformDeltaRotation;
 
-        private Vector2 _lastPos;
+        private Vector2 _lastPosition;
         private Vector2 _deltaPosition;
+        
+        private Vector3 _direction;
 
         private Vector2 _trailLastPos;
         private Vector2 _trailDeltaPos;
-
-        private Vector2 _lastPoint;
-        private Vector3 _direction;
+        private bool _hasTrail;
 
         private float _frameDelta;
         private int _frameId;
         private int _sheetId;
         
-        private List<TrailPoint> _trailPoints = new List<TrailPoint>();
+        private List<TrailPoint> _trailPoints = new List<TrailPoint>(128);
 
         public List<TrailPoint> trailPoints
         {
             get => _trailPoints;
         }
 
-        private VertexHelper _trailHelper;
+        private Vector2[] _points = new Vector2[4];
+        private Vector2[] _rotations = new Vector2[4];
         
+        private Vector2 lastTrailPoint;
+        
+        public Vector2[] points
+        {
+            get => _points;
+        }
+
         public struct TrailPoint
         {
             public Vector2 point;
@@ -82,16 +87,15 @@ namespace AssetKits.ParticleImage {
             }
         }
 
-        public Particle(ParticleImage source, Vector2 pos, Vector3 rot, Vector2 vel, Color col, Vector3 siz, float life)
+        public Particle(ParticleImage source)
         {
             _source = source;
             _transform = source.transform;
-            _position = pos;
-            _startVelocity = vel;
-            _startColor = col;
-            _startSize = siz;
-            _startRotation = rot;
+            _trailLastPos = _position;
+        }
 
+        public void Initialize(Vector2 startPosition, Vector2 startVelocity, Vector3 startRotation, Color startColor, Vector3 startSize, float lifetime, float startTime = 0f)
+        {
             _sizeLerp = Random.value;
             _colorLerp = Random.value;
             _rotateLerp = Random.value;
@@ -100,73 +104,75 @@ namespace AssetKits.ParticleImage {
             _vortexLerp = Random.value;
             _startFrameLerp = Random.value;
             _frameOverTimeLerp = Random.value;
-            _velocityXLerp = Random.value;
-            _velocityYLerp = Random.value;
+            _velocityLerp = Random.value;
             _speedLerp = Random.value;
             _ratioRandom = Random.value;
-            
             _attractorTargetPoint = new Vector2(Random.value, Random.value);
-
-            _lifetime = life;
-
-            _sheetsList = new List<SpriteSheet>();
             
-            _lastPosition = _transform.position;
-
-            if (source.textureSheetEnabled)
-            {
-                for (int i = source.textureTile.y-1; i > -1; i--)
-                {
-                    for (int j = 0; j < source.textureTile.x; j++)
-                    {
-                        _sheetsList.Add(new SpriteSheet(new Vector2(1f/source.textureTile.x * (j+1),1f/source.textureTile.y * (i+1)), new Vector2(1f/source.textureTile.x * j,1f/source.textureTile.y * i)));
-                    }
-                }
-            }
-            else
-            {
-                _sheetsList.Add(new SpriteSheet(new Vector2(1f,1f), new Vector2(0f,0f)));
-            }
+            _position = startPosition;
+            _startVelocity = startVelocity;
+            _startColor = startColor;
+            _startSize = startSize;
+            _startRotation = startRotation;
+            _lifetime = lifetime;
+            _rotation = _startRotation;
             
-            _frameId += (int)source.textureSheetStartFrame.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _startFrameLerp);
+            _lastTransformPosition = _transform.position;
             
-            _lastPoint = _position;
             _modifiedPosition = _position;
-            _lastPos = _position;
-            _trailLastPos = _position;
-            _trailHelper = new VertexHelper();
+            _velocity = Vector2.zero;
+            _gravityVelocity = Vector2.zero;
+            _deltaPosition = Vector2.zero;
+            
+            _transformDeltaRotation = Vector3.zero;
+            
+            _direction = Vector3.zero;
+            _color = _startColor;
+            _size = _startSize;
+            
+            _lastPosition = _position;
+
+            _time = startTime;//0f;
+            _normalizedTime = 0f;
+            _frameId = 0;
+
+            _frameId += (int)_source.textureSheetStartFrame.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _startFrameLerp);
+            
+            _rotations[0] = new Vector2(_size.x/2, _size.y/2);
+            _rotations[1] = new Vector2(-_size.x/2, _size.y/2);
+            _rotations[2] = new Vector2(-_size.x/2, -_size.y/2);
+            _rotations[3] = new Vector2(_size.x/2, -_size.y/2);
+            
             if (_source.trailsEnabled)
             {
+                _trailPoints.Clear();
                 _trailPoints.Add(new TrailPoint(_position, 0f));
+                lastTrailPoint = _position;
+                
+                _hasTrail = _ratioRandom <= _source.trailRatio;
             }
         }
 
-        public void Animate()
+        public void Simulate(float deltaTime)
         {
-            _time += (_source.timeScale == TimeScale.Normal) ? Time.deltaTime : Time.unscaledDeltaTime;
+            _time += deltaTime;
+            _normalizedTime = _time.Remap(0f, _lifetime, 0f, 1f);
             
-            if (_time > _lifetime) return;
-            
-            _finalVelocity = _startVelocity * _source.speedOverLifetime.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _speedLerp);
+            _velocity = _startVelocity * _source.speedOverLifetime.Evaluate(_normalizedTime, _speedLerp);
             
             if (_source.space == Simulation.World)
             {
-                _modifiedPosition += new Vector2(
-                    _transform.InverseTransformPoint(_lastPosition).x,
-                    _transform.InverseTransformPoint(_lastPosition).y);
+                var inversePoint = _transform.InverseTransformPoint(_lastTransformPosition);
+                _modifiedPosition += new Vector2(inversePoint.x, inversePoint.y);
                 
-                _deltaRotation = Quaternion.Inverse(_source.transform.rotation).eulerAngles-Quaternion.Inverse(_lastRotation).eulerAngles;
+                _transformDeltaRotation = Quaternion.Inverse(_transform.rotation).eulerAngles-Quaternion.Inverse(_lastTransformRotation).eulerAngles;
                 
-                _modifiedPosition = new Vector2(
-                    RotatePointAroundCenter(_modifiedPosition, _deltaRotation).x,
-                    RotatePointAroundCenter(_modifiedPosition, _deltaRotation).y);
+                _modifiedPosition = RotatePointAroundCenter(_modifiedPosition, _transformDeltaRotation);
                 
-                _startVelocity = new Vector2(
-                    RotatePointAroundCenter(_startVelocity, _deltaRotation).x,
-                    RotatePointAroundCenter(_startVelocity, _deltaRotation).y);
+                _startVelocity = RotatePointAroundCenter(_startVelocity, _transformDeltaRotation);
                 
-                _lastPosition = _transform.position;
-                _lastRotation = _source.transform.rotation;
+                _lastTransformPosition = _transform.position;
+                _lastTransformRotation = _transform.rotation;
             }
 
             #region VELOCITY
@@ -175,21 +181,11 @@ namespace AssetKits.ParticleImage {
             {
                 if(_source.velocitySpace == Simulation.World)
                 {
-                    _veloVelocity = new Vector2(
-                        RotatePointAroundCenter(new Vector2(_source.velocityOverLifetime.xCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityXLerp),_source.velocityOverLifetime.yCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityYLerp)), Quaternion.Inverse(_source.transform.rotation).eulerAngles).x,
-                        RotatePointAroundCenter(new Vector2(_source.velocityOverLifetime.xCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityXLerp),_source.velocityOverLifetime.yCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityYLerp)), Quaternion.Inverse(_source.transform.rotation).eulerAngles).y
-                    );
+                    _velocity += RotatePointAroundCenter(_source.velocityOverLifetime.Evaluate(_normalizedTime, _velocityLerp), Quaternion.Inverse(_transform.rotation).eulerAngles);
                 }
                 else
                 {
-                    if (_source.velocityOverLifetime.separated)
-                    {
-                        _veloVelocity = new Vector2(_source.velocityOverLifetime.xCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityXLerp),_source.velocityOverLifetime.yCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityYLerp));
-                    }
-                    else
-                    {
-                        _veloVelocity = new Vector2(_source.velocityOverLifetime.mainCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _velocityXLerp),0);
-                    }
+                    _velocity += _source.velocityOverLifetime.EvaluateXY(_normalizedTime, _velocityLerp);
                 }
             }
 
@@ -199,10 +195,7 @@ namespace AssetKits.ParticleImage {
 
             if (_source.gravityEnabled)
             {
-                //Apply gravity
-                _gravityVelocity += new Vector2(
-                    RotatePointAroundCenter(new Vector3(0,_source.gravity.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f),_gravityLerp),0), Quaternion.Inverse(_source.transform.rotation).eulerAngles).x,
-                    RotatePointAroundCenter(new Vector3(0,_source.gravity.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f),_gravityLerp),0), Quaternion.Inverse(_source.transform.rotation).eulerAngles).y) * ((_source.timeScale == TimeScale.Normal) ? Time.deltaTime : Time.unscaledDeltaTime);
+                _gravityVelocity += RotatePointAroundCenter(new Vector2(0,_source.gravity.Evaluate(_normalizedTime,_gravityLerp)), Quaternion.Inverse(_transform.rotation).eulerAngles) * deltaTime;
             }
 
             #endregion
@@ -215,43 +208,44 @@ namespace AssetKits.ParticleImage {
                 
                 if (_source.space == Simulation.Local)
                 {
-                    noise = _source.noise.GetNoise(_position.x, _position.y);
+                    noise = _source.noise.GetNoise(_position.x + _source.noiseOffset.x, _position.y + _source.noiseOffset.y);
                 }
                 else
                 {
-                    noise = _source.noise.GetNoise((_position + new Vector2(_source.transform.localPosition.x, _source.transform.localPosition.y)).x,
-                        (_position + new Vector2(_source.transform.localPosition.x, _source.transform.localPosition.y)).y);
+                    var localPosition = _transform.localPosition;
+                    var pos = _position + new Vector2(localPosition.x, localPosition.y);
+                    noise = _source.noise.GetNoise(pos.x + _source.noiseOffset.x, pos.y + _source.noiseOffset.y);
                 }
                 
-                _noiseVelocity = new Vector2(
+                _velocity += new Vector2(
                     Mathf.Cos(noise * Mathf.PI), 
                     Mathf.Sin(noise * Mathf.PI)) * _source.noiseStrength;
             }
             
             #endregion
             
-            _finalVelocity += _veloVelocity + _noiseVelocity + _gravityVelocity;
-
-            _modifiedPosition += _finalVelocity * (((_source.timeScale == TimeScale.Normal) ? Time.deltaTime : Time.unscaledDeltaTime) * 100);
+            _velocity += _gravityVelocity;
+            
+            _modifiedPosition += _velocity * (deltaTime * 100);
             
             #region VORTEX
 
             if (_source.vortexEnabled)
             {
-                _modifiedPosition = RotatePointAroundCenter(_modifiedPosition, new Vector3(0,0,_source.vortexStrength.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _vortexLerp) * ((_source.timeScale == TimeScale.Normal) ? Time.deltaTime : Time.unscaledDeltaTime) * 100));
+                _modifiedPosition = RotatePointAroundCenter(_modifiedPosition, new Vector3(0,0,_source.vortexStrength.Evaluate(_normalizedTime, _vortexLerp) * deltaTime * 100));
             }
 
             #endregion
             
             #region ATTRACTOR
 
-            if (_source.attractorTarget && _source.attractorEnabled)
+            if (_source.attractorEnabled && _source.attractorTarget)
             {
-                Vector3 canPos = Vector3.zero;
+                Vector3 targetPos;
                 
                 if (_source.attractorTarget is RectTransform)
                 {
-                    canPos = _transform.InverseTransformPoint(_source.attractorTarget.position);
+                    targetPos = _transform.InverseTransformPoint(_source.attractorTarget.position);
                 }
                 else
                 {
@@ -260,14 +254,14 @@ namespace AssetKits.ParticleImage {
 
                     if (_source.canvas.renderMode == RenderMode.ScreenSpaceCamera)
                     {
-                        canPos = new Vector3(
+                        targetPos = new Vector3(
                             ((viewportPos.x.Remap(0.5f, 1.5f,0f,_source.canvasRect.rect.width) - _source.canvasRect.InverseTransformPoint(_transform.position).x + _source.canvasRect.localPosition.x) / _transform.lossyScale.x) * _source.canvasRect.localScale.x, 
                             ((viewportPos.y.Remap(0.5f, 1.5f,0f,_source.canvasRect.rect.height) - _source.canvasRect.InverseTransformPoint(_transform.position).y + _source.canvasRect.localPosition.y) / _transform.lossyScale.y) * _source.canvasRect.localScale.y, 
                             0);
                     }
                     else
                     {
-                        canPos = new Vector3(
+                        targetPos = new Vector3(
                             (viewportPos.x.Remap(0.5f, 1.5f, 0f, _source.canvasRect.rect.width) -
                              _source.canvasRect.InverseTransformPoint(_transform.position).x) / _transform.lossyScale.x * _source.canvasRect.localScale.x,
                             (viewportPos.y.Remap(0.5f, 1.5f, 0f, _source.canvasRect.rect.height) -
@@ -275,20 +269,18 @@ namespace AssetKits.ParticleImage {
                             0);
                     }
                 }
-                
-                
 
                 if(_source.attractorType == AttractorType.Pivot)
-                    _position = Vector3.LerpUnclamped(_modifiedPosition, canPos, _source.attractorLerp.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _attractorLerp));
+                    _position = Vector3.LerpUnclamped(_modifiedPosition, targetPos, _source.attractorLerp.Evaluate(_normalizedTime, _attractorLerp));
                 else
                 {
                     var rt = _source.attractorTarget as RectTransform;
                     
                     _position = Vector3.LerpUnclamped(_modifiedPosition,
                         new Vector2(
-                            canPos.x + _attractorTargetPoint.x.Remap(0f, 1f, -rt.sizeDelta.x / 2, rt.sizeDelta.x / 2),
-                            canPos.y + _attractorTargetPoint.y.Remap(0f, 1f, -rt.sizeDelta.y / 2, rt.sizeDelta.y / 2)),
-                        _source.attractorLerp.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _attractorLerp));
+                            targetPos.x + _attractorTargetPoint.x.Remap(0f, 1f, -rt.sizeDelta.x / 2, rt.sizeDelta.x / 2),
+                            targetPos.y + _attractorTargetPoint.y.Remap(0f, 1f, -rt.sizeDelta.y / 2, rt.sizeDelta.y / 2)),
+                        _source.attractorLerp.Evaluate(_normalizedTime, _attractorLerp));
                 }
             }
             else
@@ -298,182 +290,34 @@ namespace AssetKits.ParticleImage {
 
             #endregion
 
-            _deltaPosition = _position - _lastPos;
-            _lastPos = _position;
+            _deltaPosition = _position - _lastPosition;
+            _lastPosition = _position;
+
+            var normalizedSpeed = _deltaPosition.magnitude * (1f / deltaTime) / 100f;
             
-            if (_source.trailsEnabled && _ratioRandom <= _source.trailRatio)
-            {
-                _trailDeltaPos = _trailLastPos - _position;
-                if (_trailDeltaPos.magnitude > _source.minimumVertexDistance)
-                {
-                    _trailLastPos = _position;
-                    _trailPoints.Add(new TrailPoint(_position, _time));
-                }
-            }
+            if(float.IsNaN(normalizedSpeed))
+                normalizedSpeed = 0f;
 
-            Color c = _source.colorOverLifetime.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _colorLerp);
-            //_color = _startColor * c * _source.colorBySpeed.Evaluate(_finalVelocity.magnitude.Remap(_source.colorSpeedRange.from, _source.colorSpeedRange.to, 0f, 1f));
-            var _normalizedSpeed = _deltaPosition.magnitude * (1f / Time.deltaTime) / 100f;
-            _color = _startColor * c * _source.colorBySpeed.Evaluate(_normalizedSpeed.Remap(_source.colorSpeedRange.from, _source.colorSpeedRange.to, 0f, 1f));
+            //Apply color
+            Color c = _source.colorOverLifetime.Evaluate(_normalizedTime, _colorLerp);
+            _color = _startColor * c * _source.colorBySpeed.Evaluate(normalizedSpeed.Remap(_source.colorSpeedRange.from, _source.colorSpeedRange.to, 0f, 1f));
 
-            Vector3 sol = Vector3.one;
-
-            if (_source.sizeOverLifetime.separated)
-            {
-                sol = new Vector3(_source.sizeOverLifetime.xCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp),
-                    _source.sizeOverLifetime.yCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp),
-                    _source.sizeOverLifetime.zCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp));
-            }
-            else
-            {
-                sol = new Vector3(_source.sizeOverLifetime.mainCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp),
-                    _source.sizeOverLifetime.mainCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp),
-                    _source.sizeOverLifetime.mainCurve.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _sizeLerp));
-            }
+            //Apply size
+            Vector3 sol = _source.sizeOverLifetime.Evaluate(_normalizedTime, _sizeLerp);
+            Vector3 sbs = _source.sizeBySpeed.Evaluate(normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp);
             
-            Vector3 sbs = Vector3.one;
-
-            if (_source.sizeBySpeed.separated)
-            {
-                sbs = new Vector3(_source.sizeBySpeed.xCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp),
-                    _source.sizeBySpeed.yCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp),
-                    _source.sizeBySpeed.zCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp));
-            }
-            else
-            {
-                sbs = new Vector3(_source.sizeBySpeed.mainCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp),
-                    _source.sizeBySpeed.mainCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp),
-                    _source.sizeBySpeed.mainCurve.Evaluate(_normalizedSpeed.Remap(_source.sizeSpeedRange.from, _source.sizeSpeedRange.to, 0f, 1f), _sizeLerp));
-            }
-
-            _size = _startSize;
-
-            _size = new Vector3(_size.x*sol.x,_size.y*sol.y,_size.z*sol.z);
+            _size = Vector3.Scale(_startSize, Vector3.Scale(sbs, sol));
             
-            _size = new Vector3(_size.x*sbs.x,_size.y*sbs.y,_size.z*sbs.z);
-            //source.SizeBySpeed.Evaluate(m_Velocity.magnitude.Remap(source.SizeSpeedRange.start,source.SizeSpeedRange.to, 0f, 1f))
-        }
-
-        public void Render(VertexHelper vh)
-        {
-            if (_source.trailsEnabled && _ratioRandom <= _source.trailRatio)
-            {
-                _trailHelper.Clear();
-                
-                if (_trailPoints.Count > 1)
-                {
-                    TrailPoint tp = new TrailPoint(_position, _trailPoints[_trailPoints.Count-1].time);
-                    _trailPoints[_trailPoints.Count - 1] = tp;
-
-                    if (_time >= _trailPoints[0].time+_source.trailLifetime)
-                    {
-                        _trailPoints.RemoveAt(0);
-                    }
-                }
-                
-                for (var j = 0; j < _trailPoints.Count; j++)
-                {
-                    Vector2 v = _trailPoints[j].point;
-                    
-                    if (j < _trailPoints.Count - 1)
-                    {
-                        v = _trailPoints[j + 1].point - _trailPoints[j].point;
-                    }
-                    
-                    Vector2 mid = _trailPoints[j].point; // the mid-point between start and end.
-                    Vector2 perp = Vector2.Perpendicular(v.normalized); // vector of length 1 perpendicular to v.
-            
-                    var vertex = UIVertex.simpleVert;
-                    if (_source.inheritParticleColor)
-                    {
-                        vertex.color = _color * _source.trailColorOverTrail.Evaluate(((float)j).Remap(0, _trailPoints.Count, 1f, 0f)) *
-                                       _source.trailColorOverLifetime.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f),_colorLerp);
-                    }
-                    else
-                    {
-                        vertex.color = _source.trailColorOverTrail.Evaluate(((float)j).Remap(0, _trailPoints.Count, 1f, 0f)) *
-                                       _source.trailColorOverLifetime.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f),_colorLerp);
-                    }
-
-                    var width = _size.x * _source.trailWidth.Evaluate(((float)j).Remap(0, _trailPoints.Count, 1f, 0f));
-
-                    // move half the thickness away from the mid-point.
-                    vertex.position = mid + (perp * width) / 2;
-                    vertex.uv0 = new Vector2(0, 1f / _trailPoints.Count * j);
-                    _trailHelper.AddVert(vertex);
-            
-                    // move half the thickness away from the mid-point in the opposite direction.
-                    vertex.position = mid - (perp * width) / 2;
-                    vertex.uv0 = new Vector2(1, 1f / _trailPoints.Count * j);
-                    _trailHelper.AddVert(vertex);
-                }
-
-                for (var v = 0; v + 2 < _trailHelper.currentVertCount; v += 2)
-                {
-                    _trailHelper.AddTriangle(v, v + 2, v + 1);
-                }
-            
-                for (var v = 0; v + 3 < _trailHelper.currentVertCount; v += 2)
-                {
-                    _trailHelper.AddTriangle(v + 1, v + 2, v + 3);
-                }
-
-                List<UIVertex> verts = new List<UIVertex>();
-                List<UIVertex> verts2 = new List<UIVertex>();
-                _trailHelper.GetUIVertexStream(verts);
-                _source.particleTrailRenderer.vertexHelper.GetUIVertexStream(verts2);
-                verts.AddRange(verts2);
-                _source.particleTrailRenderer.vertexHelper.AddUIVertexTriangleStream(verts);
-            }
-            
-            if (_time > _lifetime)
-            {
-                if (_source.dieWithParticle || _trailPoints.Count <= 1)
-                {
-                    _trailPoints.Clear();
-                }
-                
-                return;
-            }
-            
-            _direction = (_position - _lastPoint);
+            //Apply rotation
+            _direction = _deltaPosition;
             
             if (_direction.magnitude == 0f)
             {
-                _direction = _finalVelocity;
+                _direction = _velocity;
             }
 
             _direction = _direction.normalized;
             
-            _lastPoint = _position;
-            
-            var i = vh.currentVertCount;
-
-            UIVertex vert = new UIVertex();
-            //sheetId = Random.Range(0, sheets.Count);
-            
-            switch (_source.textureSheetType)
-            {
-                case SheetType.Speed:
-                    _frameId = (int)_finalVelocity.magnitude.Remap(_source.textureSheetFrameSpeedRange.from, _source.textureSheetFrameSpeedRange.to, 0f, _sheetsList.Count);
-                    break;
-                case SheetType.Lifetime:
-                    _frameId = (int)(_source.textureSheetFrameOverTime.Evaluate(_time.Remap(0, _lifetime, 0f, 1f),
-                        _frameOverTimeLerp)*_source.textureSheetCycles)+(int)_source.textureSheetStartFrame.Evaluate(_time.Remap(0f, _lifetime, 0f, 1f), _startFrameLerp);
-                    break;
-                case SheetType.FPS:
-                    float dur = 1f / _source.textureSheetFPS;
-                    _frameDelta += ((_source.timeScale == TimeScale.Normal) ? Time.deltaTime : Time.unscaledDeltaTime);
-                    while(_frameDelta >= dur)
-                    {
-                        _frameDelta -= dur;
-                        _frameId ++;
-                    }
-                    break;
-            }
-
-            _sheetId = (int)Mathf.Repeat(_frameId, _sheetsList.Count);
-
             Vector3 rol = Vector3.zero;
 
             if (_source.rotationOverLifetime.separated)
@@ -481,7 +325,7 @@ namespace AssetKits.ParticleImage {
                 float x = 0f;
                 float y = 0f;
                 float z = 0f;
-
+            
                 if (_source.rotationOverLifetime.xCurve.mode == ParticleSystemCurveMode.Constant ||
                     _source.rotationOverLifetime.xCurve.mode == ParticleSystemCurveMode.TwoConstants)
                 {
@@ -490,8 +334,7 @@ namespace AssetKits.ParticleImage {
                 }
                 else
                 {
-                    x = _source.rotationOverLifetime.xCurve.Evaluate(((float)_time).Remap(0f, _lifetime, 0f, 1f),
-                        _rotateLerp);
+                    x = _source.rotationOverLifetime.xCurve.Evaluate(_normalizedTime, _rotateLerp);
                 }
                 if (_source.rotationOverLifetime.yCurve.mode == ParticleSystemCurveMode.Constant ||
                     _source.rotationOverLifetime.yCurve.mode == ParticleSystemCurveMode.TwoConstants)
@@ -501,8 +344,7 @@ namespace AssetKits.ParticleImage {
                 }
                 else
                 {
-                    y = _source.rotationOverLifetime.yCurve.Evaluate(((float)_time).Remap(0f, _lifetime, 0f, 1f),
-                        _rotateLerp);
+                    y = _source.rotationOverLifetime.yCurve.Evaluate(_normalizedTime, _rotateLerp);
                 }
                 if (_source.rotationOverLifetime.zCurve.mode == ParticleSystemCurveMode.Constant ||
                     _source.rotationOverLifetime.zCurve.mode == ParticleSystemCurveMode.TwoConstants)
@@ -512,12 +354,11 @@ namespace AssetKits.ParticleImage {
                 }
                 else
                 {
-                    z = _source.rotationOverLifetime.zCurve.Evaluate(((float)_time).Remap(0f, _lifetime, 0f, 1f),
-                        _rotateLerp);
+                    z = _source.rotationOverLifetime.zCurve.Evaluate(_normalizedTime, _rotateLerp);
                 }
                 
                 rol = new Vector3(x, y, z);
-
+            
                 if (!_source.alignToDirection)
                 {
                     rol += Quaternion.Inverse(_source.transform.rotation).eulerAngles;
@@ -529,13 +370,11 @@ namespace AssetKits.ParticleImage {
                 {
                     case ParticleSystemCurveMode.Constant:
                     case ParticleSystemCurveMode.TwoConstants:
-                        rol = new Vector3(0, 0, _time.Remap(0f,_lifetime,0f,_source.rotationOverLifetime.mainCurve.Evaluate(((float)_time).Remap(0f, _lifetime, 0f, 1f),
-                                                    _rotateLerp)));
+                        rol = new Vector3(0, 0, _time.Remap(0f,_lifetime,0f,_source.rotationOverLifetime.mainCurve.Evaluate(_normalizedTime, _rotateLerp)));
                         break;
                     case ParticleSystemCurveMode.Curve:
                     case ParticleSystemCurveMode.TwoCurves:
-                        rol = new Vector3(0, 0, _source.rotationOverLifetime.mainCurve.Evaluate(((float)_time).Remap(0f, _lifetime, 0f, 1f),
-                                                    _rotateLerp));
+                        rol = new Vector3(0, 0, _source.rotationOverLifetime.mainCurve.Evaluate(_normalizedTime, _rotateLerp));
                         break;
                 }
                 
@@ -545,70 +384,194 @@ namespace AssetKits.ParticleImage {
                 }
             }
             
-            Vector3 rbs = Vector3.zero;
+            Vector3 rbs;
 
             if (_source.rotationBySpeed.separated)
             {
-                rbs = new Vector3(_time.Remap(0f,_lifetime,0f,_source.rotationBySpeed.xCurve.Evaluate(_finalVelocity.magnitude.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp)),
-                    _time.Remap(0f,_lifetime,0f,_source.rotationBySpeed.yCurve.Evaluate(_finalVelocity.magnitude.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp)),
-                        _time.Remap(0f,_lifetime,0f,_source.rotationBySpeed.zCurve.Evaluate(_finalVelocity.magnitude.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp)));
+                rbs = _source.rotationBySpeed.Evaluate(normalizedSpeed.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp);
             }
             else
             {
-                rbs = new Vector3(0,0, _time.Remap(0f, _lifetime, 0f, _source.rotationBySpeed.mainCurve.Evaluate(_finalVelocity.magnitude.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp)));
+                rbs = _source.rotationBySpeed.EvaluateZ(normalizedSpeed.Remap(_source.rotationSpeedRange.from, _source.rotationSpeedRange.to, 0f, 1f), _rotateLerp);
             }
             
             if (_source.alignToDirection)
             {
                 Quaternion q = Quaternion.FromToRotation(Vector3.up, _direction);
-                rot = _startRotation + Quaternion.Euler(new Vector3(0,0, q.eulerAngles.z)).eulerAngles;
+                _rotation = _startRotation + Quaternion.Euler(new Vector3(0,0, q.eulerAngles.z)).eulerAngles;
             }
             else
             {
-                rot = _startRotation;
+                _rotation = _startRotation;
+            }
+            
+            _rotation += rol + rbs;
+            
+            //Render
+            
+            //Trail
+            if (_source.trailsEnabled && _trailPoints.Count > 0)
+            {
+                var trailVertices = new NativeArray<Vector3>(_trailPoints.Count * 2, Allocator.Temp);
+                var trailColors = new NativeArray<Color>(_trailPoints.Count * 2, Allocator.Temp);
+                var trailTriangles = new NativeArray<int>((_trailPoints.Count - 1) * 6, Allocator.Temp);
+
+                //Attach first point to the current position
+                if (_time < _lifetime)
+                {
+                    TrailPoint tp = new TrailPoint(_position, _time);
+                    _trailPoints[_trailPoints.Count - 1] = tp;
+                }
+
+                //Last point lerp
+                if (trailPoints.Count > 1)
+                {
+                    var lastFollowingPoint = _trailPoints[0];
+                    lastFollowingPoint.point = Vector2.Lerp(trailPoints[1].point, lastTrailPoint, Mathf.Abs(_time.Remap(_trailPoints[0].time+_source.trailLifetime, _trailPoints[1].time+_source.trailLifetime, 0f, 1f)));
+                    _trailPoints[0] = lastFollowingPoint;
+                }
+                
+                var trailLength = Vector3.Distance(_trailPoints[0].point, _position);
+                
+                for (var i = 0; i < _trailPoints.Count; i++)
+                {
+                    Vector2 pointDirection = _trailPoints[i].point;
+                    float pointDistance = (i > 0) ? Vector3.Distance(_trailPoints[0].point, _trailPoints[i].point).Remap(0, trailLength, 1f, 0f) : 1f;
+                    float pointWidth = _size.x * _source.trailWidth.Evaluate(pointDistance, _sizeLerp);
+
+                    if (_trailPoints.Count > 1)
+                    {
+                        if (i < _trailPoints.Count - 1)
+                        {
+                            pointDirection = _trailPoints[i + 1].point - _trailPoints[i].point;
+                        }
+                        else
+                        {
+                            pointDirection = _trailPoints[i].point - _trailPoints[i - 1].point;
+                        }
+                    }
+                    
+                    
+                    Vector2 mid = _trailPoints[i].point; // the mid-point between start and end.
+                    Vector2 perp = Vector2.Perpendicular(pointDirection.normalized); // vector of length 1 perpendicular to v.
+
+                    Color tc = _source.trailColorOverTrail.Evaluate(pointDistance, _colorLerp) *
+                               _source.trailColorOverLifetime.Evaluate(_normalizedTime, _colorLerp);
+                    
+                    if (_source.inheritParticleColor)
+                    { 
+                        tc *= _color;
+                    }
+                    
+                    trailVertices[i * 2 + 1] = mid + (perp * pointWidth) / 2;
+                    trailVertices[i * 2] = mid - (perp * pointWidth) / 2;
+                    trailColors[i * 2] = tc;
+                    trailColors[i * 2 + 1] = tc;
+                }
+                
+                for (int i = 0; i < trailPoints.Count - 1; i++)
+                {
+                    trailTriangles[i * 6] = i * 2;
+                    trailTriangles[i * 6 + 1] = i * 2 + 1;
+                    trailTriangles[i * 6 + 2] = i * 2 + 2;
+                    trailTriangles[i * 6 + 3] = i * 2 + 2;
+                    trailTriangles[i * 6 + 4] = i * 2 + 1;
+                    trailTriangles[i * 6 + 5] = i * 2 + 3;
+                }
+                
+                _source.particleTrailRenderer.UpdateMeshData(trailVertices, trailTriangles, trailColors);
+                
+                if (_time >= _trailPoints[0].time+_source.trailLifetime)
+                {
+                    _trailPoints.RemoveAt(0);
+                    lastTrailPoint = _trailPoints[0].point;
+                }
+                
+                if (_time < _lifetime && _hasTrail)
+                {
+                    _trailDeltaPos = _trailLastPos - _position;
+                    if (_trailDeltaPos.magnitude > _source.minimumVertexDistance)
+                    {
+                        _trailLastPos = _position;
+                        _trailPoints.Add(new TrailPoint(_position, _time));
+                    }
+                }
             }
 
+            var sheets = _source.sheetsArray;
+
+            switch (_source.textureSheetType)
+            {
+                case SheetType.Speed:
+                    _frameId = (int)_velocity.magnitude.Remap(_source.textureSheetFrameSpeedRange.from, _source.textureSheetFrameSpeedRange.to, 0f, sheets.Length);
+                    break;
+                case SheetType.Lifetime:
+                    _frameId = (int)(_source.textureSheetFrameOverTime.Evaluate(_normalizedTime,
+                        _frameOverTimeLerp)*_source.textureSheetCycles)+(int)_source.textureSheetStartFrame.Evaluate(_normalizedTime, _startFrameLerp);
+                    break;
+                case SheetType.FPS:
+                    float dur = 1f / _source.textureSheetFPS;
+                    _frameDelta += deltaTime;
+                    while(_frameDelta >= dur)
+                    {
+                        _frameDelta -= dur;
+                        _frameId ++;
+                    }
+                    break;
+            }
+
+            _sheetId = (int)Mathf.Repeat(_frameId, sheets.Length);
             
-            vert.color = _color;
-            vert.position = RotatePointAroundPivot(new Vector3(_position.x - (_size.x/2), _position.y - (_size.y/2)), _position, rot + rol + rbs);
-            vert.uv0 = _sheetsList[_sheetId].pos;
-            vh.AddVert(vert);
-
-            vert.position = RotatePointAroundPivot(new Vector3(_position.x + (_size.x/2), _position.y - (_size.y/2)), _position, rot + rol + rbs);
-            vert.uv0 = new Vector2(_sheetsList[_sheetId].size.x,_sheetsList[_sheetId].pos.y);
-            vh.AddVert(vert);
-
-            vert.position = RotatePointAroundPivot(new Vector3(_position.x + (_size.x/2), _position.y + (_size.y/2)), _position, rot + rol + rbs);
-            vert.uv0 = _sheetsList[_sheetId].size;
-            vh.AddVert(vert);
-
-            vert.position = RotatePointAroundPivot(new Vector3(_position.x - (_size.x/2), _position.y + (_size.y/2)), _position, rot + rol + rbs);
-            vert.uv0 = new Vector2(_sheetsList[_sheetId].pos.x,_sheetsList[_sheetId].size.y);
-            vh.AddVert(vert);
-
-            vh.AddTriangle(i+0,i+2,i+1);
-            vh.AddTriangle(i+3,i+2,i+0);
-        }
-
-        private Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Vector3 angles)
-        {
-            return Quaternion.Euler(angles) * (point - pivot) + pivot;
+            _rotations[0] = new Vector3(_size.x/2, _size.y/2);
+            _rotations[1] = new Vector3(-_size.x/2, _size.y/2);
+            _rotations[2] = new Vector3(-_size.x/2, -_size.y/2);
+            _rotations[3] = new Vector3(_size.x/2, -_size.y/2);
+                
+            RotatePointsAroundCenter(_rotations, _rotation);
+            
+            _points[0] = _position + _rotations[0];
+            _points[1] = _position + _rotations[1];
+            _points[2] = _position + _rotations[2];
+            _points[3] = _position + _rotations[3];
         }
         
-        private Vector3 RotatePointAroundCenter(Vector3 point, Vector3 angles)
+        public int GetSheetId
+        {
+            get
+            {
+                if (_source.textureSheetEnabled)
+                {
+                    return _sheetId;
+                }
+
+                return 0;
+            }
+        }
+
+        private void RotatePointsAroundCenter(Vector2[] points, Vector3 angles)
+        {
+            Quaternion rotation = Quaternion.Euler(angles);
+
+            for (int i = 0; i < points.Length; i++)
+            {
+                points[i] = rotation * points[i];
+            }
+        }
+        
+        private Vector2 RotatePointAroundCenter(Vector2 point, Vector3 angles)
         {
             return Quaternion.Euler(angles) * (point);
         }
-        
+
         public Vector2 Position => _position;
-        public Vector2 Velocity => _finalVelocity;
-        public Vector2 Size => new Vector2(_size.x, _size.y);
+        public Vector2 Velocity => _velocity;
+        public Vector2 Size => _size;
         public float TimeSinceBorn => _time;
         public float Lifetime => _lifetime;
         public Color Color => _color;
     }
 
-    struct SpriteSheet
+    public struct SpriteSheet
     {
         public Vector2 size;
         public Vector2 pos;

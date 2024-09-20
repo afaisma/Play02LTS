@@ -1,4 +1,8 @@
-// Version: 1.1.0
+// Version: 1.2.0
+#if UNITY_BURST && UNITY_MATHEMATICS && UNITY_COLLECTIONS
+#define PARTICLE_IMAGE_JOBS
+#endif
+
 using AssetKits.ParticleImage.Enumerations;
 using UnityEditor;
 using UnityEditor.Experimental.SceneManagement;
@@ -19,6 +23,7 @@ namespace AssetKits.ParticleImage.Editor
         private SerializedProperty _timeScale;
         private SerializedProperty _playMode;
         private SerializedProperty _loop;
+        private SerializedProperty _prewarm;
         private SerializedProperty _duration;
         private SerializedProperty _delay;
         private SerializedProperty _life;
@@ -48,6 +53,7 @@ namespace AssetKits.ParticleImage.Editor
         private SerializedProperty _startPointTrans;
         
         //Particle Properties
+        private SerializedProperty _sprite;
         private SerializedProperty _texture;
         private SerializedProperty _material;
         private SerializedProperty _speedOverLifetime;
@@ -74,6 +80,7 @@ namespace AssetKits.ParticleImage.Editor
         private SerializedProperty _trailWidth;
         private SerializedProperty _trailColorOverLifetime;
         private SerializedProperty _trailColorOverTrail;
+        private SerializedProperty _trailMaterial;
         private SerializedProperty _trailLifetime;
         private SerializedProperty _inheritColor;
         private SerializedProperty _dieWithParticle;
@@ -88,7 +95,7 @@ namespace AssetKits.ParticleImage.Editor
         
         private SerializedProperty _noiseModule;
         private SerializedProperty _noiseFreq;
-        private SerializedProperty _noiseOct;
+        private SerializedProperty _noiseOffset;
         private SerializedProperty _noiseStrength;
         
         private SerializedProperty _velocityModule;
@@ -107,12 +114,20 @@ namespace AssetKits.ParticleImage.Editor
         private SerializedProperty _onFirstParticleFinish;
         private SerializedProperty _onLastParticleFinish;
         private SerializedProperty _onParticleFinish;
+        
+        //Advanced Properties
+        private SerializedProperty _multithreadModule;
+        private SerializedProperty _multithreadEnabled;
+        private bool hasCollections;
+        private bool hasMathematics;
+        private bool hasBurst;
 
         //Editor Icons
         private Texture _particleModuleIcon;
         private Texture _movementModuleIcon;
         private Texture _emitterModuleIcon;
         private Texture _eventModuleIcon;
+        private Texture _advancedModuleIcon;
         
         //Module Foldouts
         private GUIStyle _foldoutStyle;
@@ -139,6 +154,7 @@ namespace AssetKits.ParticleImage.Editor
             _particleModuleIcon = Resources.Load<Texture>("ParticleModule");
             _movementModuleIcon = Resources.Load<Texture>("MovementModule"); 
             _eventModuleIcon =  Resources.Load<Texture>("EventModule");
+            _advancedModuleIcon = Resources.Load<Texture>("AdvancedIcon");
         }
 
         private void OnEnable() 
@@ -153,6 +169,7 @@ namespace AssetKits.ParticleImage.Editor
             _playMode = serializedObject.FindProperty("_playMode");
             _delay = serializedObject.FindProperty("_startDelay");
             _loop = serializedObject.FindProperty("_loop");
+            _prewarm = serializedObject.FindProperty("_prewarm");
             _duration = serializedObject.FindProperty("_duration");
             _maskable = serializedObject.FindProperty("m_Maskable");
             _raycast = serializedObject.FindProperty("m_RaycastTarget");
@@ -189,6 +206,7 @@ namespace AssetKits.ParticleImage.Editor
             _startColor = serializedObject.FindProperty("_startColor");
             _life = serializedObject.FindProperty("_lifetime");
             _speedOverLifetime = serializedObject.FindProperty("_speedOverLifetime");
+            _sprite = serializedObject.FindProperty("m_Sprite");
             _texture = serializedObject.FindProperty("m_Texture");
             _sheetModule = serializedObject.FindProperty("_sheetModule");
             _sheetType = serializedObject.FindProperty("_sheetType");
@@ -203,7 +221,7 @@ namespace AssetKits.ParticleImage.Editor
             _targetModule = serializedObject.FindProperty("_targetModule");
             _noiseModule = serializedObject.FindProperty("_noiseModule");
             _noiseFreq = serializedObject.FindProperty("_noiseFrequency");
-            _noiseOct = serializedObject.FindProperty("_noiseOctaves");
+            _noiseOffset = serializedObject.FindProperty("_noiseOffset");
             _noiseStrength = serializedObject.FindProperty("_noiseStrength");
             _gravityModule = serializedObject.FindProperty("_gravityModule");
             _vortexModule = serializedObject.FindProperty("_vortexModule");
@@ -216,6 +234,7 @@ namespace AssetKits.ParticleImage.Editor
             _trailWidth = serializedObject.FindProperty("_trailWidth");
             _trailColorOverLifetime = serializedObject.FindProperty("_trailColorOverLifetime");
             _trailColorOverTrail = serializedObject.FindProperty("_trailColorOverTrail");
+            _trailMaterial = serializedObject.FindProperty("_trailMaterial");
             _trailLifetime = serializedObject.FindProperty("_trailLifetime");
             _inheritColor = serializedObject.FindProperty("_inheritParticleColor");
             _dieWithParticle = serializedObject.FindProperty("_dieWithParticle");
@@ -226,15 +245,15 @@ namespace AssetKits.ParticleImage.Editor
             _onFirstParticleFinish = serializedObject.FindProperty("_onFirstParticleFinish");
             _onLastParticleFinish = serializedObject.FindProperty("_onLastParticleFinish");
             _onParticleFinish = serializedObject.FindProperty("_onParticleFinish");
-            
-            _particle.OnEnable();
+            _multithreadModule = serializedObject.FindProperty("_multithreadModule");
+            _multithreadEnabled = serializedObject.FindProperty("_multithreadEnabled");
 
             if (Application.isEditor && !EditorApplication.isPlaying)
             {
                 _particle.Invoke(nameof(ParticleImage.Play), 0.1f);
+                EditorApplication.update += EditorUpdate;
             }
-
-            EditorApplication.update += EditorUpdate;
+            
             SceneView.duringSceneGui += DrawSceneWindow;
             Undo.undoRedoPerformed += UndoRedoPerformed;
         }
@@ -265,37 +284,128 @@ namespace AssetKits.ParticleImage.Editor
         {
             Handles.color = Color.cyan;
             Handles.matrix = _particle.transform.localToWorldMatrix;
-            
+
             // Draw emitter shape
             switch (_particle.shape)
             {
                 case EmitterShape.Circle:
-                    Handles.DrawWireDisc(Vector3.zero, Vector3.forward, _particle.circleRadius);
-                    
-                    if (_particle.emitOnSurface)
-                        break;
-
                     // Draw inner circle
-                    Handles.color = Color.gray;
-                    Handles.DrawWireDisc(Vector3.zero, Vector3.forward,
-                        _particle.circleRadius - _particle.emitterThickness);
+                    if (!_particle.emitOnSurface)
+                    {
+                        Handles.color = Color.gray;
+                    
+                        EditorGUI.BeginChangeCheck();
+                        var innerRadiusHandle = Handles.Slider(new Vector3(_particle.circleRadius - _particle.emitterThickness,0f,0f), Vector3.right, HandleUtility.GetHandleSize(new Vector3(_particle.circleRadius - _particle.emitterThickness,0f,0f))  * 0.04f, Handles.DotHandleCap, 0f);
+                    
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Radius");
+                            _particle.emitterThickness = _particle.circleRadius - innerRadiusHandle.x;
+                            if(innerRadiusHandle.x > _particle.circleRadius)
+                                if(!_particle.fitRect)
+                                    _particle.circleRadius = innerRadiusHandle.x;
+                                else
+                                    _particle.emitterThickness = 0f;
+                        }
+                    
+                        Handles.DrawWireDisc(Vector3.zero, Vector3.forward,
+                            _particle.circleRadius - _particle.emitterThickness);
+                        
+                        Handles.color = Color.cyan;
+                    }
+                    
+                    // Draw outer circle
+                    if (!_particle.fitRect)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        var radiusHandle = Handles.Slider(new Vector3(_particle.circleRadius,0f,0f), Vector3.right, HandleUtility.GetHandleSize(new Vector3(_particle.circleRadius,0f,0f))  * 0.04f, Handles.DotHandleCap, 0f);
+                    
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Radius");
+                            _particle.circleRadius = radiusHandle.x;
+                        }
+                    }
+                    
+                    Handles.DrawWireDisc(Vector3.zero, Vector3.forward, _particle.circleRadius);
                     
                     break;
                 case EmitterShape.Rectangle:
-                    Handles.DrawWireCube(Vector3.zero, new Vector3(_particle.rectWidth, _particle.rectHeight));
-
-                    if(_particle.emitOnSurface)
-                        break;
-                    
                     // Draw inner rectangle
-                    Handles.DrawWireCube(Vector3.zero, new Vector3(_particle.rectWidth - _particle.emitterThickness, _particle.rectHeight - _particle.emitterThickness));
+                    if(!_particle.emitOnSurface)
+                    {
+                        Handles.color = Color.gray;
+                    
+                        EditorGUI.BeginChangeCheck();
+                        var innerRectWidthHandle = Handles.Slider(new Vector3((_particle.rectWidth - _particle.emitterThickness) / 2,0f,0f), Vector3.right, HandleUtility.GetHandleSize(new Vector3((_particle.rectWidth - _particle.emitterThickness) / 2,0f,0f))  * 0.04f, Handles.DotHandleCap, 0f);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Width");
+                            _particle.emitterThickness = _particle.rectWidth - innerRectWidthHandle.x * 2;
+                            if(innerRectWidthHandle.x > _particle.rectWidth / 2)
+                                if(!_particle.fitRect)
+                                    _particle.rectWidth = innerRectWidthHandle.x * 2;
+                                else
+                                    _particle.emitterThickness = 0f;
+                        }
+                    
+                        Handles.DrawWireCube(Vector3.zero, new Vector3(_particle.rectWidth - _particle.emitterThickness, _particle.rectHeight - _particle.emitterThickness));
+                        
+                        Handles.color = Color.cyan;
+                    }
+                    
+                    // Draw outer rectangle
+                    if (!_particle.fitRect)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        var rectWidthHandle = Handles.Slider(new Vector3(_particle.rectWidth / 2, 0f, 0f),
+                            Vector3.right,
+                            HandleUtility.GetHandleSize(new Vector3(_particle.rectWidth / 2, 0f, 0f)) * 0.04f,
+                            Handles.DotHandleCap, 0f);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Width");
+                            _particle.rectWidth = rectWidthHandle.x * 2;
+                        }
 
+                        EditorGUI.BeginChangeCheck();
+                        var rectHeightHandle = Handles.Slider(new Vector3(0f, _particle.rectHeight / 2, 0f), Vector3.up,
+                            HandleUtility.GetHandleSize(new Vector3(0f, _particle.rectHeight / 2, 0f)) * 0.04f,
+                            Handles.DotHandleCap, 0f);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Height");
+                            _particle.rectHeight = rectHeightHandle.y * 2;
+                        }
+                    }
+                    
+                    Handles.DrawWireCube(Vector3.zero, new Vector3(_particle.rectWidth, _particle.rectHeight));
+                    
                     break;
                 case EmitterShape.Line:
+                    if (!_particle.fitRect)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        var lineLengthHandle = Handles.Slider(new Vector3(_particle.lineLength / 2,0f,0f), Vector3.right, HandleUtility.GetHandleSize(new Vector3(_particle.lineLength / 2,0f,0f))  * 0.04f, Handles.DotHandleCap, 0f);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            Undo.RecordObject(_particle, "Change Emitter Length");
+                            _particle.lineLength = lineLengthHandle.x * 2;
+                        }
+                    }
+
                     Handles.DrawLine(new Vector3(-_particle.lineLength/2, 0, 0), new Vector3(_particle.lineLength/2, 0, 0));
                     break;
                 
                 case EmitterShape.Directional:
+                    EditorGUI.BeginChangeCheck();
+                    var angleHandle = Handles.Slider(PointInCircle(_angle.floatValue/2).normalized * 100f, Vector3.right, HandleUtility.GetHandleSize(PointInCircle(_angle.floatValue/2).normalized * 100f) * 0.04f, Handles.DotHandleCap, 0f);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(_particle, "Change Emitter Angle");
+                        _particle.directionAngle = Vector3.SignedAngle(Vector3.right, angleHandle, Vector3.forward);
+                    }
+                    
                     Handles.DrawWireArc(Vector3.zero, Vector3.forward, PointInCircle(_angle.floatValue/2).normalized, _angle.floatValue,100);
                     Handles.DrawLine(Vector3.zero, PointInCircle(_angle.floatValue/2).normalized * 100f);
                     Handles.DrawLine(Vector3.zero, PointInCircle(-_angle.floatValue/2).normalized * 100f);
@@ -353,18 +463,34 @@ namespace AssetKits.ParticleImage.Editor
             }
 
             GUILayout.EndHorizontal();
-            EditorGUILayout.LabelField("Playback Time",_particle.main ? _particle.main.time.ToString("F") : _particle.time.ToString("F"));
-            EditorGUILayout.LabelField("Particles",_particle.particles.Count.ToString());
+            EditorGUILayout.LabelField("Playback Time",_particle.main ? _particle.main.playback.ToString("F") : _particle.playback.ToString("F"));
+            if (_particle.multithreadEnabled)
+            {
+#if PARTICLE_IMAGE_JOBS
+                EditorGUILayout.LabelField("Particles",_particle.JobParticles.Length.ToString());
+#endif
+            }
+            else
+            {
+                EditorGUILayout.LabelField("Particles",_particle.particles.Count.ToString());
+            }
 
             GUILayout.EndArea();
             
             Handles.EndGUI();
         }
+
+        private bool showWarning;
         
         public override void OnInspectorGUI()
         {
             EditorGUILayout.PropertyField(_space, new GUIContent("Simulation Space"), false);
+            EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(_timeScale, new GUIContent("Simulation Time"), false);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _particle.Stop(true);
+            }
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(_playMode, new GUIContent("Play*", "Shared between the particles group"), false);
             if (EditorGUI.EndChangeCheck())
@@ -372,9 +498,39 @@ namespace AssetKits.ParticleImage.Editor
                 _particle.PlayMode = (PlayMode)_playMode.enumValueIndex;
                 EditorUtility.SetDirty(_particle);
             }
+            EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(_loop, false);
-            EditorGUILayout.PropertyField(_duration, false);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _prewarm.boolValue = false;
+            }
+            EditorGUI.BeginDisabledGroup(!_particle.loop);
+            if (_prewarm.boolValue)
+            {
+                GUILayout.BeginHorizontal();
+            }
+            
+            EditorGUILayout.PropertyField(_prewarm, false);
+            
+            if (_prewarm.boolValue)
+            {
+                if (GUILayout.Button(new GUIContent(EditorGUIUtility.IconContent("d_console.warnicon.sml").image, "Prewarm does not support a large number of particles."), GUIStyle.none,
+                        GUILayout.Width(22), GUILayout.Height(22)))
+                {
+                    showWarning = !showWarning;
+                }
+                GUILayout.EndHorizontal();
+            }
+            if (showWarning)
+            {
+                EditorGUILayout.HelpBox("Prewarm does not support a large number of particles.", MessageType.Warning);
+            }
+            
+            EditorGUI.EndDisabledGroup();
+            EditorGUI.BeginDisabledGroup(_particle.prewarm);
             EditorGUILayout.PropertyField(_delay,new GUIContent("Start Delay"), false);
+            EditorGUI.EndDisabledGroup();
+            EditorGUILayout.PropertyField(_duration, false);
             EditorGUILayout.PropertyField(_life, false);
             EditorGUILayout.PropertyField(_speed, false);
             EditorGUILayout.PropertyField(_startSize, new GUIContent("Start Size"), false);
@@ -469,8 +625,11 @@ namespace AssetKits.ParticleImage.Editor
             _particle.moduleParticleFoldout = Foldout("Particle", _particle.moduleParticleFoldout,_particleModuleIcon);
             if (_particle.moduleParticleFoldout)
             {
-                EditorGUILayout.PropertyField(_texture, new GUIContent("Texture"));
+                EditorGUILayout.PropertyField(_sprite, new GUIContent("Sprite"));
                 EditorGUILayout.PropertyField(_material, new GUIContent("Material"));
+                GUI.color = Color.gray;
+                EditorGUILayout.PropertyField(_texture, new GUIContent("Texture (Deprecated)*", "Use Sprite instead"));
+                GUI.color = Color.white;
                 
                 DrawHorizontalLine();
                 
@@ -496,7 +655,7 @@ namespace AssetKits.ParticleImage.Editor
                 EditorGUILayout.PropertyField(_alignDirection);
 
                 DrawHorizontalLine();
-                
+
                 EditorGUILayout.PropertyField(_sheetModule, new GUIContent("Texture Sheet"));
                 
                 if (_sheetModule.FindPropertyRelative("enabled").boolValue)
@@ -566,15 +725,25 @@ namespace AssetKits.ParticleImage.Editor
                 {
                     if (_trailModule.FindPropertyRelative("enabled").boolValue)
                     {
-                        GameObject tr = new GameObject("Trails");
-                        tr.transform.parent = _particle.transform;
-                        tr.transform.localPosition = Vector3.zero;
-                        tr.transform.localScale = Vector3.one;
-                        tr.transform.localEulerAngles = Vector3.zero;
-                        tr.AddComponent<CanvasRenderer>();
-                        ParticleTrailRenderer r = tr.AddComponent<ParticleTrailRenderer>();
-                        _particle.particleTrailRenderer = r;
-                        r.particle = _particle;
+                        if (_particle.particleTrailRenderer == null)
+                        {
+                            GameObject tr = new GameObject("Trails");
+                            tr.transform.parent = _particle.transform;
+                            tr.transform.localPosition = Vector3.zero;
+                            tr.transform.localScale = Vector3.one;
+                            tr.transform.localEulerAngles = Vector3.zero;
+                            tr.AddComponent<CanvasRenderer>();
+                            ParticleTrailRenderer r = tr.AddComponent<ParticleTrailRenderer>();
+                            r.raycastTarget = false;
+                            _particle.particleTrailRenderer = r;
+                            r.particle = _particle;
+                            
+                            if (_particle.isPlaying)
+                            {
+                                _particle.Stop(true);
+                                _particle.Play();
+                            }
+                        }
                     }
                     else
                     {
@@ -587,7 +756,6 @@ namespace AssetKits.ParticleImage.Editor
                 }
                 if (_trailModule.FindPropertyRelative("enabled").boolValue)
                 {
-                    EditorGUILayout.HelpBox("Please note that trails are in the beta stage and are not optimized for production use. Therefore, it is recommended that you apply for as few particles as possible.", MessageType.Warning);
                     EditorGUILayout.PropertyField(_trailRatio, new GUIContent("Trail Ratio"),false);
                     EditorGUILayout.PropertyField(_minimumVertexDistance, new GUIContent("Vertex Distance"),false);
                     EditorGUILayout.PropertyField(_trailLifetime, new GUIContent("Trail Lifetime"),false);
@@ -595,6 +763,16 @@ namespace AssetKits.ParticleImage.Editor
                     EditorGUILayout.PropertyField(_inheritColor, new GUIContent("Inherit Particle Color"),false);
                     EditorGUILayout.PropertyField(_trailColorOverLifetime, new GUIContent("Color over Lifetime"),false);
                     EditorGUILayout.PropertyField(_trailColorOverTrail, new GUIContent("Color over Trail"),false);
+                    EditorGUI.BeginChangeCheck();
+                    EditorGUILayout.PropertyField(_trailMaterial, new GUIContent("Trail Material"),false);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        if (_particle.particleTrailRenderer != null)
+                        {
+                            _particle.particleTrailRenderer.material = _trailMaterial.objectReferenceValue as Material;
+                            _particle.particleTrailRenderer.SetMaterialDirty();
+                        }
+                    }
                     EditorGUILayout.PropertyField(_dieWithParticle, new GUIContent("Die With Particle"),false);
                 }
                 GUILayout.Space(4);
@@ -621,12 +799,23 @@ namespace AssetKits.ParticleImage.Editor
                 {
                     EditorGUILayout.PropertyField(_noiseStrength,new GUIContent("Strength"), false);
                     
+                    EditorGUI.BeginChangeCheck();
                     EditorGUILayout.PropertyField(_noiseFreq,new GUIContent("Frequency"), false);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        _particle.noise.SetFrequency(_particle.noiseFrequency/100f);
+                    }
                     
-                    EditorGUILayout.PropertyField(_noiseOct, new GUIContent("Octaves"),false);
+                    EditorGUILayout.PropertyField(_noiseOffset, new GUIContent("Offset"),false);
                     
-                    _particle.noise.SetFrequency(_particle.noiseFrequency/100f);
-                    _particle.noise.SetFractalOctaves(_particle.noiseOctaves);
+                    _particle.noiseDebug = EditorGUILayout.Toggle("Visualize Noise",_particle.noiseDebug);
+
+                    if (_particle.noiseDebug)
+                    {
+                        _particle.noiseViewSize = EditorGUILayout.Vector2IntField("Size",_particle.noiseViewSize);
+                    }
+                    
+                    
                 }
 
                 DrawHorizontalLine();
@@ -653,13 +842,98 @@ namespace AssetKits.ParticleImage.Editor
             _particle.moduleEventsFoldout = Foldout("Events", _particle.moduleEventsFoldout,_eventModuleIcon);
             if (_particle.moduleEventsFoldout)
             {
-                EditorGUILayout.PropertyField(_onStart, false);
-                EditorGUILayout.PropertyField(_onFirstParticleFinish, false);
-                EditorGUILayout.PropertyField(_onParticleFinish, false);
-                EditorGUILayout.PropertyField(_onLastParticleFinish, false);
-                EditorGUILayout.PropertyField(_onFinish, false);
+                EditorGUILayout.PropertyField(_onStart, new GUIContent("On Particle Start"), false);
+                EditorGUILayout.PropertyField(_onFirstParticleFinish, new GUIContent("On First Particle Finished"),false);
+                EditorGUILayout.PropertyField(_onParticleFinish, new GUIContent("On Any Particle Finished"),false);
+                EditorGUILayout.PropertyField(_onLastParticleFinish, new GUIContent("On Last Particle Finished"),false);
+                EditorGUILayout.PropertyField(_onFinish, new GUIContent("On Particle Stopped"),false);
             }
-
+            
+            _particle.moduleAdvancedFoldout = Foldout("Advanced", _particle.moduleAdvancedFoldout,_advancedModuleIcon);
+            if (_particle.moduleAdvancedFoldout)
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(_multithreadModule, new GUIContent("Multithreading*", "Shared between the particles group"), false);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (_particle.isPlaying)
+                    {
+                        _particle.Stop(true);
+                        _particle.Play();
+                    }
+                    if(_multithreadModule.FindPropertyRelative("enabled").boolValue == false)
+                        _particle.multithreadEnabled = false;
+                }
+                
+                if (_multithreadModule.FindPropertyRelative("enabled").boolValue)
+                {
+                    var labelStyle = new GUIStyle(GUI.skin.label) {richText = true};
+                    
+                    EditorGUI.BeginDisabledGroup(!hasBurst || !hasCollections || !hasMathematics);
+                    EditorGUI.BeginChangeCheck();
+                    EditorGUILayout.PropertyField(_multithreadEnabled, new GUIContent("Enable", "Multithreaded can't be enabled until all package dependencies are installed"), false);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        if (_particle.isPlaying)
+                        {
+                            _particle.Stop(true);
+                            _particle.Play();
+                        }
+                        _particle.multithreadEnabled = _multithreadEnabled.boolValue;
+                    }
+                    EditorGUI.EndDisabledGroup();
+                    
+    #if UNITY_COLLECTIONS
+                    hasCollections = true;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    GUILayout.Label(new GUIContent("<b>com.unity.collections</b> has been found", EditorGUIUtility.IconContent("Installed").image), labelStyle);
+                    GUILayout.EndHorizontal();
+    #else
+                    hasCollections = false;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    EditorGUILayout.LabelField(new GUIContent("<b>com.unity.collections</b> needs to be installed", EditorGUIUtility.IconContent("Error").image), labelStyle);
+                    if(GUILayout.Button("Install", GUILayout.Width(80)))
+                    {
+                        UnityEditor.PackageManager.UI.Window.Open("com.unity.collections");
+                    }
+                    GUILayout.EndHorizontal();
+    #endif
+                    
+    #if UNITY_MATHEMATICS
+                    hasMathematics = true;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    GUILayout.Label(new GUIContent("<b>com.unity.mathematics</b> has been found", EditorGUIUtility.IconContent("Installed").image), labelStyle);
+                    GUILayout.EndHorizontal();
+    #else
+                    hasMathematics = false;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    EditorGUILayout.LabelField(new GUIContent("<b>com.unity.mathematics</b> needs to be installed", EditorGUIUtility.IconContent("Error").image), labelStyle);
+                    if(GUILayout.Button("Install", GUILayout.Width(80)))
+                    {
+                        UnityEditor.PackageManager.UI.Window.Open("com.unity.mathematics");
+                    }
+                    GUILayout.EndHorizontal();
+    #endif
+                    
+    #if UNITY_BURST
+                    hasBurst = true;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    GUILayout.Label(new GUIContent("<b>com.unity.burst</b> has been found", EditorGUIUtility.IconContent("Installed").image), labelStyle);
+                    GUILayout.EndHorizontal();
+    #else
+                    hasBurst = false;
+                    GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                    GUILayout.Label(new GUIContent("<b>com.unity.burst</b> needs to be installed", EditorGUIUtility.IconContent("Error").image), labelStyle);
+                    if(GUILayout.Button("Install", GUILayout.Width(80)))
+                    {
+                        UnityEditor.PackageManager.UI.Window.Open("com.unity.burst");
+                    }
+                    GUILayout.EndHorizontal();
+    #endif
+                    
+                    _multithreadEnabled.boolValue = _multithreadEnabled.boolValue && hasBurst && hasCollections && hasMathematics;
+                }
+            }
             serializedObject.ApplyModifiedProperties();
         }
         

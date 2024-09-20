@@ -7,6 +7,12 @@ using UnityEngine.Networking;
 using SimpleJSON;
 using UnityEngine.Serialization;
 using System.Collections.Specialized;
+using UnityEngine.Events;
+using UnityEngine.UI;
+
+// send content to LoadAudioAndTimings( parameters: set jsonTimingsURL to "" if staticText is true 
+// if staticText is true, create single AudioAndTimingsStruct object (and add to cacheAcudioAndTimingsStructs as usual)
+
 
 class AudioAndTimingsStruct
 {
@@ -16,8 +22,57 @@ class AudioAndTimingsStruct
     public JSONNode jsonNodeTimings;
 }
 
+[System.Serializable]
+public class WordTiming
+{
+    public string Word;
+    public float Time;
+}
+
 public class AudioAndTextPlayer : MonoBehaviour
 {
+    public bool staticText = true;
+
+    public string nextPlayUseVoice = "";
+    public bool showHighlight = true;
+    public bool audioNameGenerated = true;
+    public ButtonSelectionController buttonSelectionController;
+    
+    [SerializeField] private bool _playAudio = true;  // Backing field for playAudio
+    
+    public bool _PlayAudio
+    {
+        get { return _playAudio; }
+        set
+        {
+            if (_playAudio != value)  // Only trigger if value changes
+            {
+                _playAudio = value;
+                UpdateAudioSourceVolume();  // Call method to update volume
+            }
+        }
+    }
+
+    // This method is called when the value of a variable changes in the editor
+    void OnValidate()
+    {
+        // Sync the property with the field when value is changed in the editor
+        UpdateAudioSourceVolume();
+    }
+
+    private void UpdateAudioSourceVolume()
+    {
+        if (audioSource != null)
+        {
+            audioSource.volume = !_PlayAudio ? 0 : 1;
+        }
+    }
+
+    [SerializeField]
+    public UnityEvent OnAutoNextStep;
+    private bool triggerNextStep = false;
+    [SerializeField] private Toggle nextStepToggle;
+    
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private TMP_Text uiForeground;
     [SerializeField] private TMP_Text uiBackground;
@@ -33,20 +88,70 @@ public class AudioAndTextPlayer : MonoBehaviour
     public string baseURL;
 
     DateTime dtWasPlaying = DateTime.MinValue;
-
+    
     private void Start()
     {
         wordTimings = new List<WordTiming>();
         currentWordIndex = 0;
+        // Add a listener to the toggle to call SetTriggerNextStep when the toggle value changes
+        if (nextStepToggle != null)
+        {
+            nextStepToggle.onValueChanged.AddListener(OnToggleValueChanged);
+        }
+
+        // nextPlayUseVoice = "computer";
     }
     
     private void OnDestroy()
     {
+        if (nextStepToggle != null)
+        {
+            nextStepToggle.onValueChanged.RemoveListener(OnToggleValueChanged);
+        }
         StopAllCoroutines();
     }
-    
-    public void Play(string audioURL, string jsonTimingsURL)
+
+    public void OnSetNextPlayVoiceSetting()
     {
+        Debug.Log("OnSetNextPlayVoiceSetting: buttonSelectionController = " + buttonSelectionController);
+        nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
+        Debug.Log("OnSetNextPlayVoiceSetting: nextPlayUseVoice = " + nextPlayUseVoice);
+    }
+    
+    void PreparePlayVoiceSettings()
+    {
+        nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
+        Debug.Log("PreparePlayVoiceSettings: nextPlayUseVoice = " + nextPlayUseVoice);
+        if (nextPlayUseVoice == "human")
+        {
+            showHighlight = false;
+            audioNameGenerated = false;
+            _PlayAudio = true;
+        }
+        else if (nextPlayUseVoice == "computer" || nextPlayUseVoice == "")
+        {
+            showHighlight = true;
+            audioNameGenerated = true;
+            _PlayAudio = true;
+        }
+        else if (nextPlayUseVoice == "novoice")
+        {
+            showHighlight = false;
+            audioNameGenerated = true;
+            _PlayAudio = false;
+        }
+    }
+    
+    public void Play(string chunkname, string currentVoicePostfix, string content)
+    {
+        PreparePlayVoiceSettings();
+        string audioURL = $"{chunkname}_{Globals.getReadingRate()}{currentVoicePostfix}.mp3";  ;
+        string jsonTimingsURL = $"{chunkname}_{Globals.getReadingRate()}_timings{currentVoicePostfix}.json"; 
+        if (!audioNameGenerated)
+            audioURL = $"{chunkname}.mp3";
+        if (staticText)
+            jsonTimingsURL =  $"{chunkname}.json";
+        
         currentWordIndex = 0;
         StopAllCoroutines();
         StartCoroutine(LoadAudioAndTimings(
@@ -54,9 +159,13 @@ public class AudioAndTextPlayer : MonoBehaviour
             jsonTimingsURL != "" ? baseURL + jsonTimingsURL: ""));
     }
     
+    private void OnToggleValueChanged(bool isOn)
+    {
+        triggerNextStep = isOn;
+    }
+
     public void SetActive(bool bActive)
     {
-        //Debug.Log("AudioAndTextPlayer::SetActive " + bActive);
         uiForeground.gameObject.SetActive(bActive);
         uiBackground.gameObject.SetActive(bActive);
     }
@@ -191,9 +300,15 @@ public class AudioAndTextPlayer : MonoBehaviour
             AddToCache(audioURL, audioAndTimingsStruct);
         }
 
-        ParseTimings(audioAndTimingsStruct.jsonNodeTimings);
-        audioSource.clip = audioAndTimingsStruct.audioClip;
+        if (audioAndTimingsStruct != null)
+        {
+            ParseTimings(audioAndTimingsStruct.jsonNodeTimings);
+            audioSource.clip = audioAndTimingsStruct.audioClip;
+        }
+
         yield return new WaitForSeconds(0.5f);
+        
+        audioSource.volume = !_PlayAudio ? 0 : 1;
         audioSource.Play();
 
         if (jsonTimingsURL != "")
@@ -211,9 +326,25 @@ public class AudioAndTextPlayer : MonoBehaviour
             //if ((dtWasPlaying != DateTime.MinValue) && (DateTime.Now - dtWasPlaying > TimeSpan.FromSeconds(2)))
             UpdateHighlightedText(0, false);
             //uiText.text = ""; // Reset the text to its original state.
+
+            // Log a message when the audio stops playing
+            Debug.Log("Audio has stopped playing.");
+
+            // Conditionally start the coroutine based on triggerNextStep
+            if (triggerNextStep)
+            {
+                StartCoroutine(WaitAndTriggerNextStep());
+            }
         }
     }
     
+    private IEnumerator WaitAndTriggerNextStep()
+    {
+        yield return new WaitForSeconds(2f);
+        OnAutoNextStep?.Invoke();
+    }
+
+
     private static void AddToCache(string audioURL, AudioAndTimingsStruct audioAndTimingsStruct)
     {
         if (cacheAcudioAndTimingsStructs.Count >= maxCacheSize)
@@ -231,19 +362,12 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         wordTimings.Clear();
 
-        WordTiming wordTiming = null;
         foreach (JSONNode timing in timings)
         {
-            wordTiming = new WordTiming
-            {
-                Word = timing["word"].Value,
-                Time = timing["time"].AsFloat
-            };
+            WordTiming wordTiming = new WordTiming();
+            wordTiming.Word = timing["word"].Value;
+            wordTiming.Time = timing["time"].AsFloat;
             wordTimings.Add(wordTiming);
-        }
-        if (wordTiming != null)
-        {
-            wordTiming.Word = wordTiming.Word.Trim();
         }
     }
 
@@ -280,7 +404,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         for (int i = 0; i < wordTimings.Count; i++)
         {
             //if (bHilight && i == currentWordIndex - 1)
-            if (bHilight && i == currentWordIndex && !IsWordPunctuation(i))
+            if (showHighlight && bHilight && i == currentWordIndex && !IsWordPunctuation(i))
             {
                 newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
                 newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
@@ -298,7 +422,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                 //newBsckgroundText += " ";
             //}
         }
-
+    
         uiForeground.text = newForegroundText.TrimEnd();
         uiBackground.text = newBsckgroundText.TrimEnd();
         //Debug.Log(newText);
@@ -311,9 +435,3 @@ public class AudioAndTextPlayer : MonoBehaviour
     }
 }
 
-[System.Serializable]
-public class WordTiming
-{
-    public string Word;
-    public float Time;
-}

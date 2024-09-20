@@ -5,6 +5,8 @@ using UnityEngine.Events;
 public class VSpriteButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler,
     IPointerEnterHandler, IPointerExitHandler
 {
+//    public string buttonName;
+    
     [SerializeField] 
     private UnityEvent onClick;
 

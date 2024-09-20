@@ -59,13 +59,20 @@ public class BooksScrollView : MonoBehaviour
 
     public void AddBook(PRBook prBook)
     {
-        GameObject newBook = Instantiate(bookPrefab, scrollViewContent);
-        if (newBook.TryGetComponent<BookViewItem>(out BookViewItem item))
+        if (prBook.bookViewItem != null)
         {
-            item.prBook = prBook;
-            string imageBookUrl = PRLibrary.baseURL + prBook.bookImageUrl;
-            StartCoroutine(PRUtils.DownloadImage(imageBookUrl, item.imageBook));
-            item.SetBookProperties(prBook);
+            prBook.bookViewItem.gameObject.SetActive(true);
+            return;
+        }
+
+        GameObject newBookGameObject = Instantiate(bookPrefab, scrollViewContent);
+        if (newBookGameObject.TryGetComponent<BookViewItem>(out BookViewItem bookViewItem))
+        {
+            bookViewItem.prBook = prBook;
+            string imageBookUrl = Globals.baseURL + prBook.bookImageUrl;
+            StartCoroutine(PRUtils.DownloadImage(imageBookUrl, bookViewItem.imageBook));
+            bookViewItem.SetBookProperties(prBook);
+            prBook.bookViewItem = bookViewItem;
         }
     }
 
@@ -78,8 +85,11 @@ public class BooksScrollView : MonoBehaviour
 
     public void ShowBooks(Filter filter)
     {
+        if (prBooks == null)
+            return;
+        
         ClearScrollView();
-
+        
         foreach (PRBook prBook in prBooks)
         {
             if (this.filter != null && !filter.Conforms(prBook))
@@ -96,7 +106,8 @@ public class BooksScrollView : MonoBehaviour
     {
         foreach (Transform child in scrollViewContent)
         {
-            Destroy(child.gameObject);
+            //Destroy(child.gameObject);
+            child.gameObject.SetActive(false);
         }
     }
     
@@ -104,7 +115,40 @@ public class BooksScrollView : MonoBehaviour
     public void SetFilter(int ageFrom, int ageTo, String genre)
     {
         filter.SetFilter(ageFrom, ageTo, genre);
-        Debug.Log("Set filter: " + ageFrom + " " + ageTo + " " + genre);
+        // Debug.Log("Set filter: " + ageFrom + " " + ageTo + " " + genre);
         ShowBooks(filter);
     }
+    
+    public void SetSortingByAge(bool bAscending)
+    {
+        List<Transform> children = new List<Transform>();
+
+        foreach (Transform child in scrollViewContent)
+        {
+            children.Add(child);
+        }
+
+        children.Sort((t1, t2) => 
+        {
+            BookViewItem bvi1 = t1.GetComponent<BookViewItem>();
+            BookViewItem bvi2 = t2.GetComponent<BookViewItem>();
+
+            if (bvi1 != null && bvi2 != null)
+            {
+                if (bAscending)
+                    return bvi1.prBook.ageFrom.CompareTo(bvi2.prBook.ageFrom);
+                else
+                    return bvi2.prBook.ageFrom.CompareTo(bvi1.prBook.ageFrom);
+            }
+            return 0;  // Consider how you wish to handle the case where BookViewItem component is missing.
+        });
+
+        for (int i = 0; i < children.Count; i++)
+        {
+            children[i].SetSiblingIndex(i);
+        }
+    }
+
+
+    
 }

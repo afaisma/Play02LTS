@@ -9,6 +9,8 @@ public class FilterContainer : MonoBehaviour
     public BooksScrollView booksScrollView;
     public RectTransform rectTransformFilter;
     public string currentFilter = "";
+    public PRLibrary prLibrary;
+
     private Vector2 initialRectTransformFilterPosition;
     private bool bIn;
     
@@ -29,12 +31,19 @@ public class FilterContainer : MonoBehaviour
             //if (isOn && currentFilter != filterItem.filter)
             if (currentFilter != filterItem.filter.ToLower())
             {
-                currentFilter = filterItem.filter.ToLower();
-                OnFilterChanged();
+                //currentFilter = filterItem.filter.ToLower();
+                //OnFilterChanged();
+                prLibrary.SetFilter(filterItem.filter.ToLower());
             }
         }
         
         MoveOut();
+    }
+    
+    public void _SetFilter(string filter)
+    {
+        currentFilter = filter;
+        OnFilterChanged();
     }
 
     private void OnFilterChanged()

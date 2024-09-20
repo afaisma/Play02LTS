@@ -26,7 +26,8 @@ public class VVScene : MonoBehaviour
     private Settings _settings;
     Dictionary<string, Scriptlet> _mapEvents = new Dictionary<string, Scriptlet>();
     public string baseURL = "";
-    public string convScene = "http://localhost:8080/api/files/download/stories/VScene/VScene.txt";
+    public string convLocalScene = "http://localhost:8080/api/files/download/stories/VScene/vscene.txt";
+    public string convS3Scene = "https://d5wtw8f0w3ire.cloudfront.net/uploads/stories/VScene/vscene.txt";
     [Multiline] public string embeddedScript;
     readonly int _maxCacheImagesSize = 30;
     static readonly OrderedDictionary CacheImages = new OrderedDictionary();
@@ -192,7 +193,7 @@ public class VVScene : MonoBehaviour
     void OnDestroy()
     {
         _interpreter?.Reset();
-        Debug.Log("OnDestroy VVScene");
+        //Debug.Log("OnDestroy VVScene");
     }
 
     void RunScript(string sScript)
@@ -629,10 +630,10 @@ public class VVScene : MonoBehaviour
     public IEnumerator CoAddVSprite(GameObject go, string url, float x0, float y0, float x1, float y1,
         bool keepAspect = true, CellStructure cellStructure = null)
     {
-        SpriteRenderer spriteRenderer = go.AddComponent<SpriteRenderer>();
-        StartCoroutine(DownloadSprite(url, go, x0, y0, x1, y1, keepAspect, cellStructure));
-        VSprite vsprite = go.AddComponent<VSprite>();
+        SpriteRenderer spriteRenderer = go.AddComponentOrReturnExisting<SpriteRenderer>();
+        VSprite vsprite = go.AddComponentOrReturnExisting<VSprite>();
         vsprite.url = url;
+        StartCoroutine(DownloadSprite(url, go, x0, y0, x1, y1, keepAspect, cellStructure));
 
         yield return null;
     }
@@ -645,7 +646,7 @@ public class VVScene : MonoBehaviour
             MoveAndResizeSprite(go, new Vector2(x0, y0), new Vector2(x1, y1));
         VSprite vSprite = go.GetComponent<VSprite>();
         vSprite.isReady = true;
-        go.AddComponent<BoxCollider2D>();
+        go.AddComponentOrReturnExisting<BoxCollider2D>();
     }
 
     IEnumerator DownloadSprite(string url, GameObject go, float x0, float y0, float x1, float y1,
@@ -664,33 +665,59 @@ public class VVScene : MonoBehaviour
             PostDownload(go, x0, y0, x1, y1, keepAspect);
             yield return sprite;
         }
-
-        UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
-
-        // Send the request and yield until it completes
-        yield return www.SendWebRequest();
-
-        if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
+        else if (!url.StartsWith("http"))
         {
-            Debug.LogError("Error while receiving: " + www.error);
+            // Load sprite from Resources
+            string resourcePath = url.TrimStart('/');
+            Sprite sprite = Resources.Load<Sprite>(resourcePath);
+
+            if (sprite != null)
+            {
+                CacheImages.Add(url, sprite);
+                if (cellStructure == null)
+                    spriteRenderer.sprite = sprite;
+                else
+                    spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX, cellStructure.nY);
+
+                PostDownload(go, x0, y0, x1, y1, keepAspect);
+                yield return sprite;
+            }
+            else
+            {
+                Debug.Log($"Error: Could not find local resource at {resourcePath}");
+            }
         }
         else
         {
-            // CreateSubspriteCell(Sprite originalSprite, int x, int y, int nX, int nY)
-            Texture2D texture = DownloadHandlerTexture.GetContent(www);
-            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
-                new Vector2(0.5f, 0.5f), 100.0f);
-            AddToCacheImages(url, sprite);
-            if (cellStructure == null)
-                spriteRenderer.sprite = sprite;
-            else
-                spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y, cellStructure.nX,
-                    cellStructure.nY);
-            PostDownload(go, x0, y0, x1, y1, keepAspect);
+            UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
 
-            // Yield the sprite to the caller
-            spriteRenderer.sprite = sprite;
-            yield return sprite;
+            // Send the request and yield until it completes
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.ConnectionError ||
+                www.result == UnityWebRequest.Result.ProtocolError)
+            {
+                Debug.LogError("Error while receiving: " + www.error);
+            }
+            else
+            {
+                // CreateSubspriteCell(Sprite originalSprite, int x, int y, int nX, int nY)
+                Texture2D texture = DownloadHandlerTexture.GetContent(www);
+                Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                    new Vector2(0.5f, 0.5f), 100.0f);
+                AddToCacheImages(url, sprite);
+                if (cellStructure == null)
+                    spriteRenderer.sprite = sprite;
+                else
+                    spriteRenderer.sprite = CreateSubspriteCell(sprite, cellStructure.x, cellStructure.y,
+                        cellStructure.nX,
+                        cellStructure.nY);
+                PostDownload(go, x0, y0, x1, y1, keepAspect);
+
+                // Yield the sprite to the caller
+                spriteRenderer.sprite = sprite;
+                yield return sprite;
+            }
         }
     }
 
@@ -775,7 +802,7 @@ public class VVScene : MonoBehaviour
         textObject.transform.localScale = Vector3.one;
 
         // Add the TextMeshPro component and configure it
-        TextMeshPro tmp = textObject.AddComponent<TextMeshPro>();
+        TextMeshPro tmp = textObject.AddComponentOrReturnExisting<TextMeshPro>();
         tmp.text = text;
         tmp.fontSize = fontSize;
 
@@ -796,7 +823,7 @@ public class VVScene : MonoBehaviour
         lightObject.transform.parent = go.transform;
         lightObject.transform.localPosition = Vector3.zero;
 
-        Light2D light2D = lightObject.AddComponent<Light2D>();
+        Light2D light2D = lightObject.AddComponentOrReturnExisting<Light2D>();
 
         light2D.intensity = intensity;
         light2D.pointLightInnerRadius = innerRadius;
@@ -844,7 +871,7 @@ public class VVScene : MonoBehaviour
         }
 
         // Add the HoveringBehavior2D component
-        HoveringBehavior2D hoveringBehavior = go.AddComponent<HoveringBehavior2D>();
+        HoveringBehavior2D hoveringBehavior = go.AddComponentOrReturnExisting<HoveringBehavior2D>();
 
         // Set the properties
         hoveringBehavior.hoverSpeed = hoverSpeed;
@@ -955,13 +982,13 @@ public class VVScene : MonoBehaviour
                     goCell.transform.parent = transform;
                 goCell.transform.Translate(cellWidth * ix + cellWidth / 2 - width / 2,
                     cellHeight * iy + cellHeight / 2 - height / 2, NextSpriteZ());
-                SpriteRenderer spriteRendererCell = goCell.AddComponent<SpriteRenderer>();
+                SpriteRenderer spriteRendererCell = goCell.AddComponentOrReturnExisting<SpriteRenderer>();
                 spriteRendererCell.sprite = cellSprite;
-                VSprite vsprite = goCell.AddComponent<VSprite>();
+                VSprite vsprite = goCell.AddComponentOrReturnExisting<VSprite>();
                 vsprite.url = url;
                 goCell.transform.localScale = new Vector3(1, 1, 1);
                 vsprite.isReady = true;
-                goCell.AddComponent<BoxCollider2D>();
+                goCell.AddComponentOrReturnExisting<BoxCollider2D>();
                 AddToGoMap(cellId, goCell);
             }
         }

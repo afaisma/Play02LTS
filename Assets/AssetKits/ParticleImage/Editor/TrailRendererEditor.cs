@@ -13,7 +13,7 @@ namespace AssetKits.ParticleImage.Editor
         {
             MonoScript.FromMonoBehaviour(target as ParticleTrailRenderer).SetIcon(Resources.Load<Texture2D>("TrailIcon"));
         }
-        
+
         public override void OnInspectorGUI()
         {
             EditorGUILayout.HelpBox("Particle Image trail renderer.", MessageType.Info);
