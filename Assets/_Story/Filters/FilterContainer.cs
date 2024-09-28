@@ -42,6 +42,7 @@ public class FilterContainer : MonoBehaviour
     
     public void _SetFilter(string filter)
     {
+        booksScrollView.ResetScrollPosition();
         currentFilter = filter;
         OnFilterChanged();
     }
@@ -50,23 +51,8 @@ public class FilterContainer : MonoBehaviour
     {
         if (booksScrollView == null)
             return;
-        HashSet<string> bookCategories = new HashSet<string>()
-        {
-            "rhymebooks",
-            "family",
-            "adventure",
-            "science",
-            "fairytales",
-            "special education",
-            "classic",
-            "art",
-            "sound & speech",
-            "math",
-            "nature",
-            "manners"
-        };
         
-        if (bookCategories.Contains(currentFilter))
+        if (PRLibrary.bookCategories.Contains(currentFilter))
         {
             booksScrollView.SetFilter(0, 0, currentFilter);
         }
@@ -90,7 +76,6 @@ public class FilterContainer : MonoBehaviour
         {
             booksScrollView.SetFilter(0, 0, "");
         }
-        
     }
     
     public void MoveIn()
@@ -101,7 +86,7 @@ public class FilterContainer : MonoBehaviour
 
     public void MoveOut()
     {
-        Invoke("_MoveOut", 1f); 
+        Invoke("_MoveOut", 0.5f); 
     }
 
     public void _MoveOut()
@@ -121,6 +106,4 @@ public class FilterContainer : MonoBehaviour
             MoveIn();
         }        
     }
-    
-
 }

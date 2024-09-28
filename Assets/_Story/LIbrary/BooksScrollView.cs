@@ -149,6 +149,10 @@ public class BooksScrollView : MonoBehaviour
         }
     }
 
-
+    public void ResetScrollPosition()
+    {
+        storedScrollPosition = new Vector2(-1, -1);
+        scrollRectToStoreTheScrollPosition.normalizedPosition = new Vector2(0, 1);
+    }
     
 }

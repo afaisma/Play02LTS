@@ -19,6 +19,25 @@ public class PRLibrary : MonoBehaviour
     public FilterContainer filterContainer;
     public TextMeshProUGUI txtTitle;
 
+    public static List<string> bookCategories = new List<string>()
+    {
+        "rhymebooks",
+        "family",
+        "adventure",
+        "science",
+        "fairytales",
+        "special education",
+        "classic",
+        "art",
+        "sound & speech",
+        "math",
+        "nature",
+        "manners",
+        ""
+    };
+    private int currentCategory = -1;  // Renamed from currentIndex
+
+    
     private void Start()
     {
         // if (Globals.IsTablet())
@@ -30,6 +49,7 @@ public class PRLibrary : MonoBehaviour
         //     Screen.orientation = Portrait;
         // }
         LoadBooks(this);
+        booksScrollView.ResetScrollPosition();
     }
 
     private void OnDestroy()
@@ -39,8 +59,6 @@ public class PRLibrary : MonoBehaviour
 
     public void LoadBooks(MonoBehaviour mb)
     {
-        // if (Globals.g_prBooksMap.ContainsKey(Globals.CSVURL))
-        //     prbooks = Globals.g_prBooksMap.GetValueOrDefault(Globals.CSVURL);
         prbooks = Globals.g_listPRBooks;
         booksScrollView.AddBooks(prbooks);
         Globals.g_openedStoriesCount = PlayerPrefs.GetInt("g_openedStoriesCount", 0);
@@ -101,8 +119,99 @@ public class PRLibrary : MonoBehaviour
     public void SetFilter(string filter)
     {
         filterContainer?._SetFilter(filter);
-        txtTitle.text = "ReadingBuddy: " + PRUtils.CapitalizeFirstLetter(filter);
+        txtTitle.text = //"ReadingBuddy: " + 
+                        PRUtils.CapitalizeFirstLetter(filter);
+        if (filter == "")
+            txtTitle.text = "All Books";
+
+        if (filter == "rhymebooks")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/rhymebook_background");
+            txtTitle.color = new Color(0.3f, 0.99f, 0.1f);
+        }
+        else if (filter == "family")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/family1-background");
+            txtTitle.color = new Color(0.54f, 0.77f, 0.5f); 
+        }
+        else if (filter == "adventure")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/adventure_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "science")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/science_background");
+            txtTitle.color = new Color(0.8f, 0.8f, 0.8f);
+        }
+        else if (filter == "fairytales")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/fairystories_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "special education")
+        {
+            imgBackground.sprite =
+                Resources.Load<Sprite>("Library/specialeducation_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "classic")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/classics_background");
+            txtTitle.color = new Color(0.8f, 0.4f, 0.8f);
+        }
+        else if (filter == "art")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/art_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "sound & speech")
+        {
+            imgBackground.sprite =
+                Resources.Load<Sprite>("Library/sound_and_speech_background");
+            txtTitle.color = new Color(0.6f, 0.6f, 0.6f);
+        }
+        else if (filter == "math")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/math2_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "nature")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/nature_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else if (filter == "manners")
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/manners_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
+        else
+        {
+            imgBackground.sprite = Resources.Load<Sprite>("Library/Library_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
     } 
+    
+    public void NextCategory()
+    {
+        currentCategory++;  // Move to the next category
+        if (currentCategory >= bookCategories.Count)
+            currentCategory = 0;  // Loop back to the first category
+
+        SetFilter(bookCategories[currentCategory]); 
+    }
+
+    // Method to get the previous category with looping
+    public void PreviousCategory()
+    {
+        currentCategory--;  // Move to the previous category
+        if (currentCategory < 0)
+            currentCategory = bookCategories.Count - 1;  // Loop back to the last category
+
+        SetFilter(bookCategories[currentCategory]); 
+    }
+    
 }
 
 [Serializable]
