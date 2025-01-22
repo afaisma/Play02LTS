@@ -55,6 +55,7 @@ public class AudioPlayer : MonoBehaviour
         }
     }
     
+    /*
     [Command]
     public void PlayAudio1(string audioClipName, float dFrom, float dTo)
     {
@@ -72,6 +73,8 @@ public class AudioPlayer : MonoBehaviour
         }
     }
 
+    */
+    /*
     public void PlayAudio2(string audioClipName, float dFrom, float dTo)
     {
         AudioClipStruct audioClipStruct = audioClipStructs.Find(x => x.audioClipName == audioClipName);
@@ -87,6 +90,7 @@ public class AudioPlayer : MonoBehaviour
             Debug.Log($"Audio clip not found: {audioClipName}");
         }
     }
+    */
 
     public void PlayAudio(string audioClipName, float dFrom, float dTo)
     { 
@@ -111,15 +115,19 @@ public class AudioPlayer : MonoBehaviour
         audioSource.Stop();
     }
 
+    /*
     private IEnumerator StopAudioAtTime(string audioClipName, float dTo)
     {
         yield return new WaitForSeconds(dTo - audioSource.time);
         OnAudioPlaybackFinished(audioClipName);
     }
+    */
 
+    /*
     private void OnAudioPlaybackFinished(string audioClipName)
     {
         audioSource.Stop();
         Debug.Log("Audio playback finished.");
     }
+*/
 }

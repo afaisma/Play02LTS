@@ -8,7 +8,7 @@ using DG.Tweening;
 public class MovingRatingsOptionsPanel : MonoBehaviour
 {
     public RectTransform rectTransformFilter;
-
+    public RateTheApp rateTheApp;
     private Vector2 initialRectTransformFilterPosition;
     private bool bIn;
     
@@ -29,6 +29,7 @@ public class MovingRatingsOptionsPanel : MonoBehaviour
     public void MoveIn()
     {
         Debug.Log("MoveIn");
+        rateTheApp.RateApplication(0);
         rectTransformFilter.DOAnchorPos(Vector2.zero, 0.35f);
         bIn = true;
     }

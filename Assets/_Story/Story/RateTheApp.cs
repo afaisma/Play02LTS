@@ -9,13 +9,17 @@ public class RateTheApp : MonoBehaviour {
     public MovingRatingsOptionsPanel movingRatingsOptionsPanel;
         
     public int rateValue;
+    
+    void Start()
+    {
+    }
 
     public void RateApplication(int rate)
     {
         rateValue = rate;
 
         // active rate button if use click some stars
-        if (rateValue > 3)
+        if (rateValue > 0)
             rateButton.GetComponent<Button>().interactable = true;
         else
             rateButton.GetComponent<Button>().interactable = false;
@@ -47,14 +51,16 @@ public class RateTheApp : MonoBehaviour {
     
     public void RateNow()
     {
-        if (rateValue >= 5)
+        if (rateValue >= 4)
         {
-            //Got to the app store
             movingRatingsOptionsPanel.MoveOut();
+            // Application.OpenURL("http://www.imagiration.com");
+            PRUtils.RateUs();
         }
         else
         {
-            panelEmailUs.SetActive(true);
+            movingRatingsOptionsPanel.MoveOut();
+            // panelEmailUs.SetActive(true);
         }
     }
 }

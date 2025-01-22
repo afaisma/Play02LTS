@@ -136,7 +136,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &51163778
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1704,9 +1704,9 @@ MonoBehaviour:
   onValueChanged:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1979336020}
-        m_TargetAssemblyTypeName: Globals, Assembly-CSharp
-        m_MethodName: HandleetReadingSpeedByBooksAgeGroupChange
+      - m_Target: {fileID: 1698033694}
+        m_TargetAssemblyTypeName: SettingsScene, Assembly-CSharp
+        m_MethodName: HandleSetReadingSpeedByBooksAgeGroupChange
         m_Mode: 2
         m_Arguments:
           m_ObjectArgument: {fileID: 437772934}
@@ -5319,10 +5319,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1199681490}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.75, y: 0.05}
-  m_AnchorMax: {x: 0.95, y: 0.95}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: 204, y: 114}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1567029721
 MonoBehaviour:
@@ -5509,8 +5509,8 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1979336020}
-        m_TargetAssemblyTypeName: Globals, Assembly-CSharp
+      - m_Target: {fileID: 1698033694}
+        m_TargetAssemblyTypeName: SettingsScene, Assembly-CSharp
         m_MethodName: HandleRateValueChange
         m_Mode: 2
         m_Arguments:
@@ -5874,6 +5874,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6143e11aaaaf494fa65b9b7530e1130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  sliderRate: {fileID: 1618609502}
+  toggleSetReadingSpeedByBooksAgeGroup: {fileID: 437772934}
+  txtReadingSpeedDescr: {fileID: 209136752}
+  versionText: {fileID: 965014152}
 --- !u!4 &1698033695
 Transform:
   m_ObjectHideFlags: 0
@@ -6119,7 +6123,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1851629485
 RectTransform:
   m_ObjectHideFlags: 0
@@ -6737,13 +6741,11 @@ MonoBehaviour:
   csvUrl: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv
   convinienceLocal: http://localhost:8080/api/files/download/stories/stories.csv
   convinienceS3: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv
+  convinienceS3QA: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories-qa/stories.csv
   convinienceEC2: http://35.90.126.120:8080/api/files/download/stories/stories.csv
-  sliderRate: {fileID: 1618609502}
-  toggleSetReadingSpeedByBooksAgeGroup: {fileID: 437772934}
-  txtReadingSpeedDescr: {fileID: 209136752}
-  versionText: {fileID: 965014152}
-  targetScene: _Library
+  targetScene: 
   minTimeInScene: 2
+  buttonLoadingRetryContinue: {fileID: 0}
 --- !u!1 &2013289312
 GameObject:
   m_ObjectHideFlags: 0

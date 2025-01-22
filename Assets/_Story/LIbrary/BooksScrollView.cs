@@ -22,6 +22,9 @@ public class Filter
     
     public bool Conforms(PRBook prBook)
     {
+        if (genre == "everything")
+            return true;
+        
         if (genre != "")
             if (prBook.genre.ToLower().Contains(genre.ToLower()))
                 return true;

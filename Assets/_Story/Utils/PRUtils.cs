@@ -140,7 +140,7 @@ public class PRUtils
             }
             else
             {
-                Debug.LogError($"Error: Could not find local resource at {resourcePath}");
+                Debug.Log($"Error: Could not find local resource at {resourcePath}");
             }
             yield break; // Ends the coroutine here for local resources.
         }
@@ -152,7 +152,7 @@ public class PRUtils
 
         if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
         {
-            Debug.LogError($"Error: {request.error}");
+            Debug.Log($"Error: {request.error}");
         }
         else
         {
@@ -192,7 +192,7 @@ public class PRUtils
         }
         else
         {
-            Debug.LogError($"Child GameObject '{childName}' not found.");
+            Debug.Log($"Child GameObject '{childName}' not found.");
             return null;
         }
     }
@@ -368,6 +368,8 @@ public class PRUtils
         // For Amazon Store or other platforms
         Application.OpenURL("amzn://apps/android?p=" + Application.identifier);
 #endif
+        
+        PlayerPrefs.SetInt("g_wasRated", 1);
     }
     
     public static string CapitalizeFirstLetter(string input)

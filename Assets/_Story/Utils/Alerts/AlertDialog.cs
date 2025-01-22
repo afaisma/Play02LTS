@@ -1,5 +1,7 @@
+using NUnit.Framework;
 using UnityEngine;
 using TMPro;
+using UnityEngine.SceneManagement;
 
 public class AlertDialog : MonoBehaviour
 {
@@ -7,7 +9,8 @@ public class AlertDialog : MonoBehaviour
 
     public void Show(string message)
     {
-        messageText.text = message;
+        // !!!!!!!!!!
+        //messageText.text = message;
         gameObject.SetActive(true);
     }
 
@@ -20,4 +23,21 @@ public class AlertDialog : MonoBehaviour
     {
         Destroy(gameObject);
     }
+    
+    public void CloseTheApp()
+    {
+        Debug.Log("CloseTheApp");
+#if UNITY_EDITOR
+    UnityEditor.EditorApplication.isPlaying = false; // Stops play mode in Unity Editor
+#else
+    Application.Quit(); // Closes the app in the built version
+#endif
+    }
+
+    public void RetryLibrary()
+    {
+        AlertDialogManager.DestroyDialogInstance();
+        SceneManager.LoadScene("_Library");
+    }
+    
 }

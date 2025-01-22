@@ -203,7 +203,15 @@ public class PRScript : MonoBehaviour
     {
         //Debug.Log("PRScript::SetupInterpreter");
         _interpreter = new Interpreter();
-        Intrinsic f = Intrinsic.Create("DisplayTitle");
+        Intrinsic f = Intrinsic.Create("ScriptLog");
+        f.AddParam("message", "");
+        f.code = (context, partialResult) =>
+        {
+            string message = context.GetVar("message").ToString();
+            Debug.Log("ScriptLog: " + message);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("DisplayTitle");
         f.AddParam("title", "");
         f.code = (context, partialResult) =>
         {

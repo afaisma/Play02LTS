@@ -10,23 +10,13 @@ using System.Collections.Specialized;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
+// send content to LoadAudioAndTimings( parameters: set jsonTimingsURL to "" if staticText is true 
+// if staticText is true, create single AudioAndTimingsStruct object (and add to cacheAcudioAndTimingsStructs as usual)
 
-class AudioAndTimingsStruct
-{
-    public string audioURL;
-    public string jsonTimingsURL;
-    public AudioClip audioClip;
-    public JSONNode jsonNodeTimings;
-}
 
-[System.Serializable]
-public class WordTiming
-{
-    public string Word;
-    public float Time;
-}
 
-public class AudioAndTextPlayer : MonoBehaviour
+
+public class AudioAndTextPlayer_bak : MonoBehaviour
 {
     public bool staticText = true;
 
@@ -392,6 +382,10 @@ public class AudioAndTextPlayer : MonoBehaviour
             }
         }
 
+        // Debug.Log("UpdateHighlightedText1: currentAudioTime = " + currentAudioTime + 
+        //           ", currentWordIndex = " + currentWordIndex + ", bHilight = " + bHilight + ", " + 
+        //           wordTimings[currentWordIndex].Word);
+
         string newForegroundText = "";
         string newBsckgroundText = "";
         for (int i = 0; i < wordTimings.Count; i++)
@@ -401,6 +395,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             {
                 newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
                 newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
+                //Debug.Log("UpdateHighlightedText2: " + wordTimings[i].Word);
             }
             else
             {
@@ -417,6 +412,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     
         uiForeground.text = newForegroundText.TrimEnd();
         uiBackground.text = newBsckgroundText.TrimEnd();
+        //Debug.Log(newText);
     }
 
     public void SetAudioTextHilightColors(string textColor, string backColor)

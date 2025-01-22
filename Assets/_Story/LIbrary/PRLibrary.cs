@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 public class PRLibrary : MonoBehaviour
@@ -11,6 +12,7 @@ public class PRLibrary : MonoBehaviour
     public static List<PRBook> prbooks;
     [SerializeField] BooksScrollView booksScrollView;
     public Image imgBackground;
+    public MovingRatingsOptionsPanel movingRatingsOptionsPanel;
     
     Toggle toggleFairytales;
     Toggle toggleScience;
@@ -19,23 +21,25 @@ public class PRLibrary : MonoBehaviour
     public FilterContainer filterContainer;
     public TextMeshProUGUI txtTitle;
 
-    public static List<string> bookCategories = new List<string>()
+    public static List<(string SceneName, string Settings)> bookCategories = new List<(string SceneName, string Settings)>()
     {
-        "rhymebooks",
-        "family",
-        "adventure",
-        "science",
-        "fairytales",
-        "special education",
-        "classic",
-        "art",
-        "sound & speech",
-        "math",
-        "nature",
-        "manners",
-        ""
+        ("_Library", "everything"),
+        ("_Library", "rhymebooks"),
+        ("_Library", "family"),
+        ("_Library", "adventure"),
+        ("_Library", "science"),
+        ("_Library", "fairytales"), 
+        ("_Library", "special education"),
+        ("_Library", "classic"),
+        ("_Library", "art"),
+        ("_Library", "sound & speech"),
+        ("_Library", "math"),
+        ("_Library", "nature"),
+        ("_Library", "manners")
+        // ,
+        // ("_Map", "")
     };
-    private int currentCategory = -1;  // Renamed from currentIndex
+    private static int currentCategory = 0;
 
     
     private void Start()
@@ -48,33 +52,63 @@ public class PRLibrary : MonoBehaviour
         // {
         //     Screen.orientation = Portrait;
         // }
+        Debug.Log("PRLibrary Start, currentCategory: " + currentCategory);
+        
         LoadBooks(this);
+        GotoCategory();
         booksScrollView.ResetScrollPosition();
-    }
-
-    private void OnDestroy()
-    {
-        Globals.g_libraryFilter = "";
     }
 
     public void LoadBooks(MonoBehaviour mb)
     {
+        // Start a coroutine to attempt loading books with retries
+        StartCoroutine(LoadBooksWithRetry());
+    }
+
+private System.Collections.IEnumerator LoadBooksWithRetry()
+    {
+        int retryCount = 0;
+        int maxRetries = 3;
+        float waitTime = 2f;  // Time to wait between checks, in seconds
+
+        // Retry up to maxRetries times
+        while (Globals.g_listPRBooks == null && retryCount < maxRetries)
+        {
+            Debug.Log($"Globals.g_listPRBooks is null. Retrying in {waitTime} seconds... (Attempt {retryCount + 1}/{maxRetries})");
+            yield return new WaitForSeconds(waitTime);  // Wait for 2 seconds
+            retryCount++;
+        }
+
+        // Check if we still don't have the book list after all retries
+        if (Globals.g_listPRBooks == null)
+        {
+            Debug.LogWarning("Failed to load books after multiple attempts.");
+            // Handle the failure to load books (e.g., show a UI message)
+            yield break;  // Exit the coroutine if books could not be loaded
+        }
+
+        // If Globals.g_listPRBooks is not null, proceed to load the books
         prbooks = Globals.g_listPRBooks;
         booksScrollView.AddBooks(prbooks);
+        
         Globals.g_openedStoriesCount = PlayerPrefs.GetInt("g_openedStoriesCount", 0);
-        Globals.g_askedToBeRated  = PlayerPrefs.GetInt("g_askedToBeRated", 0);
-        if (Globals.g_openedStoriesCount > 10 && Globals.g_askedToBeRated == 0)
+        int askedToBeRated  = PlayerPrefs.GetInt("g_askedToBeRated", 0);
+        int wasRated = PlayerPrefs.GetInt("g_wasRated", 0);
+        Debug.Log("g_openedStoriesCount: " + Globals.g_openedStoriesCount);
+        Debug.Log("askedToBeRated: " + askedToBeRated);
+        Debug.Log("wasRated: " + wasRated);
+        if ((wasRated == 0) && (Globals.g_openedStoriesCount > askedToBeRated*15 + 10) && (askedToBeRated <= 3))
         {
-            PRUtils.RateUs();
-            PlayerPrefs.SetInt("g_askedToBeRated", 1);
+            //PRUtils.RateUs();
+            movingRatingsOptionsPanel.MoveIn();
+            PlayerPrefs.SetInt("g_askedToBeRated", askedToBeRated + 1);
         }
         
-        if (Globals.g_libraryFilter != "")
+        if (Globals.g_libraryFilter != "everything")
         {
             SetFilter(Globals.g_libraryFilter);
         }
     }
-
 
     public static List<PRBook> FilterByName(string name)
     {
@@ -111,6 +145,12 @@ public class PRLibrary : MonoBehaviour
         SceneManager.LoadScene("_Map");
     }
 
+    public void Bookstore()
+    {
+        SceneManager.LoadScene("_Bookstore");
+    }
+
+
     public void Parents()
     {
         SceneManager.LoadScene("_Parents");
@@ -118,10 +158,12 @@ public class PRLibrary : MonoBehaviour
 
     public void SetFilter(string filter)
     {
+        Debug.Log("SetFilter: " + filter);
+        currentCategory = bookCategories.FindIndex(c => c.Settings == filter);
+
         filterContainer?._SetFilter(filter);
-        txtTitle.text = //"ReadingBuddy: " + 
-                        PRUtils.CapitalizeFirstLetter(filter);
-        if (filter == "")
+        txtTitle.text = PRUtils.CapitalizeFirstLetter(filter);
+        if (filter == "everything")
             txtTitle.text = "All Books";
 
         if (filter == "rhymebooks")
@@ -188,6 +230,7 @@ public class PRLibrary : MonoBehaviour
         }
         else
         {
+            Debug.Log("filter unknown: " + filter);
             imgBackground.sprite = Resources.Load<Sprite>("Library/Library_background");
             txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
         }
@@ -199,19 +242,33 @@ public class PRLibrary : MonoBehaviour
         if (currentCategory >= bookCategories.Count)
             currentCategory = 0;  // Loop back to the first category
 
-        SetFilter(bookCategories[currentCategory]); 
+        GotoCategory();
     }
 
-    // Method to get the previous category with looping
     public void PreviousCategory()
     {
         currentCategory--;  // Move to the previous category
         if (currentCategory < 0)
             currentCategory = bookCategories.Count - 1;  // Loop back to the last category
 
-        SetFilter(bookCategories[currentCategory]); 
+        GotoCategory();
     }
-    
+
+    public void GotoCategory()
+    {
+        var currentScene = SceneManager.GetActiveScene().name;
+        var (sceneName, categorySettings) = bookCategories[currentCategory];
+
+        // Check if we are in a different scene
+        if (sceneName != currentScene)
+        {
+            SceneManager.LoadScene(sceneName);  // Load the new scene
+        }
+        else
+        {
+            SetFilter(categorySettings);  // If in the same scene, apply the filter
+        }
+    }
 }
 
 [Serializable]
@@ -230,8 +287,11 @@ public class PRBook
     public int number;
     public int book_done;
     public int currentPage;
+    public string bookStoreUrlPrinted; 
+    public string bookStoreUrlKindle; 
 
     public BookViewItem bookViewItem;
+    public BookstoreViewItem bookstoreViewItem;
     public void SetAndSaveCurrentPage(int nPage)
     {
         currentPage = nPage;
@@ -242,5 +302,4 @@ public class PRBook
     {
         Globals.Prefs_Set_Book_Done(bookUrl, i);
     }
-    
 }

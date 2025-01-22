@@ -1,34 +1,12 @@
 using System;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.IO;
 using System.Collections;
 using UnityEngine.Networking;
-
-public class Preferences
-{
-    private static Preferences instance;
-    public string g_Rate = "10";
-    public int g_bSetReadingSpeedByBooksAgeGroup;
-
-    private Preferences()
-    {
-        g_Rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
-        g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
-    }
-
-    public static Preferences GetInstance()
-    {
-        if (instance == null)
-        {
-            instance = new Preferences();
-        }
-        return instance;
-    }
-}
+using UnityEngine.UI;
+using TMPro; // Include TextMeshPro
 
 public class Globals : MonoBehaviour
 {
@@ -36,26 +14,27 @@ public class Globals : MonoBehaviour
     public static string baseURL;
     public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
     public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
+    public string convinienceS3_01 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_01/stories.csv";
     public string convinienceS3 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
+    public string convinienceS3QA = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories-qa/stories.csv";
     public string convinienceEC2 = "http://35.90.126.120:8080/api/files/download/stories/stories.csv";
 
     public static List<PRBook> g_listPRBooks;
 
     public static string g_scriptName;
     public static int g_openedStoriesCount;
-    public Slider sliderRate;
-    public Toggle toggleSetReadingSpeedByBooksAgeGroup;
-    public TMP_Text txtReadingSpeedDescr;
-    public TMP_Text versionText;
     public static PRBook g_prbook;
-    public static int g_askedToBeRated;
-    public static string g_libraryFilter = "";
+    public static string g_libraryFilter = "everything";
+    public static string g_bookstoreFilter = "everything";
 
     private static Globals instance;
     public bool IsDownloading { get; private set; } = false;
 
     [SerializeField] private string targetScene = "_Library";
     [SerializeField] private float minTimeInScene = 2f;
+
+    // Retry button and message
+    [SerializeField] private Button buttonLoadingRetryContinue; // Assign through Inspector, may be null
 
     // Game statistics variables
     private float totalMinutesInGame = 0f;
@@ -64,7 +43,8 @@ public class Globals : MonoBehaviour
     private int booksRead = 0;
     private float gameStartTime;
     private int daysSinceFirstRun = 0;
-
+    private Coroutine waitAndNavigateCoroutine; 
+    
     public static Globals Instance
     {
         get
@@ -98,46 +78,22 @@ public class Globals : MonoBehaviour
         CSVURL = csvUrl;
         baseURL = PRUtils.RemoveFileNameFromUrl(csvUrl);
         
+        // Initialize retry button and set it non-interactable
+        if (buttonLoadingRetryContinue != null)
+        {
+            SetButtonText("Loading Library Catalog");  // Call SetButtonText to display initial message
+            buttonLoadingRetryContinue.interactable = false;  // Disable interaction initially
+        }
+
         // Initialize statistics
         InitializeGameStatistics();
 
-        if (versionText != null)
-            versionText.text = "Version: " + Application.version;
-
-        if (sliderRate != null)
-        {
-            switch (Preferences.GetInstance().g_Rate)
-            {
-                case "-30":
-                    sliderRate.value = 0;
-                    break;
-                case "-20":
-                    sliderRate.value = 1;
-                    break;
-                case "-10":
-                    sliderRate.value = 2;
-                    break;
-                case "0":
-                    sliderRate.value = 3;
-                    break;
-                case "10":
-                    sliderRate.value = 4;
-                    break;
-            }
-        }
-
-        if (toggleSetReadingSpeedByBooksAgeGroup != null)
-        {
-            toggleSetReadingSpeedByBooksAgeGroup.isOn =
-                Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1;
-            if (toggleSetReadingSpeedByBooksAgeGroup.isOn)
-                sliderRate.interactable = false;
-            else
-                sliderRate.interactable = true;
-        }
-
-        DisplayReadingSpeedDescr();
+        // Start loading books
         PreLoadBooks();
+    }
+
+    private void OnDestroy()
+    {
     }
 
     void OnApplicationQuit()
@@ -166,7 +122,6 @@ public class Globals : MonoBehaviour
             daysSinceFirstRun = (int)(DateTime.UtcNow - firstRunDate).TotalDays;
         }
 
-        // Increment the number of runs
         numberOfRuns++;
         PlayerPrefs.SetInt("NumberOfRuns", numberOfRuns);
     }
@@ -197,10 +152,14 @@ public class Globals : MonoBehaviour
 
     public void PreLoadBooks()
     {
+        Debug.Log("PreLoadBooks");
         if (g_listPRBooks != null)
         {
             if (!string.IsNullOrEmpty(targetScene))
-                StartCoroutine(WaitAndNavigate(targetScene, minTimeInScene));
+            {
+                // Store the coroutine reference
+                waitAndNavigateCoroutine = StartCoroutine(WaitAndNavigate(targetScene, minTimeInScene));
+            }
             return;
         }
 
@@ -211,11 +170,12 @@ public class Globals : MonoBehaviour
             List<PRBook> prbooks = ParseCSV(csv);
             g_listPRBooks = prbooks;
 
-            if (!string.IsNullOrEmpty(targetScene))
+            if (!string.IsNullOrEmpty(targetScene) && (g_listPRBooks != null))
             {
                 float elapsedTime = Time.time - startTime;
                 float delay = Mathf.Max(0, minTimeInScene - elapsedTime); // Calculate remaining delay
-                StartCoroutine(WaitAndNavigate(targetScene, delay));
+                // Store the coroutine reference
+                waitAndNavigateCoroutine = StartCoroutine(WaitAndNavigate(targetScene, delay));
             }
         });
     }
@@ -223,88 +183,35 @@ public class Globals : MonoBehaviour
     private IEnumerator WaitAndNavigate(string targetScene, float delay)
     {
         yield return new WaitForSeconds(delay);
-        //if (SceneManager.GetActiveScene().name != targetScene)
-            SceneManager.LoadScene(targetScene);
+        LoadTargetScene();
     }
-
-    public void DisplayReadingSpeedDescr()
+    
+    public void LoadTargetScene()
     {
-        if (txtReadingSpeedDescr != null)
+        if (SceneManager.GetActiveScene().name == targetScene)
+            return;
+
+        if (!string.IsNullOrEmpty(targetScene))
         {
-            string descr = "";
-            switch (Preferences.GetInstance().g_Rate)
+            // Stop the coroutine if it is running
+            if (waitAndNavigateCoroutine != null)
             {
-                case "-30":
-                    descr = "Beginner";
-                    break;
-                case "-20":
-                    descr = "Intermediate";
-                    break;
-                case "-10":
-                    descr = "Proficient";
-                    break;
-                case "0":
-                    descr = "Advanced";
-                    break;
-                case "10":
-                    descr = "Expert";
-                    break;
+                StopCoroutine(waitAndNavigateCoroutine);
             }
-
-            if (!toggleSetReadingSpeedByBooksAgeGroup.isOn)
-                txtReadingSpeedDescr.text = descr;
-            else
-                txtReadingSpeedDescr.text = "(Set by book age group)";
+            SceneManager.LoadScene(targetScene);
         }
     }
 
-    public void HandleRateValueChange(Slider slider)
+    public void RetryDownload()
     {
-        switch (slider.value)
+        if (buttonLoadingRetryContinue != null)
         {
-            case 0:
-                Preferences.GetInstance().g_Rate = "-30";
-                break;
-            case 1:
-                Preferences.GetInstance().g_Rate = "-20";
-                break;
-            case 2:
-                Preferences.GetInstance().g_Rate = "-10";
-                break;
-            case 3:
-                Preferences.GetInstance().g_Rate = "0";
-                break;
-            case 4:
-                Preferences.GetInstance().g_Rate = "10";
-                break;
-            default:
-                Preferences.GetInstance().g_Rate = "0";
-                break;
+            buttonLoadingRetryContinue.interactable = false;  // Disable interaction during retry
+            SetButtonText("Loading Library Catalog...");  // Reset text when retrying
         }
-
-        PlayerPrefs.SetString("g_Rate", Preferences.GetInstance().g_Rate);
-
-        DisplayReadingSpeedDescr();
+        PreLoadBooks(); // Retry the book download
     }
-
-    public void HandleSetReadingSpeedByBooksAgeGroupChange(Toggle toggle)
-    {
-        if (toggle.isOn)
-        {
-            Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 1;
-            sliderRate.interactable = false;
-        }
-        else
-        {
-            Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup = 0;
-            sliderRate.interactable = true;
-        }
-
-        DisplayReadingSpeedDescr();
-        PlayerPrefs.SetInt("g_bSetReadingSpeedByBooksAgeGroup",
-            Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup);
-    }
-
+    
     public void Library()
     {
         if (!IsDownloading)
@@ -380,10 +287,12 @@ public class Globals : MonoBehaviour
 
     public static string getReadingRate()
     {
-        if (Preferences.GetInstance().g_bSetReadingSpeedByBooksAgeGroup == 1)
+        int nSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
+        string rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
+        if (nSetReadingSpeedByBooksAgeGroup == 1)
             return "" + defaultAudioRateFromPRBook(g_prbook);
         else
-            return Preferences.GetInstance().g_Rate;
+            return rate;
     }
 
     public static string Prefs_BookUrl_To_Page_Key(string book_url)
@@ -452,7 +361,7 @@ public class Globals : MonoBehaviour
         }
     }
 
-    public static void GotoLibrary(String libraryFilter)
+    public static void GotoLibrary(string libraryFilter)
     {
         g_libraryFilter = libraryFilter;
         SceneManager.LoadScene("_Library");
@@ -483,6 +392,8 @@ public class Globals : MonoBehaviour
                 genre = values[6].Trim(),
                 notesForParents = values[7].Trim(),
                 id = values[8].Trim(),
+                bookStoreUrlPrinted = values.Length > 9 ? values[9].Trim() : "",
+                bookStoreUrlKindle = values.Length > 10 ? values[10].Trim() : "",
                 number = counter++,
                 currentPage = Prefs_Get_Book_Page(values[3].Trim()),
                 book_done = Prefs_Get_Book_Done(values[3].Trim())
@@ -507,19 +418,64 @@ public class Globals : MonoBehaviour
 
     private IEnumerator DownloadCSV(string url, Action<string> onComplete)
     {
+        Debug.Log("Downloading CSV from: " + url);
         IsDownloading = true;
         using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
             yield return request.SendWebRequest();
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {
-                Debug.LogError(request.error);
+                Debug.Log(request.error);
+
+                // On error, enable the retry button and change the text
+                if (buttonLoadingRetryContinue != null)
+                {
+                    SetButtonText("Connect to the Internet and Retry");  // Call SetButtonText to update message
+                    buttonLoadingRetryContinue.interactable = true;  // Enable interaction
+                    buttonLoadingRetryContinue.onClick.RemoveAllListeners();  // Clear previous listeners
+                    buttonLoadingRetryContinue.onClick.AddListener(RetryDownload);  // Add listener for retry
+                }
             }
             else
             {
                 onComplete(request.downloadHandler.text);
+
+                // On success, change the button text to "Continue" and enable interaction
+                if (buttonLoadingRetryContinue != null)
+                {
+                    SetButtonText("Continue");  // Call SetButtonText to update message
+                    buttonLoadingRetryContinue.interactable = true;  // Enable interaction
+                    buttonLoadingRetryContinue.onClick.RemoveAllListeners();  // Clear previous listeners
+                    buttonLoadingRetryContinue.onClick.AddListener(LoadTargetScene);  // Add listener to load the target scene
+                }
             }
         }
         IsDownloading = false;
+    }
+
+    // Helper method to set button text, supporting both legacy Text and TextMeshProUGUI
+    private void SetButtonText(string newText)
+    {
+        Debug.Log("Setting button text to: " + newText);
+        if (buttonLoadingRetryContinue != null)
+        {
+            // Check if the button has a Text component (legacy UI)
+            Text uiText = buttonLoadingRetryContinue.GetComponentInChildren<Text>();
+            if (uiText != null)
+            {
+                uiText.text = newText;
+                return;
+            }
+
+            // Check if the button has a TextMeshProUGUI component
+            TextMeshProUGUI tmpText = buttonLoadingRetryContinue.GetComponentInChildren<TextMeshProUGUI>();
+            if (tmpText != null)
+            {
+                tmpText.text = newText;
+                return;
+            }
+
+            Debug.LogWarning("No Text or TextMeshProUGUI component found on the button.");
+        }
     }
 }

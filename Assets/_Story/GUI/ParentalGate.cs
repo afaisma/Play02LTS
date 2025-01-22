@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.SceneManagement;
 
 public class ParentalGate : MonoBehaviour
 {
@@ -11,6 +12,7 @@ public class ParentalGate : MonoBehaviour
     public GameObject parentalGatePanel;
     public Button cancelButton;
     public string url = "";
+    public string sceneNavigateTo = "";
 
     public string question =
         "Please type in the number twenty five to proceed to the Amazon store to purchase the paper book or the ebook.";
@@ -33,10 +35,9 @@ public class ParentalGate : MonoBehaviour
     public void CheckAnswerText()
     {
         string playerAnswer = answerInputField.text;
-        if (playerAnswer.Trim() == answer1 || playerAnswer.Trim() == answer2)
+        if (playerAnswer.Trim() == answer1 || playerAnswer.Trim().ToLower() == answer2)
         {
-            Application.OpenURL(url);
-            parentalGatePanel.SetActive(false);
+            Navigate();
         }
         else
         {
@@ -60,8 +61,7 @@ public class ParentalGate : MonoBehaviour
 
         if (playerAnswer == correctAnswer)
         {
-            Application.OpenURL(url);
-            parentalGatePanel.SetActive(false);
+            Navigate();
         }
         else
         {
@@ -70,6 +70,20 @@ public class ParentalGate : MonoBehaviour
         }
     }
 
+    public void Navigate()
+    {
+        if (sceneNavigateTo != "")
+        {
+            SceneManager.LoadScene(sceneNavigateTo);
+        }
+        else
+        {
+            Application.OpenURL(url);
+        }
+            
+        //parentalGatePanel.SetActive(false);
+    }
+    
     public void Cancel()
     {
         parentalGatePanel.SetActive(false);

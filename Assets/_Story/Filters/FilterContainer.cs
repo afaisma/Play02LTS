@@ -52,7 +52,10 @@ public class FilterContainer : MonoBehaviour
         if (booksScrollView == null)
             return;
         
-        if (PRLibrary.bookCategories.Contains(currentFilter))
+        // Check if any category in bookCategories has a matching filter (Settings part of the tuple)
+        bool filterExists = PRLibrary.bookCategories.Exists(category => category.Settings == currentFilter);
+        
+        if (filterExists)
         {
             booksScrollView.SetFilter(0, 0, currentFilter);
         }
