@@ -31,6 +31,12 @@ namespace Miniscript {
 			OpGreatEqual,
 			OpLesser,
 			OpLessEqual,
+			OpAssignPlus,
+			OpAssignMinus,
+			OpAssignTimes,
+			OpAssignDivide,
+			OpAssignMod,
+			OpAssignPower,
 			LParen,
 			RParen,
 			LSquare,
@@ -105,7 +111,15 @@ namespace Miniscript {
 			// Handle two-character operators first.
 			if (!AtEnd) {
 				char c2 = input[position];
-				if (c == '=' && c2 == '=') result.type = Token.Type.OpEqual;
+				if (c2 == '=') {
+					if (c == '=') result.type = Token.Type.OpEqual;
+					else if (c == '+') result.type = Token.Type.OpAssignPlus;
+					else if (c == '-') result.type = Token.Type.OpAssignMinus;
+					else if (c == '*') result.type = Token.Type.OpAssignTimes;
+					else if (c == '/') result.type = Token.Type.OpAssignDivide;
+					else if (c == '%') result.type = Token.Type.OpAssignMod;
+					else if (c == '^') result.type = Token.Type.OpAssignPower;					
+				}
 				if (c == '!' && c2 == '=') result.type = Token.Type.OpNotEqual;
 				if (c == '>' && c2 == '=') result.type = Token.Type.OpGreatEqual;
 				if (c == '<' && c2 == '=') result.type = Token.Type.OpLessEqual;
@@ -170,7 +184,7 @@ namespace Miniscript {
 					char lastc = c;
 					c = input[position];
 					if (IsNumeric(c) || c == '.' || c == 'E' || c == 'e' ||
-					    (c == '-' && (lastc == 'E' || lastc == 'e'))) {
+					    ((c == '-' || c == '+') && (lastc == 'E' || lastc == 'e'))) {
 						position++;
 					} else break;
 				}
@@ -193,10 +207,15 @@ namespace Miniscript {
 					}
 				} else if (result.text == "else") {
 					// And similarly, conjoin an "if" after "else" (to make "else if").
-					int p = position;
-					Token nextWord = Dequeue();
-					if (nextWord != null && nextWord.text == "if") result.text = "else if";
-					else position = p;
+					// (Note we can't use Peek or Dequeue/Enqueue for these, because we are probably
+					// inside a Peek call already, and that would end up swapping the order of these tokens.)
+					var p = position;
+					while (p < inputLength && (input[p]==' ' || input[p]=='\t')) p++;
+					if (p+1 < inputLength && input.Substring(p,2) == "if" &&
+							(p+2 >= inputLength || !IsIdentifier(input[p+2]))) {
+						result.text = "else if";
+						position = p + 2;
+					}
 				}
 				return result;
 			} else if (c == '"') {
@@ -217,6 +236,9 @@ namespace Miniscript {
 							gotEndQuote = true;
 							break;
 						}
+					} else if (c == '\n' || c == '\r') {
+						// Break at end of line (string literals should not contain a line break).
+						break;
 					}
 				}
 				if (!gotEndQuote) throw new LexerException("missing closing quote (\")");
@@ -390,6 +412,13 @@ namespace Miniscript {
 			Check(lex.Dequeue(), Token.Type.Identifier, "bamf");
 			CheckLineNum(lex.lineNum, 4);
 			Check(lex.Dequeue(), Token.Type.EOL);
+			UnitTest.ErrorIf(!lex.AtEnd, "AtEnd not set when it should be");
+			
+			lex = new Lexer("x += 42");
+			Check(lex.Dequeue(), Token.Type.Identifier, "x");
+			CheckLineNum(lex.lineNum, 1);
+			Check(lex.Dequeue(), Token.Type.OpAssignPlus);
+			Check(lex.Dequeue(), Token.Type.Number, "42");
 			UnitTest.ErrorIf(!lex.AtEnd, "AtEnd not set when it should be");
 			
 			Check(LastToken("x=42 // foo"), Token.Type.Number, "42");

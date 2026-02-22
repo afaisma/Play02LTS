@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
 using Miniscript;
@@ -69,10 +69,10 @@ public class ReplDemo : MonoBehaviour {
 		// Define what to do with output from the interpreter.
 		// We'll pass it to our output.PrintLine method, but wrap it in some color
 		// tags depending on what sort of output it is.
-		demoScript.interpreter.standardOutput = (string s) => output.PrintLine(s);
-		demoScript.interpreter.implicitOutput = (string s) => output.PrintLine(
+		demoScript.interpreter.standardOutput = (string s, bool addLineBreak) => output.PrintLine(s);
+		demoScript.interpreter.implicitOutput = (string s, bool addLineBreak) => output.PrintLine(
 			"<color=#66bb66>" + s + "</color>");
-		demoScript.interpreter.errorOutput = (string s) => {
+		demoScript.interpreter.errorOutput = (string s, bool addLineBreak) => {
 			Debug.LogWarning(s);
 			output.PrintLine("<color=red>" + s + "</color>");
 			// ...and in case of error, we'll also stop the interpreter.

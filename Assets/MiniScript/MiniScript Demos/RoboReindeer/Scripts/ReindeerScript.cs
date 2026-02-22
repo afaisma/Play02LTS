@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
 using Miniscript;
@@ -40,10 +40,10 @@ public class ReindeerScript : MonoBehaviour {
 		
 		interpreter = new Interpreter();
 		interpreter.hostData = this;
-		interpreter.standardOutput = (string s) => reindeer.Say(s);
-		interpreter.implicitOutput = (string s) => reindeer.Say(
+		interpreter.standardOutput = (string s, bool addLineBreak) => reindeer.Say(s);
+		interpreter.implicitOutput = (string s, bool addLineBreak) => reindeer.Say(
 			"<color=#66bb66>" + s + "</color>");
-		interpreter.errorOutput = (string s) => {
+		interpreter.errorOutput = (string s, bool addLineBreak) => {
 			reindeer.Say("<color=red>" + s + "</color>");
 			interpreter.Stop();
 			lastError = s;

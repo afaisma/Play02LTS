@@ -38,8 +38,9 @@ namespace Miniscript {
 				AisaB,
 				AAndB,
 				AOrB,
-				BindContextOfA,
+				BindAssignA,
 				CopyA,
+				NewA,
 				NotA,
 				GotoA,
 				GotoAifB,
@@ -132,11 +133,14 @@ namespace Miniscript {
 				case Op.AisaB:
 					text = string.Format("{0} := {1} isa {2}", lhs, rhsA, rhsB);
 					break;
-				case Op.BindContextOfA:
-					text = string.Format("{0}.outerVars = {1}", rhsA, rhsB);
+				case Op.BindAssignA:
+					text = string.Format("{0} := {1}; {0}.outerVars=", rhsA, rhsB);
 					break;
 				case Op.CopyA:
 					text = string.Format("{0} := copy of {1}", lhs, rhsA);
+					break;
+				case Op.NewA:
+					text = string.Format("{0} := new {1}", lhs, rhsA);
 					break;
 				case Op.NotA:
 					text = string.Format("{0} := not {1}", lhs, rhsA);
@@ -178,7 +182,8 @@ namespace Miniscript {
 					throw new RuntimeException("unknown opcode: " + op);
 					
 				}
-//				if (comment != null) text = text + "\t// " + comment;
+				//if (comment != null) text = text + "\t// " + comment;
+				if (location != null) text = text + "\t// " + location;
 				return text;
 			}
 
@@ -225,6 +230,25 @@ namespace Miniscript {
 					return ValNumber.Truth(opA.IsA(opB, context.vm));
 				}
 
+				if (op == Op.NewA) {
+					// Create a new map, and set __isa on it to operand A (after 
+					// verifying that this is a valid map to subclass).
+					if (!(opA is ValMap)) {
+						throw new RuntimeException("argument to 'new' must be a map");
+					} else if (opA == context.vm.stringType) {
+						throw new RuntimeException("invalid use of 'new'; to create a string, use quotes, e.g. \"foo\"");
+					} else if (opA == context.vm.listType) {
+						throw new RuntimeException("invalid use of 'new'; to create a list, use square brackets, e.g. [1,2]");
+					} else if (opA == context.vm.numberType) {
+						throw new RuntimeException("invalid use of 'new'; to create a number, use a numeric literal, e.g. 42");
+					} else if (opA == context.vm.functionType) {
+						throw new RuntimeException("invalid use of 'new'; to create a function, use the 'function' keyword");
+					}
+					ValMap newMap = new ValMap();
+					newMap.SetElem(ValString.magicIsA, opA);
+					return newMap;
+				}
+
 				if (op == Op.ElemBofA && opB is ValString) {
 					// You can now look for a string in almost anything...
 					// and we have a convenient (and relatively fast) method for it:
@@ -232,11 +256,23 @@ namespace Miniscript {
 					return ValSeqElem.Resolve(opA, ((ValString)opB).value, context, out ignored);
 				}
 
+				// check for special cases of comparison to null (works with any type)
 				if (op == Op.AEqualB && (opA == null || opB == null)) {
 					return ValNumber.Truth(opA == opB);
 				}
 				if (op == Op.ANotEqualB && (opA == null || opB == null)) {
 					return ValNumber.Truth(opA != opB);
+				}
+				
+				// check for implicit coersion of other types to string; this happens
+				// when either side is a string and the operator is addition.
+				if ((opA is ValString || opB is ValString) && op == Op.APlusB) {
+					if (opA == null) return opB;
+					if (opB == null) return opA;
+					string sA = opA.ToString(context.vm);
+					string sB = opB.ToString(context.vm);
+					if (sA.Length + sB.Length > ValString.maxSize) throw new LimitExceededException("string too large");
+					return new ValString(sA + sB);
 				}
 
 				if (opA is ValNumber) {
@@ -310,24 +346,18 @@ namespace Miniscript {
 							return ValNumber.Truth(fA <= fB);
 						case Op.AAndB:
 							if (!(opB is ValNumber)) fB = opB != null && opB.BoolValue() ? 1 : 0;
-							return new ValNumber(Clamp01(fA * fB));
+							return new ValNumber(AbsClamp01(fA * fB));
 						case Op.AOrB:
 							if (!(opB is ValNumber)) fB = opB != null && opB.BoolValue() ? 1 : 0;
-							return new ValNumber(Clamp01(fA + fB - fA * fB));
-						default:
-							break;
-						}
-					} else if (opB is ValString) {
-						// number (op) string
-						string sA = opA.ToString();
-						string sB = opB.ToString();
-						switch (op) {
-						case Op.APlusB:
-							return new ValString(sA + sB);
+							return new ValNumber(AbsClamp01(fA + fB - fA * fB));
 						default:
 							break;
 						}
 					}
+					// Handle equality testing between a number (opA) and a non-number (opB).
+					// These are always considered unequal.
+					if (op == Op.AEqualB) return ValNumber.zero;
+					if (op == Op.ANotEqualB) return ValNumber.one;
 
 				} else if (opA is ValString) {
 					string sA = ((ValString)opA).value;
@@ -340,8 +370,9 @@ namespace Miniscript {
 							Check.Type(opB, typeof(ValNumber), "string division");
 							factor = 1.0 / ((ValNumber)opB).value;								
 						}
+						if (double.IsNaN(factor) || double.IsInfinity(factor)) return null;
+						if (factor <= 0) return ValString.empty;
 						int repeats = (int)factor;
-						if (repeats < 0) return ValString.empty;
 						if (repeats * sA.Length > ValString.maxSize) throw new LimitExceededException("string too large");
 						var result = new System.Text.StringBuilder();
 						for (int i = 0; i < repeats; i++) result.Append(sA);
@@ -350,52 +381,49 @@ namespace Miniscript {
 						return new ValString(result.ToString());						
 					}
 					if (op == Op.ElemBofA || op == Op.ElemBofIterA) {
-						int idx = opB.IntValue();
-						Check.Range(idx, -sA.Length, sA.Length - 1, "string index");
-						if (idx < 0) idx += sA.Length;
-						return new ValString(sA.Substring(idx, 1));
+						return ((ValString)opA).GetElem(opB);
 					}
-					string sB = (opB == null ? null : opB.ToString(context.vm));
-					switch (op) {
-					case Op.APlusB:
-						{
-							if (opB == null) return opA;
-							if (sA.Length + sB.Length > ValString.maxSize) throw new LimitExceededException("string too large");
-							return new ValString(sA + sB);
+					if (opB == null || opB is ValString) {
+						string sB = (opB == null ? null : opB.ToString(context.vm));
+						switch (op) {
+							case Op.AMinusB: {
+									if (opB == null) return opA;
+									if (sA.EndsWith(sB)) sA = sA.Substring(0, sA.Length - sB.Length);
+									return new ValString(sA);
+								}
+							case Op.NotA:
+								return ValNumber.Truth(string.IsNullOrEmpty(sA));
+							case Op.AEqualB:
+								return ValNumber.Truth(string.Equals(sA, sB));
+							case Op.ANotEqualB:
+								return ValNumber.Truth(!string.Equals(sA, sB));
+							case Op.AGreaterThanB:
+								return ValNumber.Truth(string.Compare(sA, sB, StringComparison.Ordinal) > 0);
+							case Op.AGreatOrEqualB:
+								return ValNumber.Truth(string.Compare(sA, sB, StringComparison.Ordinal) >= 0);
+							case Op.ALessThanB:
+								int foo = string.Compare(sA, sB, StringComparison.Ordinal);
+								return ValNumber.Truth(foo < 0);
+							case Op.ALessOrEqualB:
+								return ValNumber.Truth(string.Compare(sA, sB, StringComparison.Ordinal) <= 0);
+							case Op.LengthOfA:
+								return new ValNumber(sA.Length);
+							default:
+								break;
 						}
-					case Op.AMinusB:
-						{
-							if (opB == null) return opA;
-							if (sA.EndsWith(sB)) sA = sA.Substring(0, sA.Length - sB.Length);
-							return new ValString(sA);
-						}
-					case Op.NotA:
-						return ValNumber.Truth(string.IsNullOrEmpty(sA));
-					case Op.AEqualB:
-						return ValNumber.Truth(string.Compare(sA, sB) == 0);
-					case Op.ANotEqualB:
-						return ValNumber.Truth(string.Compare(sA, sB) != 0);
-					case Op.AGreaterThanB:
-						return ValNumber.Truth(string.Compare(sA, sB) > 0);
-					case Op.AGreatOrEqualB:
-						return ValNumber.Truth(string.Compare(sA, sB) >= 0);
-					case Op.ALessThanB:
-						return ValNumber.Truth(string.Compare(sA, sB) < 0);
-					case Op.ALessOrEqualB:
-						return ValNumber.Truth(string.Compare(sA, sB) <= 0);
-					case Op.LengthOfA:
-						return new ValNumber(sA.Length);
-					default:
-						break;
+					} else {
+						// RHS is neither null nor a string.
+						// We no longer automatically coerce in all these cases; about
+						// all we can do is equal or unequal testing.
+						// (Note that addition was handled way above here.)
+						if (op == Op.AEqualB) return ValNumber.zero;
+						if (op == Op.ANotEqualB) return ValNumber.one;						
 					}
 				} else if (opA is ValList) {
 					List<Value> list = ((ValList)opA).values;
 					if (op == Op.ElemBofA || op == Op.ElemBofIterA) {
 						// list indexing
-						int idx = opB.IntValue();
-						Check.Range(idx, -list.Count, list.Count - 1, "list index");
-						if (idx < 0) idx += list.Count;
-						return list[idx];
+						return ((ValList)opA).GetElem(opB);
 					} else if (op == Op.LengthOfA) {
 						return new ValNumber(list.Count);
 					} else if (op == Op.AEqualB) {
@@ -421,12 +449,13 @@ namespace Miniscript {
 							Check.Type(opB, typeof(ValNumber), "list division");
 							factor = 1.0 / ((ValNumber)opB).value;								
 						}
+						if (double.IsNaN(factor) || double.IsInfinity(factor)) return null;
 						if (factor <= 0) return new ValList();
 						int finalCount = (int)(list.Count * factor);
 						if (finalCount > ValList.maxSize) throw new LimitExceededException("list too large");
 						List<Value> result = new List<Value>(finalCount);
 						for (int i = 0; i < finalCount; i++) {
-							result.Add(list[i % list.Count]);
+							result.Add(context.ValueInContext(list[i % list.Count]));
 						}
 						return new ValList(result);
 					} else if (op == Op.NotA) {
@@ -474,15 +503,20 @@ namespace Miniscript {
 				} else {
 					// opA is something else... perhaps null
 					switch (op) {
-					case Op.BindContextOfA:
+					case Op.BindAssignA:
 						{
 							if (context.variables == null) context.variables = new ValMap();
 							ValFunction valFunc = (ValFunction)opA;
-							valFunc.outerVars = context.variables;
-							return null;
+                            return valFunc.BindAndCopy(context.variables);
 						}
 					case Op.NotA:
 						return opA != null && opA.BoolValue() ? ValNumber.zero : ValNumber.one;
+					case Op.ElemBofA:
+						if (opA is null) {
+							throw new TypeException("Null Reference Exception: can't index into null");
+						} else {
+							throw new TypeException("Type Exception: can't index into this type");
+						}
 					}
 				}
 				
@@ -496,20 +530,15 @@ namespace Miniscript {
 					else fB = opB != null && opB.BoolValue() ? 1 : 0;
 					double result;
 					if (op == Op.AAndB) {
-						result = fA * fB;
+						result = AbsClamp01(fA * fB);
 					} else {
-						result = 1.0 - (1.0 - AbsClamp01(fA)) * (1.0 - AbsClamp01(fB));
+						result = AbsClamp01(fA + fB - fA * fB);
 					}
 					return new ValNumber(result);
 				}
 				return null;
 			}
 
-			static double Clamp01(double d) {
-				if (d < 0) return 0;
-				if (d > 1) return 1;
-				return d;
-			}
 			static double AbsClamp01(double d) {
 				if (d < 0) d = -d;
 				if (d > 1) return 1;
@@ -528,7 +557,8 @@ namespace Miniscript {
 			public List<Line> code;			// TAC lines we're executing
 			public int lineNum;				// next line to be executed
 			public ValMap variables;		// local variables for this call frame
-			public ValMap outerVars;		// variables of the context where this function was defined
+			public ValMap outerVars;        // variables of the context where this function was defined
+			public Value self;				// value of self in this context
 			public Stack<Value> args;		// pushed arguments for upcoming calls
 			public Context parent;			// parent (calling) context
 			public Value resultStorage;		// where to store the return value (in the calling context)
@@ -560,7 +590,13 @@ namespace Miniscript {
 			public Context(List<Line> code) {
 				this.code = code;
 			}
-			
+
+			public void ClearCodeAndTemps() {
+		 		code.Clear();
+				lineNum = 0;
+				if (temps != null) temps.Clear();
+			}
+
 			/// <summary>
 			/// Reset this context to the first line of code, clearing out any 
 			/// temporary variables, and optionally clearing out all variables.
@@ -577,6 +613,10 @@ namespace Miniscript {
 			}
 
 			public void SetTemp(int tempNum, Value value) {
+				// OFI: let each context record how many temps it will need, so we
+				// can pre-allocate this list with that many and avoid having to
+				// grow it later.  Also OFI: do lifetime analysis on these temps
+				// and reuse ones we don't need anymore.
 				if (temps == null) temps = new List<Value>();
 				while (temps.Count <= tempNum) temps.Add(null);
 				temps[tempNum] = value;
@@ -595,6 +635,7 @@ namespace Miniscript {
 				if (identifier == "globals" || identifier == "locals") {
 					throw new RuntimeException("can't assign to " + identifier);
 				}
+				if (identifier == "self") self = value;
 				if (variables == null) variables = new ValMap();
 				if (variables.assignOverride == null || !variables.assignOverride(new ValString(identifier), value)) {
 					variables[identifier] = value;
@@ -618,6 +659,7 @@ namespace Miniscript {
 			public int GetLocalInt(string identifier, int defaultValue = 0) {
 				Value result;
 				if (variables != null && variables.TryGetValue(identifier, out result)) {
+					if (result == null) return 0;	// variable found, but its value was null!
 					return result.IntValue();
 				}
 				return defaultValue;
@@ -626,6 +668,7 @@ namespace Miniscript {
 			public bool GetLocalBool(string identifier, bool defaultValue = false) {
 				Value result;
 				if (variables != null && variables.TryGetValue(identifier, out result)) {
+					if (result == null) return false;	// variable found, but its value was null!
 					return result.BoolValue();
 				}
 				return defaultValue;
@@ -634,7 +677,17 @@ namespace Miniscript {
 			public float GetLocalFloat(string identifier, float defaultValue = 0) {
 				Value result;
 				if (variables != null && variables.TryGetValue(identifier, out result)) {
+					if (result == null) return 0;	// variable found, but its value was null!
 					return result.FloatValue();
+				}
+				return defaultValue;
+			}
+
+			public double GetLocalDouble(string identifier, double defaultValue = 0) {
+				Value result;
+				if (variables != null && variables.TryGetValue(identifier, out result)) {
+					if (result == null) return 0;	// variable found, but its value was null!
+					return result.DoubleValue();
 				}
 				return defaultValue;
 			}
@@ -648,7 +701,10 @@ namespace Miniscript {
 				return defaultValue;
 			}
 
-			
+			public SourceLoc GetSourceLoc() {
+				if (lineNum < 0 || lineNum >= code.Count) return null;
+				return code[lineNum].location;
+			}
 			
 			/// <summary>
 			/// Get the value of a variable available in this context (including
@@ -656,28 +712,46 @@ namespace Miniscript {
 			/// identifier can be found.
 			/// </summary>
 			/// <param name="identifier">name of identifier to look up</param>
+			/// <param name="localOnly">if true, look in local scope only</param>
 			/// <returns>value of that identifier</returns>
-			public Value GetVar(string identifier) {
-				// check for special built-in identifiers 'locals' and 'globals'
-				if (identifier == "locals") {
-					if (variables == null) variables = new ValMap();
-					return variables;
-				}
-				if (identifier == "globals") {
-					if (root.variables == null) root.variables = new ValMap();
-					return root.variables;
-				}
-				if (identifier == "outer") {
-					// return module variables, if we have them; else globals
-					if (outerVars != null) return outerVars;
-					if (root.variables == null) root.variables = new ValMap();
-					return root.variables;
+			public Value GetVar(string identifier, ValVar.LocalOnlyMode localOnly=ValVar.LocalOnlyMode.Off) {
+				// check for special built-in identifiers 'locals', 'globals', etc.
+				switch (identifier.Length)
+				{
+				case 4:
+					if (identifier == "self") return self;
+					break;
+				case 5:
+					if (identifier == "outer") {
+						// return module variables, if we have them; else globals
+						if (outerVars != null) return outerVars;
+						if (root.variables == null) root.variables = new ValMap();
+						return root.variables;
+					}
+					break;
+				case 6:
+					if (identifier == "locals") {
+						if (variables == null) variables = new ValMap();
+						return variables;
+					}
+					break;
+				case 7:
+					if (identifier == "globals") {
+						if (root.variables == null) root.variables = new ValMap();
+						return root.variables;
+					}
+					break;
 				}
 				
 				// check for a local variable
 				Value result;
 				if (variables != null && variables.TryGetValue(identifier, out result)) {
 					return result;
+				}
+				if (localOnly != ValVar.LocalOnlyMode.Off) {
+					if (localOnly == ValVar.LocalOnlyMode.Strict) throw new UndefinedLocalException(identifier);
+					else vm.standardOutput("Warning: assignment of unqualified local '" + identifier 
+					 + "' based on nonlocal is deprecated " + code[lineNum].location, true);
 				}
 
 				// check for a module variable
@@ -689,8 +763,8 @@ namespace Miniscript {
 				// Check the global scope (if that's not us already).
 				if (parent != null) {
 					Context globals = root;
-					if (globals.variables != null && globals.variables.ContainsKey(identifier)) {
-						return globals.variables[identifier];
+					if (globals.variables != null && globals.variables.TryGetValue(identifier, out result)) {
+						return result;
 					}
 				}
 
@@ -735,7 +809,8 @@ namespace Miniscript {
 			/// <param name="arg">Argument.</param>
 			public void PushParamArgument(Value arg) {
 				if (args == null) args = new Stack<Value>();
-				args.Push(arg);
+				if (args.Count > 255) throw new RuntimeException("Argument limit exceeded");
+				args.Push(arg);				
 			}
 
 			/// <summary>
@@ -759,8 +834,7 @@ namespace Miniscript {
 				// into local variables corrersponding to parameter names.
 				// As a special case, skip over the first parameter if it is named 'self'
 				// and we were invoked with dot syntax.
-				int selfParam = (gotSelf && func.parameters.Count > 0 && func.parameters[0].name == "self"
-				 ? 1 : 0);
+				int selfParam = (gotSelf && func.parameters.Count > 0 && func.parameters[0].name == "self" ? 1 : 0);
 				for (int i = 0; i < argCount; i++) {
 					// Careful -- when we pop them off, they're in reverse order.
 					Value argument = args.Pop();
@@ -768,7 +842,9 @@ namespace Miniscript {
 					if (paramNum >= func.parameters.Count) {
 						throw new TooManyArgumentsException();
 					}
-					result.SetVar(func.parameters[paramNum].name, argument);
+					string param = func.parameters[paramNum].name;
+					if (param == "self") result.self = argument;
+					else result.SetVar(param, argument);
 				}
 				// And fill in the rest with default values
 				for (int paramNum = argCount+selfParam; paramNum < func.parameters.Count; paramNum++) {
@@ -778,11 +854,12 @@ namespace Miniscript {
 				return result;
 			}
 
+			/// <summary>
+			/// This function prints the three-address code to the console, for debugging purposes.
+			/// </summary>
 			public void Dump() {
 				Console.WriteLine("CODE:");
-				for (int i = 0; i < code.Count; i++) {
-					Console.WriteLine("{0} {1:00}: {2}", i == lineNum ? ">" : " ", i, code[i]);
-				}
+				TAC.Dump(code, lineNum);
 
 				Console.WriteLine("\nVARS:");
 				if (variables == null) {
@@ -845,11 +922,15 @@ namespace Miniscript {
 			public Machine(Context globalContext, TextOutputMethod standardOutput) {
 				_globalContext = globalContext;
 				_globalContext.vm = this;
-				this.standardOutput = (standardOutput == null ? Console.WriteLine : standardOutput);
+				if (standardOutput == null) {
+					this.standardOutput = (s,eol) => Console.WriteLine(s);
+				} else {
+					this.standardOutput = standardOutput;
+				}
 				stack = new Stack<Context>();
 				stack.Push(_globalContext);
 			}
-			
+
 			public void Stop() {
 				while (stack.Count > 1) stack.Pop();
 				stack.Peek().JumpToEnd();
@@ -877,8 +958,15 @@ namespace Miniscript {
 				try {
 					DoOneLine(line, context);
 				} catch (MiniscriptException mse) {
-					mse.location = line.location;
-					throw mse;
+					if (mse.location == null) mse.location = line.location;
+					if (mse.location == null) {
+						foreach (Context c in stack) {
+							if (c.lineNum >= c.code.Count) continue;
+							mse.location = c.code[c.lineNum].location;
+							if (mse.location != null) break;
+						}
+					}
+					throw;
 				}
 			}
 			
@@ -889,11 +977,22 @@ namespace Miniscript {
 			/// </summary>
 			/// <param name="func">Miniscript function to invoke</param>
 			/// <param name="resultStorage">where to store result of the call, in the calling context</param>
-			public void ManuallyPushCall(ValFunction func, Value resultStorage=null) {
-				int argCount = 0;
+			/// <param name="arguments">optional list of arguments to push</param>
+			public void ManuallyPushCall(ValFunction func, Value resultStorage=null, List<Value> arguments=null) {
+				var context = stack.Peek();
+				int argCount = func.function.parameters.Count;
+				for (int i=0; i<argCount; i++) {
+					if (arguments != null && i < arguments.Count) {
+						Value val = context.ValueInContext(arguments[i]);
+						context.PushParamArgument(val);						
+					} else {
+						context.PushParamArgument(null);
+					}
+				}
 				Value self = null;	// "self" is always null for a manually pushed call
-				Context nextContext = stack.Peek().NextCallContext(func.function, argCount, self != null, null);
-				if (self != null) nextContext.SetVar("self", self);
+				
+				Context nextContext = context.NextCallContext(func.function, argCount, self != null, null);
+				if (self != null) nextContext.self = self;
 				nextContext.resultStorage = resultStorage;
 				stack.Push(nextContext);				
 			}
@@ -905,7 +1004,7 @@ namespace Miniscript {
 					context.PushParamArgument(val);
 				} else if (line.op == Line.Op.CallFunctionA) {
 					// Resolve rhsA.  If it's a function, invoke it; otherwise,
-					// just store it directly.
+					// just store it directly (but pop the call context).
 					ValMap valueFoundIn;
 					Value funcVal = line.rhsA.Val(context, out valueFoundIn);	// resolves the whole dot chain, if any
 					if (funcVal is ValFunction) {
@@ -916,7 +1015,7 @@ namespace Miniscript {
 							// bind "self" to the object used to invoke the call, except
 							// when invoking via "super"
 							Value seq = ((ValSeqElem)(line.rhsA)).sequence;
-							if (seq is ValVar && ((ValVar)seq).identifier == "super") self = context.GetVar("self");
+							if (seq is ValVar && ((ValVar)seq).identifier == "super") self = context.self;
 							else self = context.ValueInContext(seq);
 						}
 						ValFunction func = (ValFunction)funcVal;
@@ -924,9 +1023,14 @@ namespace Miniscript {
 						Context nextContext = context.NextCallContext(func.function, argCount, self != null, line.lhs);
 						nextContext.outerVars = func.outerVars;
 						if (valueFoundIn != null) nextContext.SetVar("super", super);
-						if (self != null) nextContext.SetVar("self", self);	// (set only if bound above)
+						if (self != null) nextContext.self = self;	// (set only if bound above)
 						stack.Push(nextContext);
 					} else {
+						// The user is attempting to call something that's not a function.
+						// We'll allow that, but any number of parameters is too many.  [#35]
+						// (No need to pop them, as the exception will pop the whole call stack anyway.)
+						int argCount = line.rhsB.IntValue();
+						if (argCount > 0) throw new TooManyArgumentsException();
 						context.StoreValue(line.lhs, funcVal);
 					}
 				} else if (line.op == Line.Op.ReturnA) {
@@ -972,12 +1076,28 @@ namespace Miniscript {
 				Intrinsic.shortNames.TryGetValue(val, out result);
 				return result;
 			}
+			
+			public List<SourceLoc> GetStack() {
+				var result = new List<SourceLoc>();
+				// NOTE: C# iteration over a Stack goes in reverse order.
+				// This will return the newest call context first, and the
+				// oldest (global) call context last.
+				foreach (var context in stack) {
+					result.Add(context.GetSourceLoc());
+				}
+				return result;
+			}
 		}
 
-		public static void Dump(List<Line> lines) {
+		public static void Dump(List<Line> lines, int lineNumToHighlight, int indent=0) {
 			int lineNum = 0;
 			foreach (Line line in lines) {
-				Console.WriteLine((lineNum++).ToString() + ". " + line);
+				string s = (lineNum == lineNumToHighlight ? "> " : "  ") + (lineNum++) + ". ";
+				Console.WriteLine(s + line);
+				if (line.op == Line.Op.BindAssignA) {
+					ValFunction func = (ValFunction)line.rhsA;
+					Dump(func.function.code, -1, indent+1);
+				}
 			}
 		}
 
@@ -985,6 +1105,7 @@ namespace Miniscript {
 			return new ValTemp(tempNum);
 		}
 		public static ValVar LVar(string identifier) {
+			if (identifier == "self") return ValVar.self;
 			return new ValVar(identifier);
 		}
 		public static ValTemp RTemp(int tempNum) {
@@ -999,6 +1120,7 @@ namespace Miniscript {
 		public static ValNumber IntrinsicByName(string name) {
 			return new ValNumber(Intrinsic.GetByName(name).id);
 		}
+		
 	}
 }
 

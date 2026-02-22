@@ -235,16 +235,16 @@ public class AudioAndTextPlayer_bak : MonoBehaviour
     private IEnumerator LoadAudioAndTimings(string audioURL, string jsonTimingsURL)
     {
         JSONNode timings = null;
-        AudioAndTimingsStruct audioAndTimingsStruct = null;
+        AudioAndTextStruct audioAndTimingsStruct = null;
         if (cacheAcudioAndTimingsStructs.Contains(audioURL))
         {
-            audioAndTimingsStruct = cacheAcudioAndTimingsStructs[audioURL] as AudioAndTimingsStruct;
+            audioAndTimingsStruct = cacheAcudioAndTimingsStructs[audioURL] as AudioAndTextStruct;
         }
         else
         {
-            audioAndTimingsStruct = new AudioAndTimingsStruct();
+            audioAndTimingsStruct = new AudioAndTextStruct();
             audioAndTimingsStruct.audioURL = audioURL;
-            audioAndTimingsStruct.jsonTimingsURL = jsonTimingsURL;
+            audioAndTimingsStruct.textURL = jsonTimingsURL;
             using (var www = new WWW(audioURL))
             {
                 yield return www;
@@ -332,7 +332,7 @@ public class AudioAndTextPlayer_bak : MonoBehaviour
     }
 
 
-    private static void AddToCache(string audioURL, AudioAndTimingsStruct audioAndTimingsStruct)
+    private static void AddToCache(string audioURL, AudioAndTextStruct audioAndTimingsStruct)
     {
         if (cacheAcudioAndTimingsStructs.Count >= maxCacheSize)
         {

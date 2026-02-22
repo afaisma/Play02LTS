@@ -1,22 +1,21 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using TMPro;
-using UnityEngine.Networking;
-using SimpleJSON;
-using UnityEngine.Serialization;
-using System.Collections.Specialized;
+using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Networking;
 using UnityEngine.UI;
+using System.Collections.Specialized;
+using SimpleJSON;
 
-
-class AudioAndTimingsStruct
+class AudioAndTextStruct
 {
     public string audioURL;
-    public string jsonTimingsURL;
+    public string textURL;
     public AudioClip audioClip;
     public JSONNode jsonNodeTimings;
+    public string content;
 }
 
 [System.Serializable]
@@ -34,18 +33,18 @@ public class AudioAndTextPlayer : MonoBehaviour
     public bool showHighlight = true;
     public bool audioNameGenerated = true;
     public ButtonSelectionController buttonSelectionController;
-    
-    [SerializeField] private bool _playAudio = true;  // Backing field for playAudio
-    
+
+    [SerializeField] private bool _playAudio = true; // Backing field for playAudio
+
     public bool _PlayAudio
     {
         get { return _playAudio; }
         set
         {
-            if (_playAudio != value)  // Only trigger if value changes
+            if (_playAudio != value) // Only trigger if value changes
             {
                 _playAudio = value;
-                UpdateAudioSourceVolume();  // Call method to update volume
+                UpdateAudioSourceVolume(); // Call method to update volume
             }
         }
     }
@@ -65,60 +64,55 @@ public class AudioAndTextPlayer : MonoBehaviour
         }
     }
 
-    [SerializeField]
-    public UnityEvent OnAutoNextStep;
+    [SerializeField] public UnityEvent OnAutoNextStep;
     private bool triggerNextStep = false;
     [SerializeField] private Toggle nextStepToggle;
-    
+
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private TMP_Text uiForeground;
     [SerializeField] private TMP_Text uiBackground;
-    
-    public string hilightTextColor = "FF55FF";
-    public string hilightBackColor = "00FF0033";
-    
-    public static int maxCacheSize = 30;
-    private static  OrderedDictionary cacheAcudioAndTimingsStructs = new OrderedDictionary();
 
-    private List<WordTiming> wordTimings;
+    public string hilightTextColor = "FF55FF";
+    public string hilightBackColor = "00FF0044";
+
+    private static readonly int MaxAudioCacheSize = 30;
+    private static readonly OrderedDictionary CacheAudioAndTimingsStructs = new OrderedDictionary();
+
+    private List<WordTiming> currentWordTimings;
     private int currentWordIndex;
     public string baseURL;
 
     DateTime dtWasPlaying = DateTime.MinValue;
-    
+
     private void Start()
     {
-        wordTimings = new List<WordTiming>();
+        currentWordTimings = new List<WordTiming>();
         currentWordIndex = 0;
-        // Add a listener to the toggle to call SetTriggerNextStep when the toggle value changes
+        // Add a listener to the toggle to call OnToggleValueChanged when the toggle value changes
         if (nextStepToggle != null)
         {
             nextStepToggle.onValueChanged.AddListener(OnToggleValueChanged);
         }
-
-        // nextPlayUseVoice = "computer";
     }
-    
+
     private void OnDestroy()
     {
         if (nextStepToggle != null)
         {
             nextStepToggle.onValueChanged.RemoveListener(OnToggleValueChanged);
         }
+
         StopAllCoroutines();
     }
 
     public void OnSetNextPlayVoiceSetting()
     {
-        Debug.Log("OnSetNextPlayVoiceSetting: buttonSelectionController = " + buttonSelectionController);
         nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
-        Debug.Log("OnSetNextPlayVoiceSetting: nextPlayUseVoice = " + nextPlayUseVoice);
     }
-    
+
     void PreparePlayVoiceSettings()
     {
         nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
-        Debug.Log("PreparePlayVoiceSettings: nextPlayUseVoice = " + nextPlayUseVoice);
         if (nextPlayUseVoice == "human")
         {
             showHighlight = false;
@@ -138,24 +132,51 @@ public class AudioAndTextPlayer : MonoBehaviour
             _PlayAudio = false;
         }
     }
-    
-    public void Play(string chunkname, string currentVoicePostfix, string content)
+
+    public void PlayExt(string audioURL, float fromS, float toS, string textContentURL, int pageNum)
     {
         PreparePlayVoiceSettings();
-        string audioURL = $"{chunkname}_{Globals.getReadingRate()}{currentVoicePostfix}.mp3";  ;
-        string jsonTimingsURL = $"{chunkname}_{Globals.getReadingRate()}_timings{currentVoicePostfix}.json"; 
-        if (!audioNameGenerated)
-            audioURL = $"{chunkname}.mp3";
-        if (staticText)
-            jsonTimingsURL =  $"{chunkname}.json";
-        
         currentWordIndex = 0;
         StopAllCoroutines();
         StartCoroutine(LoadAudioAndTimings(
-            audioURL != "" ? baseURL + audioURL: "", 
-            jsonTimingsURL != "" ? baseURL + jsonTimingsURL: ""));
+            !string.IsNullOrEmpty(audioURL) ? baseURL + audioURL : "",
+            !string.IsNullOrEmpty(textContentURL) ? baseURL + textContentURL : "",
+            pageNum,
+            "",
+            fromS,
+            toS
+        ));
     }
-    
+
+    public void Play(string chunkname, string currentVoicePostfix, string content, float startTime = -1,
+        float endTime = -1)
+    {
+        PreparePlayVoiceSettings();
+        string audioURL = $"{chunkname}_{Globals.getReadingRate()}{currentVoicePostfix}.mp3";
+        string jsonTimingsURL = $"{chunkname}_{Globals.getReadingRate()}_timings{currentVoicePostfix}.json";
+
+        // If not generated by TTS or if we want a plain chunk
+        if (!audioNameGenerated)
+            audioURL = $"{chunkname}.mp3";
+
+        // If static text is true, ignore external JSON timings
+        if (staticText)
+            jsonTimingsURL = $"{chunkname}.json";
+
+        currentWordIndex = 0;
+        StopAllCoroutines();
+
+        // Pass the content into the coroutine in case you want to handle it for static text
+        StartCoroutine(LoadAudioAndTimings(
+            !string.IsNullOrEmpty(audioURL) ? baseURL + audioURL : "",
+            !string.IsNullOrEmpty(jsonTimingsURL) ? baseURL + jsonTimingsURL : "",
+            -1,
+            content,
+            startTime,
+            endTime
+        ));
+    }
+
     private void OnToggleValueChanged(bool isOn)
     {
         triggerNextStep = isOn;
@@ -166,28 +187,27 @@ public class AudioAndTextPlayer : MonoBehaviour
         uiForeground.gameObject.SetActive(bActive);
         uiBackground.gameObject.SetActive(bActive);
     }
-    
-    public void SetFont( string fontName, int size, Color color)
+
+    public void SetFont(string fontName, int size, Color color)
     {
-        if (fontName != "")
+        if (!string.IsNullOrEmpty(fontName))
         {
             TMP_FontAsset fontAsset = Resources.Load<TMP_FontAsset>(fontName);
             uiForeground.font = fontAsset;
             uiBackground.font = fontAsset;
         }
+
         if (size > 0)
         {
             uiForeground.fontSize = size;
             uiBackground.fontSize = size;
         }
-        if (color != null)
-        {
-            uiForeground.color = color;
-            uiBackground.color = color;
-        }
+
+        uiForeground.color = color;
+        uiBackground.color = color;
     }
 
-    public void SetFontSize( int size)
+    public void SetFontSize(int size)
     {
         if (size > 0)
         {
@@ -195,6 +215,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             uiBackground.fontSize = size;
         }
     }
+
     public void SetTextAlignment(string alignment, bool nClearText = true)
     {
         if (nClearText)
@@ -202,23 +223,26 @@ public class AudioAndTextPlayer : MonoBehaviour
             uiForeground.text = "";
             uiBackground.text = "";
         }
-        
-        if (alignment.ToLower() == "center")
+
+        // Convert to lower for easier comparison
+        var alignLower = alignment.ToLower();
+
+        if (alignLower == "center")
         {
             uiForeground.alignment = TextAlignmentOptions.Center;
             uiBackground.alignment = TextAlignmentOptions.Center;
         }
-        else if (alignment.ToLower() == "top")
+        else if (alignLower == "top")
         {
             uiForeground.alignment = TextAlignmentOptions.Top;
             uiBackground.alignment = TextAlignmentOptions.Top;
         }
-        else if (alignment.ToLower() == "topleft")
+        else if (alignLower == "topleft")
         {
             uiForeground.alignment = TextAlignmentOptions.TopLeft;
             uiBackground.alignment = TextAlignmentOptions.TopLeft;
         }
-        else if (alignment.ToLower() == "right")
+        else if (alignLower == "right")
         {
             uiForeground.alignment = TextAlignmentOptions.Right;
             uiBackground.alignment = TextAlignmentOptions.Right;
@@ -232,52 +256,67 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     public void EnableAutoSize(int enable, int fontSizeMin, int fontSizeMax)
     {
-        bool bEnable = enable != 0;
+        bool bEnable = (enable != 0);
         uiForeground.enableAutoSizing = bEnable;
         uiForeground.fontSizeMin = fontSizeMin;
         uiForeground.fontSizeMax = fontSizeMax;
-        
+
         uiBackground.enableAutoSizing = bEnable;
         uiBackground.fontSizeMin = fontSizeMin;
         uiBackground.fontSizeMax = fontSizeMax;
     }
-    
-    private IEnumerator LoadAudioAndTimings(string audioURL, string jsonTimingsURL)
+
+    private IEnumerator LoadAudioAndTimings(string audioURL, string textURL, int pageNum, string content,
+        float startTime = -1, float endTime = -1)
     {
         JSONNode timings = null;
-        AudioAndTimingsStruct audioAndTimingsStruct = null;
-        if (cacheAcudioAndTimingsStructs.Contains(audioURL))
+        AudioAndTextStruct audioAndTextStruct = null;
+
+        // 1) Check Cache
+        if (CacheAudioAndTimingsStructs.Contains(audioURL))
         {
-            audioAndTimingsStruct = cacheAcudioAndTimingsStructs[audioURL] as AudioAndTimingsStruct;
+            audioAndTextStruct = CacheAudioAndTimingsStructs[audioURL] as AudioAndTextStruct;
         }
         else
         {
-            audioAndTimingsStruct = new AudioAndTimingsStruct();
-            audioAndTimingsStruct.audioURL = audioURL;
-            audioAndTimingsStruct.jsonTimingsURL = jsonTimingsURL;
-            using (var www = new WWW(audioURL))
+            // 2) Create a new struct if not in cache
+            audioAndTextStruct = new AudioAndTextStruct
             {
-                yield return www;
+                audioURL = audioURL,
+                textURL = textURL
+            };
 
-                if (www.error == null)
+            // --- Download the audio (if audioURL is not empty) ---
+            if (!string.IsNullOrEmpty(audioURL))
+            {
+                using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioURL, AudioType.MPEG))
                 {
-                    AudioClipStruct audioClipStruct = new AudioClipStruct
+                    yield return uwr.SendWebRequest();
+
+                    if (uwr.result == UnityWebRequest.Result.ConnectionError ||
+                        uwr.result == UnityWebRequest.Result.ProtocolError)
                     {
-                        audioClip = www.GetAudioClip()
-                    };
-                    audioAndTimingsStruct.audioClip = audioClipStruct.audioClip;
-                    //audioSource.clip = audioClipStruct.audioClip;
-                }
-                else
-                {
-                    Debug.LogError($"Error loading audio clip {audioURL}: {www.error}");
+                        Debug.LogError($"Error loading audio clip {audioURL}: {uwr.error}");
+                    }
+                    else
+                    {
+                        AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
+                        if (clip != null)
+                        {
+                            audioAndTextStruct.audioClip = clip;
+                        }
+                        else
+                        {
+                            Debug.LogError("Downloaded AudioClip is null.");
+                        }
+                    }
                 }
             }
 
-            // could be just an audio file without timings
-            if (jsonTimingsURL != "")
+            // --- Download JSON Timings if available ---
+            if (!string.IsNullOrEmpty(textURL))
             {
-                using (UnityWebRequest www = UnityWebRequest.Get(jsonTimingsURL))
+                using (UnityWebRequest www = UnityWebRequest.Get(textURL))
                 {
                     yield return www.SendWebRequest();
 
@@ -288,53 +327,143 @@ public class AudioAndTextPlayer : MonoBehaviour
                     }
                     else
                     {
-                        timings = JSON.Parse(www.downloadHandler.text);
-                        audioAndTimingsStruct.jsonNodeTimings = timings;
+                        content = www.downloadHandler.text;
+                        audioAndTextStruct.content = content;
+                        // if page number == -1, we're dealing with JSON timings
+                        if (pageNum == -1)
+                        {
+                            timings = JSON.Parse(content);
+                            audioAndTextStruct.jsonNodeTimings = timings;
+                        }
+                        // we're dealing with a page from static text
+                        else
+                        {
+                            /*
+                            String page = GetPageFromTextContent(content, pageNum);
+                            var singleChunk = new JSONArray();
+                            JSONNode singleNode = new JSONObject();
+                            singleNode["word"] = page;
+                            singleNode["time"] = 0.0f;
+                            singleChunk.Add(singleNode);
+
+                            audioAndTextStruct.jsonNodeTimings = singleChunk;
+                        */
+                        }
                     }
                 }
             }
+            else
+            {
+                // SIMPLE STATIC TEXT CASE:
+                var singleChunk = new JSONArray();
+                JSONNode singleNode = new JSONObject();
+                singleNode["word"] = content;
+                singleNode["time"] = 0.0f;
+                singleChunk.Add(singleNode);
 
-            AddToCache(audioURL, audioAndTimingsStruct);
+                audioAndTextStruct.jsonNodeTimings = singleChunk;
+            }
+
+            // 3) Add to cache
+            AddToCache(audioURL, audioAndTextStruct);
         }
 
-        if (audioAndTimingsStruct != null)
+        // 4) Apply Timings & Audio
+        if (audioAndTextStruct != null)
         {
-            ParseTimings(audioAndTimingsStruct.jsonNodeTimings);
-            audioSource.clip = audioAndTimingsStruct.audioClip;
+            // Handle fragment timings
+            if (startTime < 0) startTime = 0;
+            if (endTime < 0 && audioAndTextStruct.audioClip != null)
+                endTime = audioAndTextStruct.audioClip.length;
+
+            ParseTimings(audioAndTextStruct, pageNum);
+
+            // Set up audio clip
+            if (audioAndTextStruct.audioClip != null)
+            {
+                AudioClip originalClip = audioAndTextStruct.audioClip;
+
+                // If we're playing a fragment, create a new clip
+                if (startTime > 0 || endTime < originalClip.length)
+                {
+                    int startSample = Mathf.FloorToInt(startTime * originalClip.frequency);
+                    int endSample = Mathf.FloorToInt(endTime * originalClip.frequency);
+                    int fragmentLength = endSample - startSample;
+
+                    AudioClip fragmentClip = AudioClip.Create(
+                        "Fragment_" + originalClip.name,
+                        fragmentLength,
+                        originalClip.channels,
+                        originalClip.frequency,
+                        false
+                    );
+
+                    float[] samples = new float[fragmentLength * originalClip.channels];
+                    originalClip.GetData(samples, startSample);
+                    fragmentClip.SetData(samples, 0);
+
+                    audioSource.clip = fragmentClip;
+                }
+                else
+                {
+                    audioSource.clip = originalClip;
+                }
+            }
         }
 
+        // Small delay before playing
         yield return new WaitForSeconds(0.5f);
-        
+
         audioSource.volume = !_PlayAudio ? 0 : 1;
         audioSource.Play();
 
-        if (jsonTimingsURL != "")
+        // If we have an actual JSON timings URL, show real highlighting
+        if (!string.IsNullOrEmpty(textURL))
         {
             if (audioSource.isPlaying)
                 dtWasPlaying = DateTime.Now;
 
+            // Highlight loop
             while (audioSource.isPlaying)
             {
-                UpdateHighlightedText(audioSource.time * 1000 - 500); // Convert to milliseconds, offset playtime back a bit
+                UpdateHighlightedText(audioSource.time * 1000 - 500); // offset in ms
                 yield return null;
             }
 
-            // to reset the text to its original state
-            //if ((dtWasPlaying != DateTime.MinValue) && (DateTime.Now - dtWasPlaying > TimeSpan.FromSeconds(2)))
+            // Reset highlight once audio finishes
             UpdateHighlightedText(0, false);
-            //uiText.text = ""; // Reset the text to its original state.
-
-            // Log a message when the audio stops playing
             Debug.Log("Audio has stopped playing.");
 
-            // Conditionally start the coroutine based on triggerNextStep
+            // Conditionally trigger next step
+            if (triggerNextStep)
+            {
+                StartCoroutine(WaitAndTriggerNextStep());
+            }
+        }
+        else
+        {
+            // Static text scenario
+            UpdateHighlightedText(0, false);
+            Debug.Log("Static text – no JSON timings used.");
+
             if (triggerNextStep)
             {
                 StartCoroutine(WaitAndTriggerNextStep());
             }
         }
     }
-    
+
+    private string GetPageFromTextContent(string content, int pageNum)
+    {
+        string[] pages = content.Split(new string[] { "###" }, StringSplitOptions.None);
+        if (pageNum >= 0 && pageNum < pages.Length)
+        {
+            return pages[pageNum].Trim();
+        }
+
+        return "";
+    }
+
     private IEnumerator WaitAndTriggerNextStep()
     {
         yield return new WaitForSeconds(0.5f);
@@ -342,50 +471,64 @@ public class AudioAndTextPlayer : MonoBehaviour
     }
 
 
-    private static void AddToCache(string audioURL, AudioAndTimingsStruct audioAndTimingsStruct)
+    private static void AddToCache(string audioURL, AudioAndTextStruct audioAndTextStruct)
     {
-        if (cacheAcudioAndTimingsStructs.Count >= maxCacheSize)
+        if (CacheAudioAndTimingsStructs.Count >= MaxAudioCacheSize)
         {
-            cacheAcudioAndTimingsStructs.RemoveAt(0);
+            // Remove the oldest entry
+            CacheAudioAndTimingsStructs.RemoveAt(0);
         }
-        cacheAcudioAndTimingsStructs[audioURL] = audioAndTimingsStruct;
+
+        CacheAudioAndTimingsStructs[audioURL] = audioAndTextStruct;
     }
 
-    
-    private void ParseTimings(JSONNode timings)
+
+    private void ParseTimings(AudioAndTextStruct audioAndTextStruct, int pageNum)
     {
-        if (timings == null)
-            return;
+        if (pageNum != -1)
+        {
+            string content = audioAndTextStruct.content;
+            String page = GetPageFromTextContent(content, pageNum);
+            var singleChunk = new JSONArray();
+            JSONNode singleNode = new JSONObject();
+            singleNode["word"] = page;
+            singleNode["time"] = 0.0f;
+            singleChunk.Add(singleNode);
+            audioAndTextStruct.jsonNodeTimings = singleChunk;
+        }
 
-        wordTimings.Clear();
+        JSONNode timings = audioAndTextStruct.jsonNodeTimings;
+        if (timings == null) return;
 
+        currentWordTimings = new List<WordTiming>();
         foreach (JSONNode timing in timings)
         {
-            WordTiming wordTiming = new WordTiming();
-            wordTiming.Word = timing["word"].Value;
-            wordTiming.Time = timing["time"].AsFloat;
-            wordTimings.Add(wordTiming);
+            WordTiming wt = new WordTiming
+            {
+                Word = timing["word"].Value,
+                Time = timing["time"].AsFloat
+            };
+            currentWordTimings.Add(wt);
         }
     }
 
-    Boolean IsWordPunctuation(int i)
+    private bool IsWordPunctuation(int i)
     {
-        // if (i < 0 || i >= wordTimings.Count)
-        //     return false;
-        if (wordTimings[i].Word.Trim().Length == 1 && Char.IsPunctuation(wordTimings[i].Word.Trim().ToCharArray()[0]))
-            return true;
-        return false;
+        if (i < 0 || i >= currentWordTimings.Count)
+            return false;
+
+        string w = currentWordTimings[i].Word.Trim();
+        return (w.Length == 1 && Char.IsPunctuation(w[0]));
     }
-    
+
     private void UpdateHighlightedText(float currentAudioTime, bool bHilight = true)
     {
-        if (wordTimings == null)
+        if (currentWordTimings == null || currentWordTimings.Count == 0)
             return;
-        
-        for (int i = currentWordIndex; i < wordTimings.Count; i++)
+
+        for (int i = currentWordIndex; i < currentWordTimings.Count; i++)
         {
-            if (wordTimings[i].Time > currentAudioTime)
-            //if (PRUtils.AlmostEqual(wordTimings[i].Time, currentAudioTime, 0.1f))
+            if (currentWordTimings[i].Time > currentAudioTime)
             {
                 currentWordIndex = i;
                 break;
@@ -393,30 +536,25 @@ public class AudioAndTextPlayer : MonoBehaviour
         }
 
         string newForegroundText = "";
-        string newBsckgroundText = "";
-        for (int i = 0; i < wordTimings.Count; i++)
+        string newBackgroundText = "";
+        for (int i = 0; i < currentWordTimings.Count; i++)
         {
-            //if (bHilight && i == currentWordIndex - 1)
-            if (showHighlight && bHilight && i == currentWordIndex && !IsWordPunctuation(i))
+            bool isHighlighted = (showHighlight && bHilight && i == currentWordIndex && !IsWordPunctuation(i));
+            if (isHighlighted)
             {
-                newForegroundText += $"<color=#{hilightTextColor}>" + wordTimings[i].Word + "</color>";
-                newBsckgroundText += $"<mark=#{hilightBackColor}>" + wordTimings[i].Word + "</mark>";
+                // Highlight the current word in both foreground and background
+                newForegroundText += $"<color=#{hilightTextColor}>{currentWordTimings[i].Word}</color>";
+                newBackgroundText += $"<mark=#{hilightBackColor}>{currentWordTimings[i].Word}</mark>";
             }
             else
             {
-                newForegroundText += wordTimings[i].Word;
-                newBsckgroundText += wordTimings[i].Word;
+                newForegroundText += currentWordTimings[i].Word;
+                newBackgroundText += currentWordTimings[i].Word;
             }
-
-            //if (i < wordTimings.Count - 1 && !IsWordPunctuation(i + 1))
-            //{
-                //newForegroundText += " ";
-                //newBsckgroundText += " ";
-            //}
         }
-    
+
         uiForeground.text = newForegroundText.TrimEnd();
-        uiBackground.text = newBsckgroundText.TrimEnd();
+        uiBackground.text = newBackgroundText.TrimEnd();
     }
 
     public void SetAudioTextHilightColors(string textColor, string backColor)
@@ -425,4 +563,3 @@ public class AudioAndTextPlayer : MonoBehaviour
         hilightBackColor = backColor;
     }
 }
-

@@ -73,7 +73,7 @@ namespace Miniscript {
 		public virtual uint UIntValue() {
 			return (uint)DoubleValue();
 		}
-		
+
 		/// <summary>
 		/// Get the numeric value of this Value as a single-precision float.
 		/// </summary>
@@ -114,14 +114,14 @@ namespace Miniscript {
 		/// equal will return the same hash value.
 		/// </summary>
 		/// <returns>hash value</returns>
-		public abstract int Hash(int recursionDepth=16);
+		public abstract int Hash();
 		
 		/// <summary>
 		/// Check whether this Value is equal to another Value.
 		/// </summary>
 		/// <param name="rhs">other value to compare to</param>
-		/// <returns>1if these values are considered equal; 0 if not equal; 0.5 if unsure</returns>
-		public abstract double Equality(Value rhs, int recursionDepth=16);
+		/// <returns>1 if these values are considered equal; 0 if not equal; 0.5 if unsure</returns>
+		public abstract double Equality(Value rhs);
 		
 		/// <summary>
 		/// Can we set elements within this value?  (I.e., is it a list or map?)
@@ -144,12 +144,21 @@ namespace Miniscript {
 			return false;
 		}
 
+		/// <summary>
+		/// Compare two Values for sorting purposes.
+		/// </summary>
 		public static int Compare(Value x, Value y) {
+			// Always sort null to the end of the list.
+			if (x == null) {
+				if (y == null) return 0;
+				return 1;
+            }
+			if (y == null) return -1;
 			// If either argument is a string, do a string comparison
 			if (x is ValString || y is ValString) {
-					var sx = x.ToString();
-					var sy = y.ToString();
-					return sx.CompareTo(sy);
+				var sx = x.ToString();
+				var sy = y.ToString();
+				return sx.CompareTo(sy);
 			}
 			// If both arguments are numbers, compare numerically
 			if (x is ValNumber && y is ValNumber) {
@@ -162,13 +171,190 @@ namespace Miniscript {
 			// Otherwise, consider all values equal, for sorting purposes.
 			return 0;
 		}
+
+		private int RotateBits(int n) {
+			return (n >> 1) | (n << (sizeof(int) * 8 - 1));
+		}
+
+		/// <summary>
+		/// Compare lhs and rhs for equality, in a way that traverses down
+		/// the tree when it finds a list or map.  For any other type, this
+		/// just calls through to the regular Equality method.
+		///
+		/// Note that this works correctly for loops (maintaining a visited
+		/// list to avoid recursing indefinitely).
+		/// </summary>
+		protected bool RecursiveEqual(Value rhs) { 
+			var toDo = new Stack<ValuePair>();
+			var visited = new HashSet<ValuePair>();
+			toDo.Push(new ValuePair() { a = this, b = rhs });
+			while (toDo.Count > 0) {
+				var pair = toDo.Pop();
+
+				visited.Add(pair);
+				if (pair.a is ValList listA) {
+					var listB = pair.b as ValList;
+					if (listB == null) return false;
+					if (Object.ReferenceEquals(listA, listB)) continue;
+					int aCount = listA.values.Count;
+					if (aCount != listB.values.Count) return false;
+					for (int i = 0; i < aCount; i++) {
+						var newPair = new ValuePair() {  a = listA.values[i], b = listB.values[i] };
+						if (!visited.Contains(newPair)) toDo.Push(newPair);
+					}
+				} else if (pair.a is ValMap mapA) {
+					var mapB = pair.b as ValMap;
+					if (mapB == null) return false;
+					if (Object.ReferenceEquals(mapA, mapB)) continue;
+					if (mapA.map.Count != mapB.map.Count) return false;
+					foreach (KeyValuePair<Value, Value> kv in mapA.map) {
+						Value valFromB;
+						if (!mapB.TryGetValue(kv.Key, out valFromB)) return false;
+						Value valFromA = mapA.map[kv.Key];
+						var newPair = new ValuePair() {  a = valFromA, b = valFromB };
+						if (!visited.Contains(newPair)) toDo.Push(newPair);
+					}
+				} else if (pair.a == null || pair.b == null) {
+					if (pair.a != null || pair.b != null) return false;
+				} else {
+					// No other types can recurse, so we can safely do:
+					if (pair.a.Equality(pair.b) == 0) return false;
+				}
+			}
+			// If we clear out our toDo list without finding anything unequal,
+			// then the values as a whole must be equal.
+			return true;
+		}
+
+		// Hash function that works correctly with nested lists and maps.
+		protected int RecursiveHash()
+		{
+			int result = 0;
+			var toDo = new Stack<Value>();
+			var visited = new HashSet<Value>();
+			toDo.Push(this);
+			while (toDo.Count > 0) {
+				Value item = toDo.Pop();
+				visited.Add(item);
+				if (item is ValList list) {
+					result = RotateBits(result) ^ list.values.Count.GetHashCode();
+					for (int i=list.values.Count-1; i>=0; i--) {
+						Value child = list.values[i];
+						if (!(child is ValList || child is ValMap) || !visited.Contains(child)) {
+							toDo.Push(child);
+						}
+					}
+				} else  if (item is ValMap map) {
+					result = RotateBits(result) ^ map.map.Count.GetHashCode();
+					foreach (KeyValuePair<Value, Value> kv in map.map) {
+						if (!(kv.Key is ValList || kv.Key is ValMap) || !visited.Contains(kv.Key)) {
+							toDo.Push(kv.Key);
+						}
+						if (!(kv.Value is ValList || kv.Value is ValMap) || !visited.Contains(kv.Value)) {
+							toDo.Push(kv.Value);
+						}
+					}
+				} else {
+					// Anything else, we can safely use the standard hash method
+					result = RotateBits(result) ^ (item == null ? 0 : item.Hash());
+				}
+			}
+			return result;
+		}
 	}
-	
-	public class ValueSorter : IComparer<Value> {
+
+	// ValuePair: used internally when working out whether two maps
+	// or lists are equal.
+	struct ValuePair {
+		public Value a;
+		public Value b;
+		public override bool Equals(object obj) {
+			if (obj is ValuePair other) {
+				return ReferenceEquals(a, other.a) && ReferenceEquals(b, other.b);
+			}
+			return false;
+		}
+
+		public override int GetHashCode() {
+			unchecked {
+				return ((a != null ? a.GetHashCode() : 0) * 397) ^ (b != null ? b.GetHashCode() : 0);
+			}
+		}
+	}
+
+	public class ValueSorter : IComparer<Value>
+	{
 		public static ValueSorter instance = new ValueSorter();
-		public int Compare(Value x, Value y) {
+		public int Compare(Value x, Value y)
+		{
 			return Value.Compare(x, y);
 		}
+	}
+
+	public class ValueReverseSorter : IComparer<Value>
+	{
+		public static ValueReverseSorter instance = new ValueReverseSorter();
+		public int Compare(Value x, Value y)
+		{
+			return Value.Compare(y, x);
+		}
+	}
+
+	/// <summary>
+	/// ValNull is an object to represent null in places where we can't use
+	/// an actual null (such as a dictionary key or value).
+	/// </summary>
+	public class ValNull : Value {
+		private ValNull() {}
+		
+		public override string ToString(TAC.Machine machine) {
+			return "null";
+		}
+		
+		public override bool IsA(Value type, TAC.Machine vm) {
+			return type == null;
+		}
+
+		public override int Hash() {
+			return -1;
+		}
+
+		public override Value Val(TAC.Context context) {
+			return null;
+		}
+
+		public override Value Val(TAC.Context context, out ValMap valueFoundIn) {
+			valueFoundIn = null;
+			return null;
+		}
+		
+		public override Value FullEval(TAC.Context context) {
+			return null;
+		}
+		
+		public override int IntValue() {
+			return 0;
+		}
+
+		public override double DoubleValue() {
+			return 0.0;
+		}
+		
+		public override bool BoolValue() {
+			return false;
+		}
+
+		public override double Equality(Value rhs) {
+			return (rhs == null || rhs is ValNull ? 1 : 0);
+		}
+
+		static readonly ValNull _inst = new ValNull();
+		
+		/// <summary>
+		/// Handy accessor to a shared "instance".
+		/// </summary>
+		public static ValNull instance { get { return _inst; } }
+		
 	}
 	
 	/// <summary>
@@ -186,13 +372,20 @@ namespace Miniscript {
 			// Convert to a string in the standard MiniScript way.
 			if (value % 1.0 == 0.0) {
 				// integer values as integers
-				return value.ToString("0", CultureInfo.InvariantCulture);
+				string result = value.ToString("0", CultureInfo.InvariantCulture);
+				if (result == "-0") result = "0";
+				return result;
 			} else if (value > 1E10 || value < -1E10 || (value < 1E-6 && value > -1E-6)) {
 				// very large/small numbers in exponential form
-				return value.ToString("E6", CultureInfo.InvariantCulture);
+				string s = value.ToString("E6", CultureInfo.InvariantCulture);
+				s = s.Replace("E-00", "E-0");
+				return s;
 			} else {
-				// all others in decimal form, with 1-6 digits past the decimal point
-				return value.ToString("0.0#####", CultureInfo.InvariantCulture);
+				// all others in decimal form, with 1-6 digits past the decimal point;
+				// and take care not to display "-0" for "negative" 0.0
+				string result = value.ToString("0.0#####", CultureInfo.InvariantCulture);
+				if (result == "-0") result = "0";
+				return result;
 			}
 		}
 
@@ -210,14 +403,15 @@ namespace Miniscript {
 		}
 
 		public override bool IsA(Value type, TAC.Machine vm) {
+			if (type == null) return false;
 			return type == vm.numberType;
 		}
 
-		public override int Hash(int recursionDepth=16) {
+		public override int Hash() {
 			return value.GetHashCode();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			return rhs is ValNumber && ((ValNumber)rhs).value == value ? 1 : 0;
 		}
 
@@ -286,19 +480,21 @@ namespace Miniscript {
 		}
 
 		public override bool IsA(Value type, TAC.Machine vm) {
+			if (type == null) return false;
 			return type == vm.stringType;
 		}
 
-		public override int Hash(int recursionDepth=16) {
+		public override int Hash() {
 			return value.GetHashCode();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			// String equality is treated the same as in C#.
 			return rhs is ValString && ((ValString)rhs).value == value ? 1 : 0;
 		}
 
 		public Value GetElem(Value index) {
+			if (!(index is ValNumber)) throw new KeyException("String index must be numeric", null);
 			var i = index.IntValue();
 			if (i < 0) i += value.Length;
 			if (i < 0 || i >= value.Length) {
@@ -431,32 +627,24 @@ namespace Miniscript {
 		}
 
 		public override bool IsA(Value type, TAC.Machine vm) {
+			if (type == null) return false;
 			return type == vm.listType;
 		}
 
-		public override int Hash(int recursionDepth=16) {
-			//return values.GetHashCode();
-			int result = values.Count.GetHashCode();
-			if (recursionDepth < 1) return result;
-			for (var i = 0; i < values.Count; i++) {
-				result ^= values[i].Hash(recursionDepth-1);
-			}
-			return result;
+		public override int Hash() {
+			return RecursiveHash();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
+			// Quick bail-out cases:
 			if (!(rhs is ValList)) return 0;
 			List<Value> rhl = ((ValList)rhs).values;
 			if (rhl == values) return 1;  // (same list)
 			int count = values.Count;
 			if (count != rhl.Count) return 0;
-			if (recursionDepth < 1) return 0.5;		// in too deep
-			double result = 1;
-			for (var i = 0; i < count; i++) {
-				result *= values[i].Equality(rhl[i], recursionDepth-1);
-				if (result <= 0) break;
-			}
-			return result;
+
+			// Otherwise, we have to do:
+			return RecursiveEqual(rhs) ? 1 : 0;
 		}
 
 		public override bool CanSetElem() { return true; }
@@ -471,6 +659,7 @@ namespace Miniscript {
 		}
 
 		public Value GetElem(Value index) {
+			if (!(index is ValNumber)) throw new KeyException("List index must be numeric", null);
 			var i = index.IntValue();
 			if (i < 0) i += values.Count;
 			if (i < 0 || i >= values.Count) {
@@ -487,12 +676,30 @@ namespace Miniscript {
 	/// of Value, Value pairs.
 	/// </summary>
 	public class ValMap : Value {
+
+		// Define a maximum depth we will allow an inheritance ("__isa") chain to be.
+		// This is used to avoid locking up the app if some bozo creates a loop in
+		// the __isa chain, but it also means we can't allow actual inheritance trees
+		// to be longer than this.  So, use a reasonably generous value.
+		public const int maxIsaDepth = 256;
+
 		public Dictionary<Value, Value> map;
 
 		// Assignment override function: return true to cancel (override)
 		// the assignment, or false to allow it to happen as normal.
 		public delegate bool AssignOverrideFunc(Value key, Value value);
 		public AssignOverrideFunc assignOverride;
+
+		// Can store arbitrary data. Useful for retaining a C# object
+		// passed into scripting.
+		public object userData;
+
+		// Evaluation override function: Allows map to be fully backed
+		// by a C# object (or otherwise intercept map indexing).
+		// Return true to return the out value to the caller, or false
+		// to proceed with normal map look-up.
+		public delegate bool EvalOverrideFunc(Value key, out Value value);
+		public EvalOverrideFunc evalOverride;
 
 		public ValMap() {
 			this.map = new Dictionary<Value, Value>(RValueEqualityComparer.instance);
@@ -522,6 +729,7 @@ namespace Miniscript {
 		/// <param name="key">key to check for</param>
 		/// <returns>true if the map contains that key; false otherwise</returns>
 		public bool ContainsKey(Value key) {
+			if (key == null) key = ValNull.instance;
 			return map.ContainsKey(key);
 		}
 		
@@ -565,47 +773,82 @@ namespace Miniscript {
 		/// <param name="identifier">identifier to look up</param>
 		/// <returns>true if found, false if not</returns>
 		public bool TryGetValue(string identifier, out Value value) {
+			if (map.Count < 5) {
+				// new approach: just iterate!  This is faster for small maps (which are common).
+				foreach (var kv in map) {
+					if (kv.Key is ValString ks && ks.value == identifier) {
+						value = kv.Value;
+						return true;
+					}
+				}
+				value = null;
+				return false;
+			}
+			// old method, and still better on big maps: use dictionary look-up.
 			var idVal = TempValString.Get(identifier);
-			bool result = map.TryGetValue(idVal, out value);
+			bool result = TryGetValue(idVal, out value);
 			TempValString.Release(idVal);
 			return result;
 		}
-		
+
+		/// <summary>
+		/// Look up the given identifier in the backing map (unless overridden
+		/// by the evalOverride function).
+		/// </summary>
+		/// <param name="key">identifier to look up</param>
+		/// <param name="value">Corresponding value, if found</param>
+		/// <returns>true if found, false if not</returns>
+		public bool TryGetValue(Value key, out Value value)
+		{
+			if (evalOverride != null && evalOverride(key, out value)) return true;
+			return map.TryGetValue(key, out value);
+		}
+
 		/// <summary>
 		/// Look up a value in this dictionary, walking the __isa chain to find
-		/// it in a parent object if necessary.
+		/// it in a parent object if necessary.  
 		/// </summary>
 		/// <param name="key">key to search for</param>
 		/// <returns>value associated with that key, or null if not found</returns>
 		public Value Lookup(Value key) {
+			if (key == null) key = ValNull.instance;
 			Value result = null;
 			ValMap obj = this;
+			int chainDepth = 0;
 			while (obj != null) {
-				if (obj.map.TryGetValue(key, out result)) return result;
+				if (obj.TryGetValue(key, out result)) return result;
 				Value parent;
-				if (!obj.map.TryGetValue(ValString.magicIsA, out parent)) break;
+				if (!obj.TryGetValue(ValString.magicIsA, out parent)) break;
+				if (chainDepth++ > maxIsaDepth) {
+					throw new LimitExceededException("__isa depth exceeded (perhaps a reference loop?)");
+				}
 				obj = parent as ValMap;
 			}
 			return null;
 		}
-		
+
 		/// <summary>
 		/// Look up a value in this dictionary, walking the __isa chain to find
-		/// it in a parent object if necessary; return both the value found an
+		/// it in a parent object if necessary; return both the value found and
 		/// (via the output parameter) the map it was found in.
 		/// </summary>
 		/// <param name="key">key to search for</param>
 		/// <returns>value associated with that key, or null if not found</returns>
 		public Value Lookup(Value key, out ValMap valueFoundIn) {
+			if (key == null) key = ValNull.instance;
 			Value result = null;
 			ValMap obj = this;
+			int chainDepth = 0;
 			while (obj != null) {
-				if (obj.map.TryGetValue(key, out result)) {
+				if (obj.TryGetValue(key, out result)) {
 					valueFoundIn = obj;
 					return result;
 				}
 				Value parent;
-				if (!obj.map.TryGetValue(ValString.magicIsA, out parent)) break;
+				if (!obj.TryGetValue(ValString.magicIsA, out parent)) break;
+				if (chainDepth++ > maxIsaDepth) {
+					throw new LimitExceededException("__isa depth exceeded (perhaps a reference loop?)");
+				}
 				obj = parent as ValMap;
 			}
 			valueFoundIn = null;
@@ -639,8 +882,8 @@ namespace Miniscript {
 			foreach (Value k in map.Keys) {
 				Value key = k;		// stupid C#!
 				Value value = map[key];
-				if (key is ValTemp || key is ValVar) key = key.Val(context);
-				if (value is ValTemp || value is ValVar) value = value.Val(context);
+				if (key is ValTemp || key is ValVar || value is ValSeqElem) key = key.Val(context);
+				if (value is ValTemp || value is ValVar || value is ValSeqElem) value = value.Val(context);
 				result.map[key] = value;
 			}
 			return result;
@@ -668,49 +911,38 @@ namespace Miniscript {
 		}
 
 		public override bool IsA(Value type, TAC.Machine vm) {
+			if (type == null) return false;
 			// If the given type is the magic 'map' type, then we're definitely
 			// one of those.  Otherwise, we have to walk the __isa chain.
 			if (type == vm.mapType) return true;
 			Value p = null;
-			map.TryGetValue(ValString.magicIsA, out p);
+			TryGetValue(ValString.magicIsA, out p);
+			int chainDepth = 0;
 			while (p != null) {
 				if (p == type) return true;
 				if (!(p is ValMap)) return false;
-				((ValMap)p).map.TryGetValue(ValString.magicIsA, out p);
+				if (chainDepth++ > maxIsaDepth) {
+					throw new LimitExceededException("__isa depth exceeded (perhaps a reference loop?)");
+				}
+				((ValMap)p).TryGetValue(ValString.magicIsA, out p);
 			}
 			return false;
 		}
 
-		public override int Hash(int recursionDepth=16) {
-			//return map.GetHashCode();
-			int result = map.Count.GetHashCode();
-			if (recursionDepth < 0) return result;  // (important to recurse an odd number of times, due to bit flipping)
-			foreach (KeyValuePair<Value, Value> kv in map) {
-				result ^= kv.Key.Hash(recursionDepth-1);
-				if (kv.Value != null) result ^= kv.Value.Hash(recursionDepth-1);
-			}
-			return result;
+		public override int Hash() {
+			return RecursiveHash();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
+			// Quick bail-out cases:
 			if (!(rhs is ValMap)) return 0;
 			Dictionary<Value, Value> rhm = ((ValMap)rhs).map;
 			if (rhm == map) return 1;  // (same map)
 			int count = map.Count;
 			if (count != rhm.Count) return 0;
-			if (recursionDepth < 1) return 0.5;		// in too deep
-			double result = 1;
-			foreach (KeyValuePair<Value, Value> kv in map) {
-				if (!rhm.ContainsKey(kv.Key)) return 0;
-				var rhvalue = rhm[kv.Key];
-				if (kv.Value == null) {
-					if (rhvalue != null) return 0;
-					continue;
-				}
-				result *= kv.Value.Equality(rhvalue, recursionDepth-1);
-				if (result <= 0) break;
-			}
-			return result;
+
+			// Otherwise:
+			return RecursiveEqual(rhs) ? 1 : 0;
 		}
 
 		public override bool CanSetElem() { return true; }
@@ -721,6 +953,7 @@ namespace Miniscript {
 		/// and if found, give that a chance to handle it instead.
 		/// </summary>
 		public override void SetElem(Value index, Value value) {
+			if (index == null) index = ValNull.instance;
 			if (assignOverride == null || !assignOverride(index, value)) {
 				map[index] = value;
 			}
@@ -737,9 +970,9 @@ namespace Miniscript {
 			if (index < 0 || index >= keys.Count) {
 				throw new IndexException("index " + index + " out of range for map");
 			}
-			Value key = keys.ElementAt<Value>(index);	// (TODO: consider more efficient methods here)
+			Value key = keys.ElementAt<Value>(index);   // (TODO: consider more efficient methods here)
 			var result = new ValMap();
-			result.map[keyStr] = key;
+			result.map[keyStr] = (key is ValNull ? null : key);
 			result.map[valStr] = map[key];
 			return result;
 		}
@@ -797,10 +1030,14 @@ namespace Miniscript {
 	/// </summary>
 	public class ValFunction : Value {
 		public Function function;
-		public ValMap outerVars;	// local variables where the function was defined (usually, the module)
+		public readonly ValMap outerVars;	// local variables where the function was defined (usually, the module)
 
 		public ValFunction(Function function) {
 			this.function = function;
+		}
+		public ValFunction(Function function, ValMap outerVars) {
+			this.function = function;
+            this.outerVars = outerVars;
 		}
 
 		public override string ToString(TAC.Machine vm) {
@@ -813,19 +1050,24 @@ namespace Miniscript {
 		}
 
 		public override bool IsA(Value type, TAC.Machine vm) {
+			if (type == null) return false;
 			return type == vm.functionType;
 		}
 
-		public override int Hash(int recursionDepth=16) {
+		public override int Hash() {
 			return function.GetHashCode();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			// Two Function values are equal only if they refer to the exact same function
 			if (!(rhs is ValFunction)) return 0;
 			var other = (ValFunction)rhs;
 			return function == other.function ? 1 : 0;
 		}
+
+        public ValFunction BindAndCopy(ValMap contextVariables) {
+            return new ValFunction(function, contextVariables);
+        }
 
 	}
 
@@ -849,31 +1091,36 @@ namespace Miniscript {
 			return "_" + tempNum.ToString(CultureInfo.InvariantCulture);
 		}
 
-		public override int Hash(int recursionDepth=16) {
+		public override int Hash() {
 			return tempNum.GetHashCode();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			return rhs is ValTemp && ((ValTemp)rhs).tempNum == tempNum ? 1 : 0;
 		}
 
 	}
 
 	public class ValVar : Value {
+		public enum LocalOnlyMode { Off, Warn, Strict };
+		
 		public string identifier;
 		public bool noInvoke;	// reflects use of "@" (address-of) operator
-
+		public LocalOnlyMode localOnly = LocalOnlyMode.Off;	// whether to look this up in the local scope only
+		
 		public ValVar(string identifier) {
 			this.identifier = identifier;
 		}
 
 		public override Value Val(TAC.Context context) {
+			if (this == self) return context.self;
 			return context.GetVar(identifier);
 		}
 
 		public override Value Val(TAC.Context context, out ValMap valueFoundIn) {
 			valueFoundIn = null;
-			return context.GetVar(identifier);
+			if (this == self) return context.self;
+			return context.GetVar(identifier, localOnly);
 		}
 
 		public override string ToString(TAC.Machine vm) {
@@ -881,16 +1128,19 @@ namespace Miniscript {
 			return identifier;
 		}
 
-		public override int Hash(int recursionDepth=16) {
+		public override int Hash() {
 			return identifier.GetHashCode();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			return rhs is ValVar && ((ValVar)rhs).identifier == identifier ? 1 : 0;
 		}
 
 		// Special name for the implicit result variable we assign to on expression statements:
 		public static ValVar implicitResult = new ValVar("_");
+
+		// Special var for 'self'
+		public static ValVar self = new ValVar("self");
 	}
 
 	public class ValSeqElem : Value {
@@ -913,14 +1163,14 @@ namespace Miniscript {
 		public static Value Resolve(Value sequence, string identifier, TAC.Context context, out ValMap valueFoundIn) {
 			var includeMapType = true;
 			valueFoundIn = null;
-			int loopsLeft = 1000;		// (max __isa chain depth)
+			int loopsLeft = ValMap.maxIsaDepth;
 			while (sequence != null) {
 				if (sequence is ValTemp || sequence is ValVar) sequence = sequence.Val(context);
 				if (sequence is ValMap) {
 					// If the map contains this identifier, return its value.
 					Value result = null;
 					var idVal = TempValString.Get(identifier);
-					bool found = ((ValMap)sequence).map.TryGetValue(idVal, out result);
+					bool found = ((ValMap)sequence).TryGetValue(idVal, out result);
 					TempValString.Release(idVal);
 					if (found) {
 						valueFoundIn = (ValMap)sequence;
@@ -928,8 +1178,8 @@ namespace Miniscript {
 					}
 					
 					// Otherwise, if we have an __isa, try that next.
-					if (loopsLeft < 0) return null;		// (unless we've hit the loop limit)
-					if (!((ValMap)sequence).map.TryGetValue(ValString.magicIsA, out sequence)) {
+					if (loopsLeft < 0) throw new LimitExceededException("__isa depth exceeded (perhaps a reference loop?)"); 
+					if (!((ValMap)sequence).TryGetValue(ValString.magicIsA, out sequence)) {
 						// ...and if we don't have an __isa, try the generic map type if allowed
 						if (!includeMapType) throw new KeyException(identifier);
 						sequence = context.vm.mapType ?? Intrinsics.MapType();
@@ -961,20 +1211,27 @@ namespace Miniscript {
 		}
 		
 		public override Value Val(TAC.Context context, out ValMap valueFoundIn) {
+			Value baseSeq = sequence;
+			if (sequence == ValVar.self) {
+				baseSeq = context.self;
+				if (baseSeq == null) throw new UndefinedIdentifierException("self");
+			}
 			valueFoundIn = null;
 			Value idxVal = index == null ? null : index.Val(context);
-			if (idxVal is ValString) return Resolve(sequence, ((ValString)idxVal).value, context, out valueFoundIn);
+			if (idxVal is ValString) return Resolve(baseSeq, ((ValString)idxVal).value, context, out valueFoundIn);
 			// Ok, we're searching for something that's not a string;
-			// this can only be done in maps and lists (and lists, only with a numeric index).
-			Value baseVal = sequence.Val(context);
+			// this can only be done in maps, lists, and strings (and lists/strings, only with a numeric index).
+			Value baseVal = baseSeq.Val(context);
 			if (baseVal is ValMap) {
 				Value result = ((ValMap)baseVal).Lookup(idxVal, out valueFoundIn);
-				if (valueFoundIn == null) throw new KeyException(idxVal.CodeForm(context.vm, 1));
+				if (valueFoundIn == null) throw new KeyException(idxVal == null ? "null" : idxVal.CodeForm(context.vm, 1));
 				return result;
-			} else if (baseVal is ValList && idxVal is ValNumber) {
+			} else if (baseVal is ValList) {
 				return ((ValList)baseVal).GetElem(idxVal);
-			} else if (baseVal is ValString && idxVal is ValNumber) {
+			} else if (baseVal is ValString) {
 				return ((ValString)baseVal).GetElem(idxVal);
+			} else if (baseVal is null) {
+				throw new TypeException("Null Reference Exception: can't index into null");
 			}
 				
 			throw new TypeException("Type Exception: can't index into this type");
@@ -984,11 +1241,11 @@ namespace Miniscript {
 			return string.Format("{0}{1}[{2}]", noInvoke ? "@" : "", sequence, index);
 		}
 
-		public override int Hash(int recursionDepth=16) {
-			return sequence.Hash(recursionDepth-1) ^ index.Hash(recursionDepth-1);
+		public override int Hash() {
+			return sequence.Hash() ^ index.Hash();
 		}
 
-		public override double Equality(Value rhs, int recursionDepth=16) {
+		public override double Equality(Value rhs) {
 			return rhs is ValSeqElem && ((ValSeqElem)rhs).sequence == sequence
 				&& ((ValSeqElem)rhs).index == index ? 1 : 0;
 		}

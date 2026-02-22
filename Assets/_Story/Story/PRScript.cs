@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -452,13 +452,27 @@ public class PRScript : MonoBehaviour
         f.AddParam("content", "");
         f.code = (context, partialResult) =>
         {
-            // chunk_1
-            // chunk_1_0.mp3  chunk_1_-10.mp3 chunk_1_-20.mp3 chunk_1_-30.mp3
-            // chunk_1_0.chunk_1_0_timings.json chunk_1_-10.mp3 chunk_1_-20_timings.json chunk_1_-30_timings.json
             string chunkname = NormalizeUrl(context.GetVar("chunkname").ToString());
             string content = context.GetVar("content").ToString();
             audioAndTextPlayer.SetActive(true);
             audioAndTextPlayer.Play(chunkname, getCurrentVoicePostfix(), content); 
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("PlayAudioAndShowText");
+        f.AddParam("audiofile", "");
+        f.AddParam("fromS", -1f);
+        f.AddParam("toS", -1f);
+        f.AddParam("textContentFile", "");
+        f.AddParam("pageNum", 0);
+        f.code = (context, partialResult) =>
+        {
+            string audiofile = NormalizeUrl(context.GetVar("audiofile").ToString());
+            float fromS = context.GetVar("fromS").FloatValue();
+            float toS = context.GetVar("toS").FloatValue();
+            string textContentFile = NormalizeUrl(context.GetVar("textContentFile").ToString());
+            int pageNum = context.GetVar("pageNum").IntValue();
+            audioAndTextPlayer.SetActive(true);
+            audioAndTextPlayer.PlayExt(audiofile, fromS, toS, textContentFile, pageNum);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetCurrentVoice");
@@ -575,10 +589,10 @@ public class PRScript : MonoBehaviour
         // Define what to do with output from the interpreter.
         // We'll pass it to our output.PrintLine method, but wrap it in some color
         // tags depending on what sort of output it is.
-        _interpreter.standardOutput = (s) => Debug.Log(s);
-        _interpreter.implicitOutput = (s) => Debug.Log(
+        _interpreter.standardOutput = (s, addLineBreak) => Debug.Log(s);
+        _interpreter.implicitOutput = (s, addLineBreak) => Debug.Log(
             "<color=#66bb66>" + s + "</color>");
-        _interpreter.errorOutput = (s) =>
+        _interpreter.errorOutput = (s, addLineBreak) =>
         {
             AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s + 
                                                         "\n The script content:\n <color=#bb00bb>" + 

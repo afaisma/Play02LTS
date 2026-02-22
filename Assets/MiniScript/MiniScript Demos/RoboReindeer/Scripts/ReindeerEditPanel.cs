@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
 using System.Collections.Generic;
@@ -63,7 +63,7 @@ public class ReindeerEditPanel : MonoBehaviour {
 	public void CheckSource() {
 		checkResultText.text = null;
 		Miniscript.Interpreter interp = new Miniscript.Interpreter();
-		interp.errorOutput = (string s) => ShowError(s);
+		interp.errorOutput = (string s, bool addLineBreak) => ShowError(s);
 		interp.Reset(codeField.source);
 		try {
 			interp.Compile();

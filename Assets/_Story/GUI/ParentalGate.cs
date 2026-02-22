@@ -10,12 +10,13 @@ public class ParentalGate : MonoBehaviour
     public TMP_Text questionText;
     public TMP_InputField answerInputField;
     public GameObject parentalGatePanel;
+    public Button checkOrNextButton;
     public Button cancelButton;
     public string url = "";
     public string sceneNavigateTo = "";
 
     public string question =
-        "Please type in the number twenty five to proceed to the Amazon store to purchase the paper book or the ebook.";
+        "Please type the number <b>twenty five</b> to proceed to the list of books.\n";
     public string answer1 = "25";
     public string answer2 = "twenty five";
 
@@ -41,6 +42,11 @@ public class ParentalGate : MonoBehaviour
         }
         else
         {
+            if (checkOrNextButton !=null)
+            {
+                TextMeshProUGUI textMeshProUGUI = checkOrNextButton.GetComponentInChildren<TextMeshProUGUI>();
+                textMeshProUGUI.text = "Try Again";
+            }
             answerInputField.text = "";
         }
     }
@@ -66,6 +72,12 @@ public class ParentalGate : MonoBehaviour
         else
         {
             answerInputField.text = "";
+            // change the checkOrNextButton text to "Try Again"
+            if (checkOrNextButton !=null)
+            {
+                TextMeshProUGUI textMeshProUGUI = checkOrNextButton.GetComponentInChildren<TextMeshProUGUI>();
+                textMeshProUGUI.text = "Try Again";
+            }
             GenerateQuestionCounting();
         }
     }

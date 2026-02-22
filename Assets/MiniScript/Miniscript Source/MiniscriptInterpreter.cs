@@ -1,4 +1,4 @@
-﻿/*	MiniscriptInterpreter.cs
+/*	MiniscriptInterpreter.cs
 
 The only class in this file is Interpreter, which is your main interface 
 to the MiniScript system.  You give Interpreter some MiniScript source 
@@ -19,7 +19,7 @@ namespace Miniscript {
 	/// (e.g. normal output, errors, etc.) to your C# code.
 	/// </summary>
 	/// <param name="output"></param>
-	public delegate void TextOutputMethod(string output);
+	public delegate void TextOutputMethod(string output, bool addLineBreak);
 
 	/// <summary>
 	/// Interpreter: an object that contains and runs one MiniScript script.
@@ -85,8 +85,8 @@ namespace Miniscript {
 		/// </summary>
 		public Interpreter(string source=null, TextOutputMethod standardOutput=null, TextOutputMethod errorOutput=null) {
 			this.source = source;
-			if (standardOutput == null) standardOutput = Console.WriteLine;
-			if (errorOutput == null) errorOutput = Console.WriteLine;
+			if (standardOutput == null) standardOutput = (s,eol) => Console.WriteLine(s);
+			if (errorOutput == null) errorOutput = (s,eol) => Console.WriteLine(s);
 			this.standardOutput = standardOutput;
 			this.errorOutput = errorOutput;
 		}
@@ -136,6 +136,7 @@ namespace Miniscript {
 				vm.interpreter = new WeakReference(this);
 			} catch (MiniscriptException mse) {
 				ReportError(mse);
+				if (vm == null) parser = null;
 			}
 		}
 		
@@ -166,22 +167,28 @@ namespace Miniscript {
 		/// <param name="timeLimit">maximum amout of time to run before returning, in seconds</param>
 		/// <param name="returnEarly">if true, return as soon as we reach an intrinsic that returns a partial result</param>
 		public void RunUntilDone(double timeLimit=60, bool returnEarly=true) {
+			int startImpResultCount = 0;
 			try {
 				if (vm == null) {
 					Compile();
 					if (vm == null) return;	// (must have been some error)
 				}
+				startImpResultCount = vm.globalContext.implicitResultCounter;
 				double startTime = vm.runTime;
 				vm.yielding = false;
 				while (!vm.done && !vm.yielding) {
+                    // ToDo: find a substitute for vm.runTime, or make it go faster, because
+                    // right now about 14% of our run time is spent just in the vm.runtime call!
+                    // Perhaps Environment.TickCount?  (Just watch out for the wraparound every 25 days!)
 					if (vm.runTime - startTime > timeLimit) return;	// time's up for now!
 					vm.Step();		// update the machine
 					if (returnEarly && vm.GetTopContext().partialResult != null) return;	// waiting for something
 				}
 			} catch (MiniscriptException mse) {
 				ReportError(mse);
-				vm.GetTopContext().JumpToEnd();
+				Stop(); // was: vm.GetTopContext().JumpToEnd();
 			}
+			CheckImplicitResult(startImpResultCount);
 		}
 		
 		/// <summary>
@@ -194,7 +201,7 @@ namespace Miniscript {
 				vm.Step();
 			} catch (MiniscriptException mse) {
 				ReportError(mse);
-				vm.GetTopContext().JumpToEnd();
+				Stop(); // was: vm.GetTopContext().JumpToEnd();
 			}
 		}
 
@@ -210,7 +217,12 @@ namespace Miniscript {
 			if (vm == null) {
 				vm = parser.CreateVM(standardOutput);
 				vm.interpreter = new WeakReference(this);
-			}
+			} else if (vm.done && !parser.NeedMoreInput()) {
+				// Since the machine and parser are both done, we don't really need the
+				// previously-compiled code.  So let's clear it out, as a memory optimization.
+				vm.GetTopContext().ClearCodeAndTemps();
+				parser.PartialReset();
+            }
 			if (sourceLine == "#DUMP") {
 				vm.DumpTopContext();
 				return;
@@ -219,6 +231,7 @@ namespace Miniscript {
 			double startTime = vm.runTime;
 			int startImpResultCount = vm.globalContext.implicitResultCounter;
 			vm.storeImplicit = (implicitOutput != null);
+			vm.yielding = false;
 
 			try {
 				if (sourceLine != null) parser.Parse(sourceLine, true);
@@ -227,19 +240,13 @@ namespace Miniscript {
 						if (vm.runTime - startTime > timeLimit) return;	// time's up for now!
 						vm.Step();
 					}
-					if (implicitOutput != null && vm.globalContext.implicitResultCounter > startImpResultCount) {
-
-						Value result = vm.globalContext.GetVar(ValVar.implicitResult.identifier);
-						if (result != null) {
-							implicitOutput.Invoke(result.ToString(vm));
-						}
-					}
+					CheckImplicitResult(startImpResultCount);
 				}
 
 			} catch (MiniscriptException mse) {
 				ReportError(mse);
 				// Attempt to recover from an error by jumping to the end of the code.
-				vm.GetTopContext().JumpToEnd();
+				Stop(); // was: vm.GetTopContext().JumpToEnd();
 			}
 		}
 		
@@ -288,6 +295,23 @@ namespace Miniscript {
 			if (vm != null) vm.globalContext.SetVar(varName, value);
 		}
 		
+		
+		/// <summary>
+		/// Helper method that checks whether we have a new implicit result, and if
+		/// so, invokes the implicitOutput callback (if any).  This is how you can
+		/// see the result of an expression in a Read-Eval-Print Loop (REPL).
+		/// </summary>
+		/// <param name="previousImpResultCount">previous value of implicitResultCounter</param>
+		protected void CheckImplicitResult(int previousImpResultCount) {
+			if (implicitOutput != null && vm.globalContext.implicitResultCounter > previousImpResultCount) {
+
+				Value result = vm.globalContext.GetVar(ValVar.implicitResult.identifier);
+				if (result != null) {
+					implicitOutput.Invoke(result.ToString(vm), true);
+				}
+			}			
+		}
+		
 		/// <summary>
 		/// Report a MiniScript error to the user.  The default implementation 
 		/// simply invokes errorOutput with the error description.  If you want
@@ -296,7 +320,7 @@ namespace Miniscript {
 		/// </summary>
 		/// <param name="mse">exception that was thrown</param>
 		protected virtual void ReportError(MiniscriptException mse) {
-			errorOutput.Invoke(mse.Description());
+			errorOutput.Invoke(mse.Description(), true);
 		}
 	}
 }

@@ -35,9 +35,6 @@ namespace Miniscript {
 	public class MiniscriptException: Exception {
 		public SourceLoc location;
 
-		public MiniscriptException() {
-		}
-
 		public MiniscriptException(string message) : base(message) {
 		}
 
@@ -111,8 +108,6 @@ namespace Miniscript {
 	}
 
 	public class KeyException : RuntimeException {
-		private KeyException() {}		// don't use this version
-
 		public KeyException(string key) : base("Key Not Found: '" + key + "' not found in map") {
 		}
 
@@ -154,13 +149,22 @@ namespace Miniscript {
 	}
 
 	public class UndefinedIdentifierException : RuntimeException {
-		private UndefinedIdentifierException() {}		// don't call this version!
-
 		public UndefinedIdentifierException(string ident) : base(
-			"Undefined Identifier: '" + ident + "' is unknown in this context") {
+		"Undefined Identifier: '" + ident + "' is unknown in this context") {
 		}
 
 		public UndefinedIdentifierException(string message, Exception inner) : base(message, inner) {
+		}
+	}
+
+	public class UndefinedLocalException : RuntimeException {
+		private UndefinedLocalException() {}		// don't call this version!
+
+		public UndefinedLocalException(string ident) : base(
+		"Undefined Local Identifier: '" + ident + "' is unknown in this context") {
+		}
+
+		public UndefinedLocalException(string message, Exception inner) : base(message, inner) {
 		}
 	}
 
@@ -174,8 +178,9 @@ namespace Miniscript {
 		
 		public static void Type(Value val, System.Type requiredType, string desc=null) {
 			if (!requiredType.IsInstanceOfType(val)) {
-				throw new TypeException(string.Format("got a {0} where a {1} was required{2}",
-					val.GetType(), requiredType, desc == null ? null : " (" + desc + ")"));
+				string typeStr = val == null ? "null" : "a " + val.GetType();
+				throw new TypeException(string.Format("got {0} where a {1} was required{2}",
+					typeStr, requiredType, desc == null ? null : " (" + desc + ")"));
 			}
 		}
 	}

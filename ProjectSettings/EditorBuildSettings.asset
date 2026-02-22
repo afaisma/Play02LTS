@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Story/_StartScene.unity
+    guid: 35d5e01ec49fb4df4aafbed45ae37e5b
+  - enabled: 1
     path: Assets/_Story/LIbrary/_Library.unity
     guid: da6a020733c364eaf90a8525a734bfec
   - enabled: 1
@@ -15,6 +18,16 @@ EditorBuildSettings:
     path: Assets/_Story/Settings/_Settings.unity
     guid: 8a2194c1c4a5f4971a69daa6b21f2242
   - enabled: 1
-    path: Assets/_Story/Story/_StoryTablet.unity
-    guid: f1c11790d0b204aef97c4e79dcb69f34
+    path: Assets/_Story/Settings/_Parents.unity
+    guid: 3b33f9e36026f4b07a989c847f210e6d
+  - enabled: 1
+    path: Assets/_Story/Rooms/_Map.unity
+    guid: 151cfd47ca9ec482e9711b374dfa9709
+  - enabled: 1
+    path: Assets/_Story/Rooms/_Message.unity
+    guid: 7855c3331300f4ea2b9b56c855157381
+  - enabled: 1
+    path: Assets/_Story/Bookstore/_Bookstore.unity
+    guid: 1cc828da001bc469ab0e0e1301920e13
   m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

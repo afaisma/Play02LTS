@@ -473,9 +473,9 @@ public class VVScene : MonoBehaviour
 
     void ConfigOutput()
     {
-        _interpreter.standardOutput = (s) => Debug.Log(s);
-        _interpreter.implicitOutput = (s) => Debug.Log("<color=#66bb66>" + s + "</color>");
-        _interpreter.errorOutput = (s) =>
+        _interpreter.standardOutput = (s, addLineBreak) => Debug.Log(s);
+        _interpreter.implicitOutput = (s, addLineBreak) => Debug.Log("<color=#66bb66>" + s + "</color>");
+        _interpreter.errorOutput = (s, addLineBreak) =>
         {
             AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s +
                                                         "\n The script content:\n <color=#bb00bb>" +

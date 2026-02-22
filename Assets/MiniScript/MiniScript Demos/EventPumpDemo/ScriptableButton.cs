@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -94,8 +94,8 @@ public class ScriptableButton : EventTrigger {
 	public void ResetScript() {
 		if (interpreter == null) {
 			interpreter = new Interpreter();
-			interpreter.standardOutput = (string s) => output.PrintLine(s);
-			interpreter.errorOutput = (string s) => {
+			interpreter.standardOutput = (string s, bool addLineBreak) => output.PrintLine(s);
+			interpreter.errorOutput = (string s, bool addLineBreak) => {
 				if (!suppressErrorOutput) {
 					output.PrintLine("<color=red>" + s + "</color>");
 					suppressErrorOutput = true;

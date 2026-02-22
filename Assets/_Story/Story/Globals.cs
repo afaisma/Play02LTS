@@ -10,10 +10,11 @@ using TMPro; // Include TextMeshPro
 
 public class Globals : MonoBehaviour
 {
-    public static string CSVURL = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
+    public static string CSVURL = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public static string baseURL;
-    public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
+    public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
+    public string convinienceS3_02 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public string convinienceS3_01 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_01/stories.csv";
     public string convinienceS3 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
     public string convinienceS3QA = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories-qa/stories.csv";

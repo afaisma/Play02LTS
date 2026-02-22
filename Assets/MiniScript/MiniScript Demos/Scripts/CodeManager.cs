@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 using System.Collections.Generic;
@@ -61,9 +61,9 @@ public class CodeManager : MonoBehaviour {
 	
 	public void Run() {
 		output.Clear();
-		target.interpreter.standardOutput = (string s) => output.PrintLine(s);
+		target.interpreter.standardOutput = (string s, bool addLineBreak) => output.PrintLine(s);
 		target.interpreter.implicitOutput = null;
-		target.interpreter.errorOutput = (string s) => {
+		target.interpreter.errorOutput = (string s, bool addLineBreak) => {
 			Debug.LogWarning(s);
 			output.PrintLine("<color=red>" + s + "</color>");
 			target.interpreter.Stop();
