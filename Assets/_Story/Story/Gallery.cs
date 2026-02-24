@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using QFSW.QC;
 using UnityEngine;
 using UnityEngine.UI;
+using ReadingBuddy.UI;
 
 public enum GalleryItemType
 {
@@ -25,7 +26,7 @@ public class Gallery : MonoBehaviour
     public SoundBar _soundBar;
     public List<GalleryItem> _galleryItems = new List<GalleryItem>();
     public int _currentGalleryItemIndex = 0;
-    public Image imgMain;
+    public PuzzleImage imgMain;
     public Button btnPrevious;
     public Button btnNext;
 
@@ -60,6 +61,12 @@ public class Gallery : MonoBehaviour
         _currentGalleryItemIndex = 0;
         _galleryItems.Clear();
         _soundBar.Clear();
+        imgMain.IsPuzzled = false;
+    }
+
+    public void TogglePuzzle()
+    {
+        imgMain.IsPuzzled = !imgMain.IsPuzzled;
     }
 
     public void DisplayCurrentItem()
