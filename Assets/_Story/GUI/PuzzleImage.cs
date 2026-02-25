@@ -148,7 +148,7 @@ namespace ReadingBuddy.UI
 
         [Header("Puzzle Behavior")]
         [SerializeField] private bool _shuffleWhenEnteringPuzzled = true;
-        [SerializeField] private int _shuffleSeed = 12345;
+        [SerializeField] private int _shuffleSeed = 0; // 0 = random each time
         [SerializeField, Range(0.1f, 2f)] private float _snapDistanceFactor = 0.85f;
 
         [Header("Slot Visuals")]
@@ -177,8 +177,8 @@ namespace ReadingBuddy.UI
         public event Action<PuzzleImage> PuzzleSolvedEvent;                      // owner
         public event Action<PuzzleImage, bool> PuzzleStateChangedEvent;          // owner, solved
 
-        private RectTransform _slotsRoot;
-        private RectTransform _piecesRoot;
+        [SerializeField, HideInInspector] private RectTransform _slotsRoot;
+        [SerializeField, HideInInspector] private RectTransform _piecesRoot;
 
         private readonly List<RectTransform> _slotRects = new List<RectTransform>();
         private readonly List<Image> _slotImages = new List<Image>();
@@ -195,6 +195,7 @@ namespace ReadingBuddy.UI
 
         private bool _cachedBaseRaycastTargetValid;
         private bool _cachedBaseRaycastTarget;
+        private bool _pendingRebuild;
 
         public PuzzleDisplayMode Mode
         {
@@ -287,7 +288,16 @@ namespace ReadingBuddy.UI
             if (_modePolicy == PuzzleModePolicy.AutoBySolvedState)
                 SetSolvedState(false, raiseEvents: true, playSolvedSfx: false);
 
+            bool wasUnpuzzled = EffectiveMode != PuzzleDisplayMode.Puzzled;
             Mode = PuzzleDisplayMode.Puzzled;
+
+            // RefreshVisuals skips AssignInitialPieceSlots when pieces are already built,
+            // so explicitly reshuffle when transitioning from unpuzzled.
+            if (wasUnpuzzled && _pieces.Count > 0)
+            {
+                AssignInitialPieceSlots();
+                LayoutSlotsAndPieces();
+            }
         }
 
         public void SetUnpuzzled()
@@ -348,11 +358,39 @@ namespace ReadingBuddy.UI
             _rows    = Mathf.Max(1, _rows);
             _columns = Mathf.Max(1, _columns);
             _gap     = Mathf.Max(0f, _gap);
-            if (isActiveAndEnabled)
-            {
-                EnsureRoots();
-                RefreshVisuals(forceRebuild: true);
-            }
+
+            // Defer scene manipulation out of OnValidate to avoid re-entrancy:
+            // creating/destroying GameObjects inside OnValidate can re-trigger
+            // OnValidate before the first call finishes, causing children to pile up.
+            UnityEditor.EditorApplication.delayCall -= EditorDelayedRefresh;
+            UnityEditor.EditorApplication.delayCall += EditorDelayedRefresh;
+        }
+
+        private void EditorDelayedRefresh()
+        {
+            UnityEditor.EditorApplication.delayCall -= EditorDelayedRefresh;
+            if (this == null || !isActiveAndEnabled) return;
+
+            if (EffectiveMode == PuzzleDisplayMode.Puzzled)
+                EnsureTextureReadable(GetSourceSprite());
+
+            EnsureRoots();
+            RefreshVisuals(forceRebuild: true);
+        }
+
+        private static void EnsureTextureReadable(Sprite src)
+        {
+            if (src == null || src.texture.isReadable) return;
+
+            string path = UnityEditor.AssetDatabase.GetAssetPath(src.texture);
+            if (string.IsNullOrEmpty(path)) return;
+
+            var importer = UnityEditor.AssetImporter.GetAtPath(path) as UnityEditor.TextureImporter;
+            if (importer == null || importer.isReadable) return;
+
+            importer.isReadable = true;
+            importer.SaveAndReimport();
+            Debug.Log($"[PuzzleImage] Auto-enabled Read/Write on '{src.texture.name}' for puzzle mode.");
         }
 #endif
 
@@ -374,6 +412,23 @@ namespace ReadingBuddy.UI
 
             if (src != _lastSourceSprite)
             {
+                // Defer rebuild if a drag is in progress — destroying pieces mid-drag
+                // causes MissingReferenceExceptions from the EventSystem.
+                if (IsAnyPieceDragging())
+                {
+                    _pendingRebuild = true;
+                }
+                else
+                {
+                    _pendingRebuild = false;
+                    RefreshVisuals(forceRebuild: true);
+                }
+                return;
+            }
+
+            if (_pendingRebuild && !IsAnyPieceDragging())
+            {
+                _pendingRebuild = false;
                 RefreshVisuals(forceRebuild: true);
                 return;
             }
@@ -385,12 +440,31 @@ namespace ReadingBuddy.UI
                     LayoutSlotsAndPieces();
             }
 
+            // If layout hasn't completed yet (zero-size container at init), retry each
+            // frame until it succeeds so _cellSize is valid before any drag begins.
+            if (EffectiveMode == PuzzleDisplayMode.Puzzled
+                && _cellSize == Vector2.zero
+                && _pieces.Count > 0)
+            {
+                LayoutSlotsAndPieces();
+            }
+
             if (color != _lastColor)
             {
                 _lastColor = color;
                 if (EffectiveMode == PuzzleDisplayMode.Puzzled)
                     SyncPieceStyle();
             }
+        }
+
+        private bool IsAnyPieceDragging()
+        {
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                if (_pieces[i] != null && _pieces[i].IsDragging)
+                    return true;
+            }
+            return false;
         }
 
         private void EnsureAudioSource()
@@ -440,6 +514,17 @@ namespace ReadingBuddy.UI
 
             if (EffectiveMode == PuzzleDisplayMode.Unpuzzled)
             {
+                SetBaseVisible(true);
+                _slotsRoot.gameObject.SetActive(false);
+                _piecesRoot.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!src.texture.isReadable)
+            {
+                Debug.LogWarning(
+                    $"[PuzzleImage] Texture '{src.texture.name}' is not readable — " +
+                    "showing as normal image. Enable Read/Write in the texture import settings to use puzzle mode.", this);
                 SetBaseVisible(true);
                 _slotsRoot.gameObject.SetActive(false);
                 _piecesRoot.gameObject.SetActive(false);
@@ -502,6 +587,15 @@ namespace ReadingBuddy.UI
 
                 StretchToParent(_piecesRoot);
                 _piecesRoot.SetAsLastSibling();
+            }
+
+            // Destroy any duplicate roots that accumulated from previous reloads.
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = transform.GetChild(i);
+                if (child == _slotsRoot || child == _piecesRoot) continue;
+                if (child.name == "__PuzzleSlots" || child.name == "__PuzzlePieces")
+                    SafeDestroy(child.gameObject);
             }
         }
 
@@ -590,7 +684,10 @@ namespace ReadingBuddy.UI
             for (int i = 0; i < count; i++) slots.Add(i);
 
             if (_shuffleWhenEnteringPuzzled && !IsSolved)
-                Shuffle(slots, _shuffleSeed);
+            {
+                int seed = _shuffleSeed != 0 ? _shuffleSeed : Environment.TickCount;
+                Shuffle(slots, seed);
+            }
 
             for (int i = 0; i < _pieces.Count; i++)
             {
@@ -713,8 +810,15 @@ namespace ReadingBuddy.UI
                 _cachedBaseRaycastTargetValid = true;
             }
 
+            bool changed = canvasRenderer.cull == visible; // cull is opposite of visible
             canvasRenderer.cull = !visible;
             raycastTarget = visible ? _cachedBaseRaycastTarget : false;
+
+            // Mirror what MaskableGraphic.UpdateCull does internally: after changing cull,
+            // mark vertices dirty so the canvas repopulates the mesh. Without this, un-culling
+            // after the first hide leaves the renderer with empty geometry and the image stays blank.
+            if (changed)
+                SetVerticesDirty();
         }
 
         private void ClearGeneratedContent()
@@ -867,6 +971,11 @@ namespace ReadingBuddy.UI
         {
             if (piece == null)
                 return;
+
+            // Ensure layout is valid — _cellSize may be zero if the container hadn't
+            // finished layout when the puzzle was first built.
+            if (_cellSize == Vector2.zero)
+                LayoutSlotsAndPieces();
 
             int originalSlot = piece.DragStartSlotIndex;
             int nearestSlot = FindNearestSlot(piece.RectTransform.anchoredPosition, out float distance);
