@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -157,13 +158,14 @@ namespace ReadingBuddy.UI
 
         [Header("Audio (Optional)")]
         [SerializeField] private AudioSource _audioSource;
-        [SerializeField] private bool _autoAddAudioSourceIfMissing = false;
         [SerializeField, Range(0f, 1f)] private float _sfxVolume = 1f;
         [SerializeField] private AudioClip _pickupClip;
         [SerializeField] private AudioClip _placeClip;
         [SerializeField] private AudioClip _correctPlaceClip;
         [SerializeField] private AudioClip _wrongPlaceClip;
-        [SerializeField] private AudioClip _solvedClip;
+        [SerializeField, Range(1, 5)] private int _solvedSoundCount = 2;
+
+        private AudioClip[] _solvedSoundPool;
 
         [Header("Events")]
         [SerializeField] private PuzzlePiecePlacedUnityEvent _onPiecePlaced = new PuzzlePiecePlacedUnityEvent();
@@ -285,8 +287,7 @@ namespace ReadingBuddy.UI
 
         public void SetPuzzled()
         {
-            if (_modePolicy == PuzzleModePolicy.AutoBySolvedState)
-                SetSolvedState(false, raiseEvents: true, playSolvedSfx: false);
+            SetSolvedState(false, raiseEvents: true, playSolvedSfx: false);
 
             bool wasUnpuzzled = EffectiveMode != PuzzleDisplayMode.Puzzled;
             Mode = PuzzleDisplayMode.Puzzled;
@@ -331,6 +332,8 @@ namespace ReadingBuddy.UI
         protected override void OnEnable()
         {
             base.OnEnable();
+            if (_solvedSoundPool == null)
+                _solvedSoundPool = Resources.LoadAll<AudioClip>("PuzzleSounds");
             EnsureAudioSource();
             EnsureRoots();
             RefreshVisuals(forceRebuild: true);
@@ -472,14 +475,11 @@ namespace ReadingBuddy.UI
             if (_audioSource == null)
                 _audioSource = GetComponent<AudioSource>();
 
-            if (_audioSource == null && _autoAddAudioSourceIfMissing)
+            if (_audioSource == null)
                 _audioSource = gameObject.AddComponent<AudioSource>();
 
-            if (_audioSource != null)
-            {
-                _audioSource.playOnAwake = false;
-                _audioSource.loop = false;
-            }
+            _audioSource.playOnAwake = false;
+            _audioSource.loop = false;
         }
 
         private void PlaySfx(AudioClip clip)
@@ -488,6 +488,25 @@ namespace ReadingBuddy.UI
             if (_audioSource == null) return;
 
             _audioSource.PlayOneShot(clip, _sfxVolume);
+        }
+
+        private IEnumerator PlayRandomSolvedSounds()
+        {
+            if (_audioSource == null || _solvedSoundPool == null || _solvedSoundPool.Length == 0)
+                yield break;
+
+            var pool = new List<AudioClip>(_solvedSoundPool);
+            var rng = new System.Random();
+            int count = Mathf.Min(_solvedSoundCount, pool.Count);
+
+            for (int i = 0; i < count; i++)
+            {
+                int j = rng.Next(i, pool.Count);
+                AudioClip tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+
+                _audioSource.PlayOneShot(pool[i], _sfxVolume * 0.7f);
+                yield return new WaitForSeconds(pool[i].length);
+            }
         }
 
         private Sprite GetSourceSprite()
@@ -514,6 +533,7 @@ namespace ReadingBuddy.UI
 
             if (EffectiveMode == PuzzleDisplayMode.Unpuzzled)
             {
+                ClearGeneratedContent();
                 SetBaseVisible(true);
                 _slotsRoot.gameObject.SetActive(false);
                 _piecesRoot.gameObject.SetActive(false);
@@ -683,11 +703,7 @@ namespace ReadingBuddy.UI
             var slots = new List<int>(count);
             for (int i = 0; i < count; i++) slots.Add(i);
 
-            if (_shuffleWhenEnteringPuzzled && !IsSolved)
-            {
-                int seed = _shuffleSeed != 0 ? _shuffleSeed : Environment.TickCount;
-                Shuffle(slots, seed);
-            }
+            Shuffle(slots, Environment.TickCount);
 
             for (int i = 0; i < _pieces.Count; i++)
             {
@@ -937,7 +953,7 @@ namespace ReadingBuddy.UI
                 PuzzleSolvedEvent?.Invoke(this);
 
                 if (playSolvedSfx)
-                    PlaySfx(_solvedClip);
+                    StartCoroutine(PlayRandomSolvedSounds());
             }
 
             return changed;

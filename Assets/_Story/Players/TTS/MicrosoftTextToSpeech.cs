@@ -4,7 +4,7 @@ using UnityEngine.Networking;
 
 public class MicrosoftTextToSpeech : MonoBehaviour
 {
-    private string apiKey = "8269fa851a134a09acaae4ae84ddea5d";
+    private string apiKey = "AZURE_KEY";
     private string apiRegion = "eastus";
     private string apiUrl = "https://";
     private AudioSource audioSource;

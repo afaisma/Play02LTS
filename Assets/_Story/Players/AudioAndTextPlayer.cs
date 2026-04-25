@@ -65,6 +65,8 @@ public class AudioAndTextPlayer : MonoBehaviour
     }
 
     [SerializeField] public UnityEvent OnAutoNextStep;
+    [SerializeField] public UnityEvent OnAudioFinished;
+    public bool IsAutoplaying => triggerNextStep;
     private bool triggerNextStep = false;
     [SerializeField] private Toggle nextStepToggle;
 
@@ -433,6 +435,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             // Reset highlight once audio finishes
             UpdateHighlightedText(0, false);
             Debug.Log("Audio has stopped playing.");
+            OnAudioFinished?.Invoke();
 
             // Conditionally trigger next step
             if (triggerNextStep)
@@ -445,6 +448,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             // Static text scenario
             UpdateHighlightedText(0, false);
             Debug.Log("Static text – no JSON timings used.");
+            OnAudioFinished?.Invoke();
 
             if (triggerNextStep)
             {

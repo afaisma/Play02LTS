@@ -29,9 +29,13 @@ public class Gallery : MonoBehaviour
     public PuzzleImage imgMain;
     public Button btnPrevious;
     public Button btnNext;
+    public Button btnPuzzle;
+
+    private Sprite[] _puzzleButtonSprites;
 
     private void Start()
     {
+        _puzzleButtonSprites = Resources.LoadAll<Sprite>("PuzzleButtons");
         SetupUI();
     }
 
@@ -64,9 +68,33 @@ public class Gallery : MonoBehaviour
         imgMain.IsPuzzled = false;
     }
 
+    public void ShowPuzzleButton(bool show)
+    {
+        if (btnPuzzle == null) return;
+        btnPuzzle.gameObject.SetActive(show);
+        if (show)
+        {
+            var label = btnPuzzle.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (label != null) label.text = "";
+
+            if (_puzzleButtonSprites != null && _puzzleButtonSprites.Length > 0)
+            {
+                var img = btnPuzzle.GetComponent<Image>();
+                if (img != null)
+                    img.sprite = _puzzleButtonSprites[UnityEngine.Random.Range(0, _puzzleButtonSprites.Length)];
+            }
+        }
+    }
+
     public void TogglePuzzle()
     {
         imgMain.IsPuzzled = !imgMain.IsPuzzled;
+        if (btnPuzzle != null)
+        {
+            var label = btnPuzzle.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (label != null)
+                label.text = "";
+        }
     }
 
     public void DisplayCurrentItem()

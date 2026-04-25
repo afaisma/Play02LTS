@@ -92,6 +92,8 @@ public class PRScript : MonoBehaviour
     private Settings _settings;
     private List<PRCharacter> _characters;
     private List<ButtonStruct> buttonStructs = new List<ButtonStruct>();
+    private bool _bookPuzzleEnabled = true;
+    private bool _puzzleEnabledCurrentPage = true;
 
     public string baseURL = "";
     public ButtonController buttonController;
@@ -185,12 +187,21 @@ public class PRScript : MonoBehaviour
         videoPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioAndTextPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         VoiceOptions(new bool[] { false, true, true });
+        audioAndTextPlayer.OnAudioFinished.AddListener(OnAudioPlaybackFinished);
         Reload();
     }
     void OnDestroy()
     {
+        audioAndTextPlayer.OnAudioFinished.RemoveListener(OnAudioPlaybackFinished);
         _interpreter?.Reset();
         Debug.Log("OnDestroy PRScript");
+    }
+
+    private void OnAudioPlaybackFinished()
+    {
+        if (audioAndTextPlayer.IsAutoplaying) return;
+        if (!_puzzleEnabledCurrentPage) return;
+        storyStepsUI.gallery.ShowPuzzleButton(true);
     }
 
     public void Reload()
@@ -548,6 +559,28 @@ public class PRScript : MonoBehaviour
             videoPlayer.PlaySegment(fBegin, fEnd);
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("SetPuzzleEnabled");
+        f.AddParam("enable", 1);
+        f.code = (context, partialResult) =>
+        {
+            _puzzleEnabledCurrentPage = context.GetVar("enable").IntValue() != 0;
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetPuzzleEnabledInBook");
+        f.AddParam("enable", 1);
+        f.code = (context, partialResult) =>
+        {
+            _bookPuzzleEnabled = context.GetVar("enable").IntValue() != 0;
+            _puzzleEnabledCurrentPage = _bookPuzzleEnabled;
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("SetPuzzleEnabledInPage");
+        f.AddParam("enable", 1);
+        f.code = (context, partialResult) =>
+        {
+            _puzzleEnabledCurrentPage = context.GetVar("enable").IntValue() != 0;
+            return new Intrinsic.Result(ValNumber.one);
+        };
         ConfigOutput();
     }
 
@@ -570,6 +603,9 @@ public class PRScript : MonoBehaviour
         bool bStepChanged = SetCurrentStep(index);
         if (bStepChanged)
         {
+            _puzzleEnabledCurrentPage = _bookPuzzleEnabled;
+            storyStepsUI.gallery.ShowPuzzleButton(false);
+
             if (_mapEvents.ContainsKey("OnExecuteStep"))
             {
                 ExecuteScriptlet(_mapEvents["OnExecuteStep"].Content);
