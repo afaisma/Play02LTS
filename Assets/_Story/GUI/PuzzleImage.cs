@@ -703,7 +703,11 @@ namespace ReadingBuddy.UI
             var slots = new List<int>(count);
             for (int i = 0; i < count; i++) slots.Add(i);
 
-            Shuffle(slots, Environment.TickCount);
+            // M-R2-1: honor the _shuffleSeed inspector field. Comment on the field
+            // says "0 = random each time", so 0 falls back to TickCount and any
+            // non-zero value is used directly for deterministic shuffling.
+            int seed = _shuffleSeed != 0 ? _shuffleSeed : Environment.TickCount;
+            Shuffle(slots, seed);
 
             for (int i = 0; i < _pieces.Count; i++)
             {

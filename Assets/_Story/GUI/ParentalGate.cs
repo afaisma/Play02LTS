@@ -25,6 +25,10 @@ public class ParentalGate : MonoBehaviour
     void Start()
     {
         GenerateQuestionText();
+        // C-R2-2: initialize to a sentinel so the default value of 0 doesn't
+        // accidentally let a child bypass the counting-variant gate by typing 0
+        // before any question has been generated.
+        correctAnswer = -1;
         cancelButton.onClick.AddListener(Cancel);
     }
 
@@ -63,7 +67,16 @@ public class ParentalGate : MonoBehaviour
     
     public void CheckAnswerCounting()
     {
-        int playerAnswer = int.Parse(answerInputField.text);
+        // C-R2-1: TryParse so non-numeric input (a child mashing keys) doesn't
+        // crash the gate with FormatException. Treat invalid input as wrong.
+        if (!int.TryParse(answerInputField.text, out int playerAnswer))
+        {
+            ShowTryAgain();
+            // Make sure there's a real question to answer next time
+            // (relevant on the very first invalid attempt when correctAnswer is still -1).
+            GenerateQuestionCounting();
+            return;
+        }
 
         if (playerAnswer == correctAnswer)
         {
@@ -71,14 +84,19 @@ public class ParentalGate : MonoBehaviour
         }
         else
         {
-            answerInputField.text = "";
-            // change the checkOrNextButton text to "Try Again"
-            if (checkOrNextButton !=null)
-            {
-                TextMeshProUGUI textMeshProUGUI = checkOrNextButton.GetComponentInChildren<TextMeshProUGUI>();
-                textMeshProUGUI.text = "Try Again";
-            }
+            ShowTryAgain();
             GenerateQuestionCounting();
+        }
+    }
+
+    private void ShowTryAgain()
+    {
+        answerInputField.text = "";
+        if (checkOrNextButton != null)
+        {
+            TextMeshProUGUI textMeshProUGUI = checkOrNextButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (textMeshProUGUI != null)
+                textMeshProUGUI.text = "Try Again";
         }
     }
 
@@ -92,8 +110,11 @@ public class ParentalGate : MonoBehaviour
         {
             Application.OpenURL(url);
         }
-            
-        //parentalGatePanel.SetActive(false);
+
+        // L-R2-1: hide the gate panel after a successful answer so it isn't
+        // still visible when the user returns from the external URL.
+        if (parentalGatePanel != null)
+            parentalGatePanel.SetActive(false);
     }
     
     public void Cancel()

@@ -17,7 +17,12 @@ public class PRVideoPlayer : MonoBehaviour
     {
         if (videoPlayer == null) return false;
 
-        videoPlayer.url = baseURL + url;
+        // M-R2-2: don't double-prefix already-absolute URLs. If a story script
+        // ever passes a full http(s):// URL, prepending baseURL produces a
+        // garbage URL like "http://cdn.example.com/http://other.com/video.mp4".
+        videoPlayer.url = (!string.IsNullOrEmpty(url) && url.StartsWith("http"))
+            ? url
+            : baseURL + url;
         videoPlayer.Prepare();
 
         return true;
@@ -92,6 +97,10 @@ public class PRVideoPlayer : MonoBehaviour
         if (videoPlayer == null) return;
 
         videoPlayer.Stop();
+        // M-R2-3: keep state consistent — without this, Update() would keep
+        // tracking segmentEndTime on a stopped player. Harmless today but
+        // a tripwire for future Update logic.
+        isPlayingSegment = false;
     }
 
     private void OnEndOfPlaying(VideoPlayer source)
