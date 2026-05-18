@@ -36,7 +36,12 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        Globals.GotoPrBook(prBook);
+        // M-R4-1: guard against a tap on an item that hasn't been populated yet
+        // (rare race during catalog load on slow devices). Globals.GotoPrBook
+        // dereferences prBook.bookFullUrl immediately and would NRE on null.
+        // BookstoreViewItem.OnPointerClick already has this guard.
+        if (prBook != null)
+            Globals.GotoPrBook(prBook);
     }
     
 }
