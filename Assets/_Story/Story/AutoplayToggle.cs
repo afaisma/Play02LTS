@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
@@ -10,8 +9,12 @@ public class AutoplayToggle : MonoBehaviour
     public Toggle toggle;
     public Button buttonNext;
     public Image backgroundImage;
-    public Color uncheckedColor = new Color(255, 255,255, 128);
-    public Color checkedColor =  new Color(100, 255,100, 128);
+    // H-R3-1: use Color32 (byte 0-255) — the original Color(255,255,255,128)
+    // syntax was wrong because UnityEngine.Color takes float 0-1, so both
+    // states rendered as opaque white. Color32 implicitly converts to Color.
+    // L-R3-1: removed the duplicate `using UnityEngine;` line.
+    public Color uncheckedColor = new Color32(255, 255, 255, 128);
+    public Color checkedColor   = new Color32(100, 255, 100, 128);
     public TMPro.TextMeshProUGUI textLabel;
 
     void Start()

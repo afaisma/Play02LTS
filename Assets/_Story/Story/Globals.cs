@@ -109,7 +109,13 @@ public class Globals : MonoBehaviour
     void OnApplicationPause(bool paused)
     {
         if (paused)
+        {
             UpdateGameStatistics();
+            // M-R3-5: flush all PlayerPrefs writes (settings, page progress, etc.)
+            // to disk. Without this, settings tweaked just before a force-kill
+            // from the Android recents switcher can be lost.
+            PlayerPrefs.Save();
+        }
     }
 
     void InitializeGameStatistics()

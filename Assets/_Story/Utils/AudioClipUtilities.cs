@@ -10,7 +10,9 @@ public static class AudioClipUtilities
             return null;
         }
 
-        if (start < 0 || start >= clip.length || stop < 0 || stop >= clip.length || start >= stop)
+        // M-R3-2: allow stop == clip.length (whole-clip subclip is a legitimate
+        // case). Previously `stop >= clip.length` rejected it.
+        if (start < 0 || start >= clip.length || stop < 0 || stop > clip.length || start >= stop)
         {
             Debug.LogError("Invalid start or stop time.");
             return null;
@@ -20,11 +22,12 @@ public static class AudioClipUtilities
         int samplesStop = Mathf.FloorToInt(stop * clip.frequency);
         int samplesLength = samplesStop - samplesStart;
 
-        float[] originalData = new float[clip.samples * clip.channels];
-        clip.GetData(originalData, 0);
-
+        // M-R3-3: read only the needed window directly from the source clip,
+        // instead of allocating a full-clip copy and slicing it. For a 60-second
+        // 44 kHz stereo clip this used to allocate ~5 MB per call; now it
+        // allocates only what the subclip needs.
         float[] subclipData = new float[samplesLength * clip.channels];
-        System.Array.Copy(originalData, samplesStart * clip.channels, subclipData, 0, samplesLength * clip.channels);
+        clip.GetData(subclipData, samplesStart);
 
         AudioClip subclip = AudioClip.Create(clip.name + "_Subclip", samplesLength, clip.channels, clip.frequency, false);
         subclip.SetData(subclipData, 0);

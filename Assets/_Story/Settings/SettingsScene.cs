@@ -55,12 +55,8 @@ public class SettingsScene : MonoBehaviour
             versionText.text = "Version: " + Application.version;
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-    
+    // L-R3-2: removed an empty Update() that cost a per-frame managed call for no gain.
+
     public void RateThisApp()
     {
         PRUtils.RateUs();

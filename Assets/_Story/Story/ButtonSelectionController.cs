@@ -32,9 +32,12 @@ public class ButtonSelectionController : MonoBehaviour
 
     private void OnDestroy()
     {
+        // L-R3-6: guard against `buttons` being null (Inspector never wired).
+        if (buttons == null) return;
         foreach (Button button in buttons)
         {
-            button.onClick.RemoveAllListeners();
+            if (button != null)
+                button.onClick.RemoveAllListeners();
         }
     }
 
@@ -54,7 +57,9 @@ public class ButtonSelectionController : MonoBehaviour
         //     return; // Already selected
         // }
 
-        Debug.Log("***2222 currently selected button: " + _currentlySelected.name);
+        // H-R3-3: null-guard the debug log. _currentlySelected is set just below,
+        // so it's null on the very first call (before ButtonOptions has run).
+        Debug.Log("***2222 currently selected button: " + (_currentlySelected != null ? _currentlySelected.name : "<none>"));
         _currentlySelected = button;
         foreach (Button b in buttons)
         {
