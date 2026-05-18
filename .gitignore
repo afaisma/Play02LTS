@@ -72,3 +72,39 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
 **/.DS_Store
+
+# --- ReadingBuddy additions ---
+
+# JetBrains IDE state (per-user)
+.idea/
+*.iml
+*.iws
+
+# Claude Code session state (per-user)
+.claude/
+
+# Cursor IDE config (per-user, judgment call — comment out to track instead)
+.cursorignore
+
+# Visual Studio installer config (per-user, judgment call — comment out to track instead)
+.vsconfig
+
+# Generic tooling temp directory
+.utmp/
+
+# Mono runtime crash dumps
+mono_crash.*.json
+
+# Unity Burst AOT debug-information directories (folder name itself says "DoNotShip")
+*BurstDebugInformation_DoNotShip/
+
+# Unity auto-recovery of crashed scenes (per-user, ephemeral)
+[Aa]ssets/_[Rr]ecovery/
+
+# macOS auto-renamed-on-copy duplicates ("foo 2.png", "foo 2.meta", etc.)
+*\ 2.png
+*\ 2.jpg
+*\ 2.jpeg
+*\ 2.meta
+*\ 2.unity
+*\ 2.prefab
