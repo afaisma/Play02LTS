@@ -278,6 +278,9 @@ public class AudioAndTextPlayer : MonoBehaviour
         if (CacheAudioAndTimingsStructs.Contains(audioURL))
         {
             audioAndTextStruct = CacheAudioAndTimingsStructs[audioURL] as AudioAndTextStruct;
+            // C3: move to most-recently-used position so frequent items survive eviction.
+            CacheAudioAndTimingsStructs.Remove(audioURL);
+            CacheAudioAndTimingsStructs[audioURL] = audioAndTextStruct;
         }
         else
         {
@@ -384,6 +387,13 @@ public class AudioAndTextPlayer : MonoBehaviour
             if (audioAndTextStruct.audioClip != null)
             {
                 AudioClip originalClip = audioAndTextStruct.audioClip;
+
+                // H4: free the previous fragment clip (if any) before assigning a new one.
+                // Cached originals are not destroyed — they don't start with "Fragment_".
+                if (audioSource.clip != null && audioSource.clip.name.StartsWith("Fragment_"))
+                {
+                    Destroy(audioSource.clip);
+                }
 
                 // If we're playing a fragment, create a new clip
                 if (startTime > 0 || endTime < originalClip.length)

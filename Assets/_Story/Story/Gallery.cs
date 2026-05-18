@@ -81,7 +81,7 @@ public class Gallery : MonoBehaviour
             {
                 var img = btnPuzzle.GetComponent<Image>();
                 if (img != null)
-                    img.sprite = _puzzleButtonSprites[UnityEngine.Random.Range(0, _puzzleButtonSprites.Length)];
+                    img.sprite = _puzzleButtonSprites[3];
             }
         }
     }

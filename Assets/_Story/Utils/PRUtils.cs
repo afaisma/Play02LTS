@@ -39,7 +39,7 @@ public class PRUtils
         {"Pastel Orange", new Color(1, 0.7059f, 0.5098f, alpha)},
         {"Pastel Purple", new Color(0.8392f, 0.7216f, 0.8549f, alpha)},
         {"Pastel Mint", new Color(0.6784f, 1, 0.8039f, alpha)},
-        {"Pastel Lavender", new Color(0.9019f, 0.7451f, alpha, alpha)}
+        {"Pastel Lavender", new Color(0.9019f, 0.7451f, 0.9412f, alpha)}
     };
     static List<Color> pastelColorList = new List<Color>(pastelColors.Values);
     static string[] unitsMap = { "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen" };
@@ -129,7 +129,9 @@ public class PRUtils
     
     public static IEnumerator DownloadFile(string url, System.Action<string> onComplete)
     {
-        if (!url.StartsWith("http:"))
+        // H1: accept any URL with a scheme (http://, https://, file://, ...).
+        // The `resources:` pseudo-scheme has no `://`, so it correctly falls through to the local-resource branch.
+        if (!url.Contains("://"))
         {
             // Load from Resources
             string resourcePath = url.Replace("resources:", "").TrimStart('/'); // Removing the "resources:" prefix and any starting slashes
@@ -145,18 +147,20 @@ public class PRUtils
             yield break; // Ends the coroutine here for local resources.
         }
 
-        UnityWebRequest request = UnityWebRequest.Get(url);
-        request.certificateHandler = new AcceptAllCertificatesHandler(); // Add this line
-
-        yield return request.SendWebRequest();
-
-        if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
+        // H3: dispose UnityWebRequest (native download handler + buffers) when done.
+        // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on by default.
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
-            Debug.Log($"Error: {request.error}");
-        }
-        else
-        {
-            onComplete?.Invoke(request.downloadHandler.text);
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
+            {
+                Debug.Log($"Error: {request.error}");
+            }
+            else
+            {
+                onComplete?.Invoke(request.downloadHandler.text);
+            }
         }
     }
     
@@ -209,27 +213,34 @@ public class PRUtils
         image.preserveAspect = bPreserveAspect;
         if (cacheImages.Contains(url))
         {
-            image.sprite = cacheImages[url] as Sprite;
+            Sprite cached = cacheImages[url] as Sprite;
+            image.sprite = cached;
+            // C3: move to most-recently-used position so frequent items survive eviction.
+            cacheImages.Remove(url);
+            cacheImages[url] = cached;
             yield break;
         }
 
-        UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
-        request.certificateHandler = new AcceptAllCertificatesHandler();
-        yield return request.SendWebRequest();
-
-        if (request.result != UnityWebRequest.Result.Success) //
+        // H3: dispose UnityWebRequest when done.
+        // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on.
+        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
         {
-            Debug.Log($"Failed to download image {url}: " + request.error);
-            AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
-            image.sprite = Resources.Load<Sprite>("NoImage");;
-        }
-        else
-        {
-            Texture2D texture = DownloadHandlerTexture.GetContent(request);
-            Sprite imageSprite = Texture2DToSprite(texture);
-            image.sprite = imageSprite;
+            yield return request.SendWebRequest();
 
-            AddToCacheImages(url, imageSprite);
+            if (request.result != UnityWebRequest.Result.Success) //
+            {
+                Debug.Log($"Failed to download image {url}: " + request.error);
+                AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
+                image.sprite = Resources.Load<Sprite>("NoImage");;
+            }
+            else
+            {
+                Texture2D texture = DownloadHandlerTexture.GetContent(request);
+                Sprite imageSprite = Texture2DToSprite(texture);
+                image.sprite = imageSprite;
+
+                AddToCacheImages(url, imageSprite);
+            }
         }
     }
     

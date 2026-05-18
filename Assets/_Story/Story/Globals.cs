@@ -102,6 +102,16 @@ public class Globals : MonoBehaviour
         UpdateGameStatistics(); // Update statistics before the application quits
     }
 
+    // H6: OnApplicationQuit is unreliable on mobile (especially when the user kills the app
+    // from the recent-apps switcher). OnApplicationPause(true) fires reliably on iOS and Android
+    // when the app is backgrounded, so we persist stats there as well. UpdateGameStatistics is
+    // idempotent — running it on both pause and quit is safe.
+    void OnApplicationPause(bool paused)
+    {
+        if (paused)
+            UpdateGameStatistics();
+    }
+
     void InitializeGameStatistics()
     {
         totalMinutesInGame = PlayerPrefs.GetFloat("TotalMinutesInGame", 0f);
@@ -129,9 +139,11 @@ public class Globals : MonoBehaviour
 
     void UpdateGameStatistics()
     {
-        // Calculate the total time in the game for this run
+        // Calculate the time elapsed since the last save (not since app start).
+        // H6: reset gameStartTime so successive calls (e.g. pause then quit) don't double-count.
         float sessionMinutes = (Time.time - gameStartTime) / 60f;
         totalMinutesInGame += sessionMinutes;
+        gameStartTime = Time.time;
         PlayerPrefs.SetFloat("TotalMinutesInGame", totalMinutesInGame);
 
         // Update other statistics as needed (for example, pagesRead, booksRead)
@@ -376,37 +388,57 @@ public class Globals : MonoBehaviour
 
         string line;
         int counter = 0;
+        int badRowCount = 0;
         while ((line = reader.ReadLine()) != null)
         {
             if (line.Trim() == "") continue;
 
-            string[] values = line.Split(',');
+            // C2 (Level 1): isolate per-row parse failures. A malformed row (too few columns,
+            // non-numeric ageFrom/ageTo, etc.) used to throw and abort the entire catalog load,
+            // leaving g_listPRBooks null and the user staring at an empty library. Now bad rows
+            // are logged and skipped; the remaining good rows still load.
+            // Note: counter (book.number) only advances on successful parse, so numbering stays
+            // contiguous regardless of how many rows were skipped.
+            try
+            {
+                string[] values = line.Split(',');
 
-            PRBook book = new PRBook
-            {
-                bookName = values[0].Trim(),
-                bookAuthor = values[1].Trim(),
-                bookImageUrl = values[2].Trim(),
-                bookUrl = values[3].Trim(),
-                ageFrom = int.Parse(values[4].Trim()),
-                ageTo = int.Parse(values[5].Trim()),
-                genre = values[6].Trim(),
-                notesForParents = values[7].Trim(),
-                id = values[8].Trim(),
-                bookStoreUrlPrinted = values.Length > 9 ? values[9].Trim() : "",
-                bookStoreUrlKindle = values.Length > 10 ? values[10].Trim() : "",
-                number = counter++,
-                currentPage = Prefs_Get_Book_Page(values[3].Trim()),
-                book_done = Prefs_Get_Book_Done(values[3].Trim())
-            };
-            book.bookFullUrl = book.bookUrl;
-            if (book.bookFullUrl.StartsWith("http") == false)
-            {
-                book.bookFullUrl = baseURL + book.bookFullUrl;
+                PRBook book = new PRBook
+                {
+                    bookName = values[0].Trim(),
+                    bookAuthor = values[1].Trim(),
+                    bookImageUrl = values[2].Trim(),
+                    bookUrl = values[3].Trim(),
+                    ageFrom = int.Parse(values[4].Trim()),
+                    ageTo = int.Parse(values[5].Trim()),
+                    genre = values[6].Trim(),
+                    notesForParents = values[7].Trim(),
+                    id = values[8].Trim(),
+                    bookStoreUrlPrinted = values.Length > 9 ? values[9].Trim() : "",
+                    bookStoreUrlKindle = values.Length > 10 ? values[10].Trim() : "",
+                    number = counter++,
+                    currentPage = Prefs_Get_Book_Page(values[3].Trim()),
+                    book_done = Prefs_Get_Book_Done(values[3].Trim())
+                };
+                book.bookFullUrl = book.bookUrl;
+                if (book.bookFullUrl.StartsWith("http") == false)
+                {
+                    book.bookFullUrl = baseURL + book.bookFullUrl;
+                }
+
+                parsedPRBooks.Add(book);
+                //Debug.Log("Added book: " + book.bookName + "");
             }
+            catch (Exception ex)
+            {
+                badRowCount++;
+                Debug.LogWarning($"ParseCSV: skipping malformed row #{counter + badRowCount} ({ex.GetType().Name}: {ex.Message}). Row content: \"{line}\"");
+            }
+        }
 
-            parsedPRBooks.Add(book);
-            //Debug.Log("Added book: " + book.bookName + "");
+        if (badRowCount > 0)
+        {
+            Debug.LogWarning($"ParseCSV: loaded {parsedPRBooks.Count} books, skipped {badRowCount} malformed row(s).");
         }
 
         return parsedPRBooks;

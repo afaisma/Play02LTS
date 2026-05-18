@@ -778,12 +778,17 @@ public class PRScript : MonoBehaviour
         Debug.Log("LeftSwipe " + swipeable.name);
         if (swipeable.name.ToLower() == "gallery")
         {
-            if (storyStepsUI.gallery._currentGalleryItemIndex == storyStepsUI.gallery._galleryItems.Count - 1)
-                return;
-            if (storyStepsUI.gallery._galleryItems.Count > 1)
+            // H8: when there are more images to the right, advance within the gallery.
+            // When already on the last image (or only one image), swipe past it -> next page.
+            if (storyStepsUI.gallery._galleryItems.Count > 1 &&
+                storyStepsUI.gallery._currentGalleryItemIndex < storyStepsUI.gallery._galleryItems.Count - 1)
+            {
                 storyStepsUI.gallery.DisplayNextItem();
+            }
             else
+            {
                 NextStep();
+            }
         }
         else if (swipeable.name.ToLower() == "textforeground")
         {
@@ -793,15 +798,20 @@ public class PRScript : MonoBehaviour
 //
     public void RightSwipe(SwipeableObject swipeable)
     {
-        Debug.Log("LeftSwipe " + swipeable.name);
-        if (swipeable.name.ToLower() == "gallery") 
+        Debug.Log("RightSwipe " + swipeable.name);
+        if (swipeable.name.ToLower() == "gallery")
         {
-            if (storyStepsUI.gallery._currentGalleryItemIndex == 0)
-                return;
-            if (storyStepsUI.gallery._galleryItems.Count > 1)
+            // H8: when there are more images to the left, retreat within the gallery.
+            // When already on the first image (or only one image), swipe back -> previous page.
+            if (storyStepsUI.gallery._galleryItems.Count > 1 &&
+                storyStepsUI.gallery._currentGalleryItemIndex > 0)
+            {
                 storyStepsUI.gallery.DisplayPreviousItem();
+            }
             else
+            {
                 PrevStep();
+            }
         }
         else if (swipeable.name.ToLower() == "textforeground")
         {
