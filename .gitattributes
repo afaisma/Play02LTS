@@ -1,0 +1,81 @@
+# ReadingBuddy / Play6.3 — line-ending and binary-file rules.
+#
+# This file fixes the "everything looks modified" problem caused by mixing
+# CRLF working trees with LF-stored blobs.
+#
+# After committing this file, run on a clean working tree:
+#     git add --renormalize .
+#     git commit -m "chore: normalize line endings to LF"
+# and add that commit's SHA to .git-blame-ignore-revs so `git blame` skips it.
+
+# Default: detect text files, normalize them to LF in the repo and on checkout.
+* text=auto eol=lf
+
+# --- Unity binary-like text formats ---
+# These are technically YAML/text but they merge poorly, diff opaquely, and
+# Unity tolerates either line ending. Treat them as binary to prevent
+# perpetual EOL churn.
+*.unity         binary
+*.prefab        binary
+*.asset         binary
+*.mat           binary
+*.anim          binary
+*.controller    binary
+*.physicMaterial   binary
+*.physicsMaterial2D binary
+*.cubemap       binary
+*.fbx           binary
+*.shadergraph   binary
+*.scenetemplate binary
+
+# --- Binary media (in case any slip past .gitignore) ---
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.bmp  binary
+*.tga  binary
+*.psd  binary
+*.exr  binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.svgz binary
+
+# --- Audio / video ---
+*.mp3  binary
+*.wav  binary
+*.aif  binary
+*.aiff binary
+*.ogg  binary
+*.flac binary
+*.mp4  binary
+*.mov  binary
+*.webm binary
+
+# --- Fonts ---
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary
+
+# --- Archives and packages ---
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.7z   binary
+*.rar  binary
+*.unitypackage binary
+
+# --- Native libraries ---
+*.dll  binary
+*.so   binary
+*.dylib binary
+*.a    binary
+*.lib  binary
+*.framework binary
+
+# --- Documents that are technically binary ---
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
