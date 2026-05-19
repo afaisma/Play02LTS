@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 using QFSW.QC;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -59,6 +60,12 @@ public class Gallery : MonoBehaviour
         public GameObject go;
         public bool  prepareHandled;  // initial setup done once content loaded
         public bool  userInteracted;  // user has tapped at least once
+        public bool  tapPlayback = true;  // when false, tap skips built-in
+                                          // play/pause toggle and only fires
+                                          // onOverlayEvent. Useful for overlays
+                                          // (e.g. butterflies) whose tap should
+                                          // mean something other than "stop
+                                          // the wings animation".
     }
 
     private class OverlayVideoEntry : OverlayEntry
@@ -104,6 +111,12 @@ public class Gallery : MonoBehaviour
     // are always logged regardless of this flag.
     private const bool VERBOSE_OVERLAY = false;
 
+    // Active timer coroutines keyed by (eventName, target). Schedule() with
+    // the same key replaces the existing coroutine; CancelSchedule() stops it.
+    // Cleared in clearUpGalleryItems so page-changes don't leak callbacks.
+    private readonly Dictionary<(string evt, string target), Coroutine> _scheduled =
+        new Dictionary<(string evt, string target), Coroutine>();
+
     private void Start()
     {
         _puzzleButtonSprites = Resources.LoadAll<Sprite>("PuzzleButtons");
@@ -137,7 +150,18 @@ public class Gallery : MonoBehaviour
         _galleryItems.Clear();
         _soundBar.Clear();
         imgMain.IsPuzzled = false;
+        ClearScheduledCallbacks();
         ClearOverlayVideos();
+    }
+
+    /// <summary>Stop every pending Schedule() coroutine. Called on page
+    /// change so timer callbacks from the previous page don't fire against
+    /// destroyed overlays.</summary>
+    private void ClearScheduledCallbacks()
+    {
+        foreach (var c in _scheduled.Values)
+            if (c != null) StopCoroutine(c);
+        _scheduled.Clear();
     }
 
     /// <summary>
@@ -284,6 +308,14 @@ public class Gallery : MonoBehaviour
         {
             if (entry.vp == null) return;
             entry.userInteracted = true;
+            // If tapPlayback is disabled, skip the built-in play/pause
+            // and let the script-side [event onTap] handler decide what
+            // tapping means for this overlay (e.g. pause its motion).
+            if (!entry.tapPlayback)
+            {
+                onOverlayEvent?.Invoke("onTap", key);
+                return;
+            }
             if (entry.vp.isPlaying)
             {
                 entry.vp.Pause();
@@ -374,6 +406,14 @@ public class Gallery : MonoBehaviour
             if (entry.go == null) return;
             int total = entry.frames?.Length ?? 0;
             entry.userInteracted = true;
+            // tapPlayback=false: skip the play/pause toggle (e.g. butterflies
+            // whose wing animation should keep flapping regardless of tap)
+            // and route straight to the script-side handler.
+            if (!entry.tapPlayback)
+            {
+                onOverlayEvent?.Invoke("onTap", key);
+                return;
+            }
             if (entry.prepareHandled && total > 0)
             {
                 if (entry.playing)
@@ -676,6 +716,9 @@ public class Gallery : MonoBehaviour
             case "tappable":
                 SetOverlayTappable(entry, value != 0f);
                 return;
+            case "tapplayback":
+                entry.tapPlayback = value != 0f;
+                return;
         }
 
         if (entry is OverlayVideoEntry v)
@@ -749,6 +792,113 @@ public class Gallery : MonoBehaviour
             return;
         }
         SetOverlayActive(name, !IsOverlayShown(entry));
+    }
+
+    /// <summary>Teleport a named overlay to a new rect. Coordinates use the
+    /// same author top-left convention as AddOverlay* (0..1 normalized; y=0
+    /// is top of the picture). Kills any in-flight AnimateOverlayTo on the
+    /// same overlay so the final position is deterministic.</summary>
+    public void SetOverlayPosition(string name, float x1, float y1, float x2, float y2)
+    {
+        if (!_overlayVideos.TryGetValue(name, out OverlayEntry entry)
+            || entry == null || entry.go == null)
+        {
+            Debug.LogWarning($"SetOverlayPosition: no overlay named '{name}'");
+            return;
+        }
+        var rt = entry.go.GetComponent<RectTransform>();
+        if (rt == null) return;
+        DOTween.Kill(rt);
+        rt.anchorMin = new Vector2(x1, 1f - y2);
+        rt.anchorMax = new Vector2(x2, 1f - y1);
+    }
+
+    /// <summary>Smoothly tween a named overlay to a new rect over <c>duration</c>
+    /// seconds (linear ease). A new call cancels any in-flight tween on the
+    /// same overlay. Tween targets the RectTransform so DOTween.Kill(rt)
+    /// stops both the anchorMin and anchorMax tweens together.</summary>
+    public void AnimateOverlayTo(string name, float x1, float y1, float x2, float y2, float duration)
+    {
+        if (!_overlayVideos.TryGetValue(name, out OverlayEntry entry)
+            || entry == null || entry.go == null)
+        {
+            Debug.LogWarning($"AnimateOverlayTo: no overlay named '{name}'");
+            return;
+        }
+        var rt = entry.go.GetComponent<RectTransform>();
+        if (rt == null) return;
+        DOTween.Kill(rt);
+        if (duration <= 0f)
+        {
+            rt.anchorMin = new Vector2(x1, 1f - y2);
+            rt.anchorMax = new Vector2(x2, 1f - y1);
+            return;
+        }
+        Vector2 newMin = new Vector2(x1, 1f - y2);
+        Vector2 newMax = new Vector2(x2, 1f - y1);
+        // DOTween free doesn't include DOAnchorMin/Max helpers, so use the
+        // generic To(getter, setter, ...) form and tag the tween with the
+        // RectTransform so DOTween.Kill(rt) can find them.
+        DOTween.To(() => rt.anchorMin, v => rt.anchorMin = v, newMin, duration)
+            .SetTarget(rt).SetEase(Ease.Linear);
+        DOTween.To(() => rt.anchorMax, v => rt.anchorMax = v, newMax, duration)
+            .SetTarget(rt).SetEase(Ease.Linear);
+    }
+
+    /// <summary>Stop any in-flight position tween on a named overlay. The
+    /// overlay stays at its current intermediate position. Used by tap
+    /// handlers to genuinely "freeze" a moving overlay.</summary>
+    public void StopOverlayAnimation(string name)
+    {
+        if (!_overlayVideos.TryGetValue(name, out OverlayEntry entry)
+            || entry == null || entry.go == null)
+        {
+            Debug.LogWarning($"StopOverlayAnimation: no overlay named '{name}'");
+            return;
+        }
+        var rt = entry.go.GetComponent<RectTransform>();
+        if (rt != null) DOTween.Kill(rt);
+    }
+
+    /// <summary>Fire <c>onOverlayEvent(eventName, target)</c> after a delay.
+    /// Calling Schedule again with the same (eventName, target) cancels the
+    /// pending one — the most recent call wins. <c>target</c> may be empty
+    /// for non-targeted events. Page changes via <c>clearUpGalleryItems</c>
+    /// cancel everything; no leak.</summary>
+    public void Schedule(float seconds, string eventName, string target = "")
+    {
+        if (string.IsNullOrEmpty(eventName))
+        {
+            Debug.LogWarning("Schedule: eventName is empty");
+            return;
+        }
+        var key = (eventName, target ?? "");
+        if (_scheduled.TryGetValue(key, out Coroutine existing) && existing != null)
+            StopCoroutine(existing);
+        _scheduled[key] = StartCoroutine(ScheduleTick(Mathf.Max(0f, seconds), key));
+    }
+
+    /// <summary>Cancel a pending Schedule by (eventName, target). No-op if
+    /// no matching schedule is active.</summary>
+    public void CancelSchedule(string eventName, string target = "")
+    {
+        if (string.IsNullOrEmpty(eventName)) return;
+        var key = (eventName, target ?? "");
+        if (_scheduled.TryGetValue(key, out Coroutine c))
+        {
+            if (c != null) StopCoroutine(c);
+            _scheduled.Remove(key);
+        }
+    }
+
+    private IEnumerator ScheduleTick(float seconds, (string evt, string target) key)
+    {
+        yield return new WaitForSeconds(seconds);
+        // Remove ourselves before dispatching so a handler that calls
+        // Schedule(...) with the same key doesn't get clobbered when our
+        // coroutine returns.
+        _scheduled.Remove(key);
+        onOverlayEvent?.Invoke(key.evt, key.target);
     }
 
     private static bool IsOverlayShown(OverlayEntry entry)

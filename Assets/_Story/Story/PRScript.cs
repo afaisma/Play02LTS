@@ -482,6 +482,72 @@ public class PRScript : MonoBehaviour
             storyStepsUI.ToggleOverlay(context.GetVar("name").ToString());
             return new Intrinsic.Result(ValNumber.one);
         };
+        // Position / animation control
+        f = Intrinsic.Create("SetOverlayPosition");
+        f.AddParam("name", "");
+        f.AddParam("x1", 0f);
+        f.AddParam("y1", 0f);
+        f.AddParam("x2", 1f);
+        f.AddParam("y2", 1f);
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.SetOverlayPosition(
+                context.GetVar("name").ToString(),
+                context.GetVar("x1").FloatValue(),
+                context.GetVar("y1").FloatValue(),
+                context.GetVar("x2").FloatValue(),
+                context.GetVar("y2").FloatValue());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("AnimateOverlayTo");
+        f.AddParam("name", "");
+        f.AddParam("x1", 0f);
+        f.AddParam("y1", 0f);
+        f.AddParam("x2", 1f);
+        f.AddParam("y2", 1f);
+        f.AddParam("duration", 1f);
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.AnimateOverlayTo(
+                context.GetVar("name").ToString(),
+                context.GetVar("x1").FloatValue(),
+                context.GetVar("y1").FloatValue(),
+                context.GetVar("x2").FloatValue(),
+                context.GetVar("y2").FloatValue(),
+                context.GetVar("duration").FloatValue());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("StopOverlayAnimation");
+        f.AddParam("name", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.StopOverlayAnimation(context.GetVar("name").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // Deferred callbacks. The script-side handler matches on
+        // (eventName [, target]) via the existing [event NAME TARGET] syntax.
+        f = Intrinsic.Create("Schedule");
+        f.AddParam("seconds", 1f);
+        f.AddParam("eventName", "");
+        f.AddParam("target", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.Schedule(
+                context.GetVar("seconds").FloatValue(),
+                context.GetVar("eventName").ToString(),
+                context.GetVar("target").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("CancelSchedule");
+        f.AddParam("eventName", "");
+        f.AddParam("target", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.CancelSchedule(
+                context.GetVar("eventName").ToString(),
+                context.GetVar("target").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
         f = Intrinsic.Create("MaximizeGallery");
         f.code = (context, partialResult) =>
         {
@@ -718,14 +784,19 @@ public class PRScript : MonoBehaviour
     {
         if (_mapEvents == null) return;
         target ??= "";
-        var key = (evName, target);
-        if (!_mapEvents.TryGetValue(key, out Scriptlet scriptlet))
+        // Two-step lookup so authors can write either:
+        //   [event onTap bf_orange]   — handler for one specific target
+        //   [event onTap]             — generic handler matching any target
+        // Specific match wins; generic is the fallback. Inside either body,
+        // the `target` global identifies which overlay fired.
+        Scriptlet scriptlet;
+        if (!_mapEvents.TryGetValue((evName, target), out scriptlet)
+            && !_mapEvents.TryGetValue((evName, ""), out scriptlet))
         {
-            // Helpful when the author misnames a target — log once.
+            // Helpful when the author misnames a target — log the miss.
             Debug.Log($"DispatchEvent: no [event {evName} {target}] handler defined");
             return;
         }
-        Debug.Log($"DispatchEvent: running [event {evName} {target}]");
         SetupInterpreter();
         _interpreter.Reset(scriptlet.Content);
         _interpreter.Compile();

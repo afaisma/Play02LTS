@@ -299,6 +299,31 @@ public class StoryStepsUI : MonoBehaviour
     public void HideOverlay(string name)   { gallery.HideOverlay(name); }
     public void ToggleOverlay(string name) { gallery.ToggleOverlay(name); }
 
+    public void SetOverlayPosition(string name, float x1, float y1, float x2, float y2)
+    {
+        gallery.SetOverlayPosition(name, x1, y1, x2, y2);
+    }
+
+    public void AnimateOverlayTo(string name, float x1, float y1, float x2, float y2, float duration)
+    {
+        gallery.AnimateOverlayTo(name, x1, y1, x2, y2, duration);
+    }
+
+    public void StopOverlayAnimation(string name)
+    {
+        gallery.StopOverlayAnimation(name);
+    }
+
+    public void Schedule(float seconds, string eventName, string target = "")
+    {
+        gallery.Schedule(seconds, eventName, target);
+    }
+
+    public void CancelSchedule(string eventName, string target = "")
+    {
+        gallery.CancelSchedule(eventName, target);
+    }
+
     public void MaximizeGallery()
     {
         PRUtils.ResizeUIElementToParentMax(gallery.gameObject);
