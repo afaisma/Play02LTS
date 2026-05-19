@@ -275,6 +275,30 @@ public class StoryStepsUI : MonoBehaviour
         gallery.addGalleryItem(prScript.baseURL + url, GalleryItemType.Video);
     }
 
+    public void AddOverlayVideo(string name, string url, float x1, float y1, float x2, float y2)
+    {
+        gallery.AddOverlayVideo(name, prScript.baseURL + url, x1, y1, x2, y2);
+    }
+
+    public void AddOverlaySprites(string name, string folderUrl, float x1, float y1, float x2, float y2)
+    {
+        gallery.AddOverlaySprites(name, prScript.baseURL + folderUrl, x1, y1, x2, y2);
+    }
+
+    public void AddOverlayPicture(string name, string url, float x1, float y1, float x2, float y2)
+    {
+        gallery.AddOverlayPicture(name, prScript.baseURL + url, x1, y1, x2, y2);
+    }
+
+    public void SetOverlayVideo(string name, string property, float value)
+    {
+        gallery.SetOverlayProperty(name, property, value);
+    }
+
+    public void ShowOverlay(string name)   { gallery.ShowOverlay(name); }
+    public void HideOverlay(string name)   { gallery.HideOverlay(name); }
+    public void ToggleOverlay(string name) { gallery.ToggleOverlay(name); }
+
     public void MaximizeGallery()
     {
         PRUtils.ResizeUIElementToParentMax(gallery.gameObject);

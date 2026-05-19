@@ -5,6 +5,7 @@ using System.Collections.Generic;
 public class SwipeDetector : MonoBehaviour
 {
     private Vector2 startPos;
+    private bool    _startedOnDraggableOverlay;
     private const float minSwipeDist = 50.0f;
     public PRScript prScript;
 
@@ -22,9 +23,24 @@ public class SwipeDetector : MonoBehaviour
             {
                 case TouchPhase.Began:
                     startPos = touch.position;
+                    // If the touch landed on a draggable overlay, the
+                    // overlay's IDragHandler owns this gesture — don't
+                    // treat its motion as a page-turn swipe. We check at
+                    // start (not end) because a successful drag carries
+                    // the overlay along with the pointer, so the end-
+                    // position raycast would still land on the overlay
+                    // and we'd want to suppress the swipe; but we also
+                    // want to allow swipes that *originate* on the page
+                    // picture and happen to pass through an overlay rect.
+                    _startedOnDraggableOverlay = IsOverDraggableOverlay(touch.position);
                     break;
 
                 case TouchPhase.Ended:
+                    if (_startedOnDraggableOverlay)
+                    {
+                        _startedOnDraggableOverlay = false;
+                        break;
+                    }
                     float swipeDist = (touch.position - startPos).magnitude;
 
                     if (swipeDist > minSwipeDist)
@@ -64,5 +80,26 @@ public class SwipeDetector : MonoBehaviour
                     break;
             }
         }
+    }
+
+    /// <summary>True if a draggable overlay (OverlayDragHandler) sits under
+    /// the given screen position. Used to suppress page-turn swipes that
+    /// originate on a draggable element.</summary>
+    private bool IsOverDraggableOverlay(Vector2 screenPos)
+    {
+        if (EventSystem.current == null) return false;
+        var ped = new PointerEventData(EventSystem.current) { position = screenPos };
+        var results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(ped, results);
+        foreach (var r in results)
+        {
+            if (r.gameObject == null) continue;
+            if (r.gameObject.GetComponent<OverlayDragHandler>() != null
+                || r.gameObject.GetComponentInParent<OverlayDragHandler>() != null)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

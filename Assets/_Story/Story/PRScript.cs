@@ -88,7 +88,11 @@ public class PRScript : MonoBehaviour
     public int nCurrentStep = 0;
     private Interpreter _interpreter;
     private List<Scriptlet> _scriptlets;
-    Dictionary<string, Scriptlet> _mapEvents = new Dictionary<string, Scriptlet>();
+    // Keyed by (eventName, target). target is "" for global events (e.g. OnExecuteStep);
+    // for per-overlay events the target is the overlay's name (e.g. ("onTap", "octopus")).
+    // Populated by parse() from `////////[event NAME [TARGET]]` block headers.
+    Dictionary<(string evName, string target), Scriptlet> _mapEvents =
+        new Dictionary<(string, string), Scriptlet>();
     private Settings _settings;
     private List<PRCharacter> _characters;
     private List<ButtonStruct> buttonStructs = new List<ButtonStruct>();
@@ -119,7 +123,7 @@ public class PRScript : MonoBehaviour
         _settings = new Settings();
         _scriptlets = new List<Scriptlet>();
         _characters = new List<PRCharacter>();
-        _mapEvents = new Dictionary<string, Scriptlet>();
+        _mapEvents = new Dictionary<(string, string), Scriptlet>();
 
         bool bSettingsSectionEnded = false;
         int index = 0;
@@ -141,8 +145,15 @@ public class PRScript : MonoBehaviour
             }
             else if (lines[index].StartsWith("////////[event"))
             {
-                Match match = Regex.Match(lines[index], @"\[event (\w+)");
-                string eventName = match.Groups[1].Value;
+                // Header shape:
+                //   ////////[event NAME]            -> ("NAME", "")
+                //   ////////[event NAME TARGET]     -> ("NAME", "TARGET")
+                // NAME is the event class (OnExecuteStep, onTap, onMediaEnd, ...).
+                // TARGET, if present, binds the handler to a named object — e.g.
+                // an overlay name. Trailing whitespace / extra tokens are ignored.
+                Match match = Regex.Match(lines[index], @"\[event\s+(\w+)(?:\s+(\w+))?");
+                string eventName  = match.Groups[1].Value;
+                string targetName = match.Groups[2].Success ? match.Groups[2].Value : "";
                 bSettingsSectionEnded = true;
                 Scriptlet scriptlet = new Scriptlet(lines[index]);
                 scriptlet.Content = "";
@@ -153,7 +164,7 @@ public class PRScript : MonoBehaviour
                     scriptlet.Content += lines[index] + "\n";
                     index++;
                 }
-                _mapEvents[eventName] = scriptlet;
+                _mapEvents[(eventName, targetName)] = scriptlet;
             }
             else
             {
@@ -178,7 +189,13 @@ public class PRScript : MonoBehaviour
     void Start()
     {
         storyStepsUI.prScript = this;
-        
+
+        // Route Gallery's overlay-event hooks (currently onTap, eventually
+        // onMediaEnd / onDragEnd / etc.) through DispatchEvent so the
+        // script-side [event NAME TARGET] blocks fire automatically.
+        if (storyStepsUI.gallery != null)
+            storyStepsUI.gallery.onOverlayEvent = DispatchEvent;
+
         if (Globals.g_scriptName != null)
             scriptURL = Globals.g_scriptName;
         
@@ -369,6 +386,100 @@ public class PRScript : MonoBehaviour
         {
             string url = NormalizeUrl(context.GetVar("url").ToString());
             storyStepsUI.AddGalleryImage(url);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("AddOverlayVideo");
+        f.AddParam("name", "");
+        f.AddParam("url",  "");
+        f.AddParam("x1", 0f);
+        f.AddParam("y1", 0f);
+        f.AddParam("x2", 1f);
+        f.AddParam("y2", 1f);
+        f.code = (context, partialResult) =>
+        {
+            string name = context.GetVar("name").ToString();
+            string url  = NormalizeUrl(context.GetVar("url").ToString());
+            float x1 = context.GetVar("x1").FloatValue();
+            float y1 = context.GetVar("y1").FloatValue();
+            float x2 = context.GetVar("x2").FloatValue();
+            float y2 = context.GetVar("y2").FloatValue();
+            storyStepsUI.AddOverlayVideo(name, url, x1, y1, x2, y2);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("AddOverlaySprites");
+        f.AddParam("name", "");
+        f.AddParam("url",  "");
+        f.AddParam("x1", 0f);
+        f.AddParam("y1", 0f);
+        f.AddParam("x2", 1f);
+        f.AddParam("y2", 1f);
+        f.code = (context, partialResult) =>
+        {
+            string name = context.GetVar("name").ToString();
+            string url  = NormalizeUrl(context.GetVar("url").ToString());
+            float x1 = context.GetVar("x1").FloatValue();
+            float y1 = context.GetVar("y1").FloatValue();
+            float x2 = context.GetVar("x2").FloatValue();
+            float y2 = context.GetVar("y2").FloatValue();
+            storyStepsUI.AddOverlaySprites(name, url, x1, y1, x2, y2);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("AddOverlayPicture");
+        f.AddParam("name", "");
+        f.AddParam("url",  "");
+        f.AddParam("x1", 0f);
+        f.AddParam("y1", 0f);
+        f.AddParam("x2", 1f);
+        f.AddParam("y2", 1f);
+        f.code = (context, partialResult) =>
+        {
+            string name = context.GetVar("name").ToString();
+            string url  = NormalizeUrl(context.GetVar("url").ToString());
+            float x1 = context.GetVar("x1").FloatValue();
+            float y1 = context.GetVar("y1").FloatValue();
+            float x2 = context.GetVar("x2").FloatValue();
+            float y2 = context.GetVar("y2").FloatValue();
+            storyStepsUI.AddOverlayPicture(name, url, x1, y1, x2, y2);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // SetOverlayVideo "name", "property", value
+        //   property ∈ { "autoplay", "loop", "volume", "fps", ... }
+        //   Works for both video and sprites overlays — dispatch is type-aware
+        //   inside Gallery.SetOverlayProperty.
+        f = Intrinsic.Create("SetOverlayVideo");
+        f.AddParam("name",     "");
+        f.AddParam("property", "");
+        f.AddParam("value",    0f);
+        f.code = (context, partialResult) =>
+        {
+            string name     = context.GetVar("name").ToString();
+            string property = context.GetVar("property").ToString();
+            float  value    = context.GetVar("value").FloatValue();
+            storyStepsUI.SetOverlayVideo(name, property, value);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // ShowOverlay "name" — make a named overlay visible + interactive.
+        f = Intrinsic.Create("ShowOverlay");
+        f.AddParam("name", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.ShowOverlay(context.GetVar("name").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // HideOverlay "name" — invisible + non-interactive (raycasts skip it).
+        f = Intrinsic.Create("HideOverlay");
+        f.AddParam("name", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.HideOverlay(context.GetVar("name").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // ToggleOverlay "name" — flip current visibility.
+        f = Intrinsic.Create("ToggleOverlay");
+        f.AddParam("name", "");
+        f.code = (context, partialResult) =>
+        {
+            storyStepsUI.ToggleOverlay(context.GetVar("name").ToString());
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("MaximizeGallery");
@@ -590,9 +701,37 @@ public class PRScript : MonoBehaviour
         SetupInterpreter();
         _interpreter.Reset(script);
         _interpreter.Compile();
-        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep)); 
-        _interpreter.SetGlobalValue("nSteps", new ValNumber(this._scriptlets.Count)); 
+        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep));
+        _interpreter.SetGlobalValue("nSteps", new ValNumber(this._scriptlets.Count));
         Debug.Log("PRScript::RunScript " + script);
+        _interpreter.RunUntilDone(10);
+    }
+
+    /// <summary>
+    /// Run a [event NAME [TARGET]] handler, if one is defined. Called from
+    /// Unity-side dispatch points (e.g. Gallery's overlay-tap callback).
+    /// Sets MiniScript globals <c>target</c>, <c>nCurrentStep</c>, and
+    /// <c>nSteps</c> before executing so handlers can branch on context.
+    /// Silently no-ops if no handler matches.
+    /// </summary>
+    public void DispatchEvent(string evName, string target)
+    {
+        if (_mapEvents == null) return;
+        target ??= "";
+        var key = (evName, target);
+        if (!_mapEvents.TryGetValue(key, out Scriptlet scriptlet))
+        {
+            // Helpful when the author misnames a target — log once.
+            Debug.Log($"DispatchEvent: no [event {evName} {target}] handler defined");
+            return;
+        }
+        Debug.Log($"DispatchEvent: running [event {evName} {target}]");
+        SetupInterpreter();
+        _interpreter.Reset(scriptlet.Content);
+        _interpreter.Compile();
+        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep));
+        _interpreter.SetGlobalValue("nSteps",       new ValNumber(this._scriptlets.Count));
+        _interpreter.SetGlobalValue("target",       new ValString(target));
         _interpreter.RunUntilDone(10);
     }
 
@@ -606,9 +745,10 @@ public class PRScript : MonoBehaviour
             _puzzleEnabledCurrentPage = _bookPuzzleEnabled;
             storyStepsUI.gallery.ShowPuzzleButton(false);
 
-            if (_mapEvents.ContainsKey("OnExecuteStep"))
+            var execKey = ("OnExecuteStep", "");
+            if (_mapEvents.ContainsKey(execKey))
             {
-                ExecuteScriptlet(_mapEvents["OnExecuteStep"].Content);
+                ExecuteScriptlet(_mapEvents[execKey].Content);
             }
             ExecuteScriptlet(_scriptlets[nCurrentStep].Content);
         }
