@@ -93,20 +93,28 @@ public class AudioPlayer : MonoBehaviour
     */
 
     public void PlayAudio(string audioClipName, float dFrom, float dTo)
-    { 
+    {
         AudioClipStruct audioClipStruct = audioClipStructs.Find(x => x.audioClipName == audioClipName);
-        if (audioClipStruct.audioClip != null)
+        if (audioClipStruct.audioClip == null)
         {
-            AudioClip ac = AudioClipUtilities.MakeSubclip(audioClipStruct.audioClip, dFrom,  dTo);
-            audioSource.clip = ac;
-            //audioSource.time = dFrom;
-            audioSource.Play();
-            //audioSource.Stop();
-            //Invoke("StopPlaying", dTo - dFrom);
+            Debug.Log($"Audio clip not found: {audioClipName}");
+            return;
+        }
+        // No time range specified (both 0 — the intrinsic default, or
+        // dTo <= dFrom) means "play the whole clip" as a one-shot SFX.
+        // PlayOneShot layers cleanly on top of anything else playing on
+        // the same AudioSource, so rapid taps produce overlapping laughs
+        // instead of cutting each other off.
+        if (dTo <= dFrom)
+        {
+            audioSource.PlayOneShot(audioClipStruct.audioClip);
         }
         else
         {
-            Debug.Log($"Audio clip not found: {audioClipName}");
+            // Time range: produce a subclip and play it monophonically.
+            // (This is the historical chunk-audio path.)
+            audioSource.clip = AudioClipUtilities.MakeSubclip(audioClipStruct.audioClip, dFrom, dTo);
+            audioSource.Play();
         }
     }
 
