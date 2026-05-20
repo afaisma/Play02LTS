@@ -7,40 +7,8 @@ using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 
-public class Filter
-{
-    public int ageFrom = 0;
-    public int ageTo = 0;
-    public String genre = "";
 
-    public void SetFilter(int ageFrom, int ageTo, String genre)
-    {
-        this.ageFrom = ageFrom;
-        this.ageTo = ageTo;
-        this.genre = genre;
-    }
-    
-    public bool Conforms(PRBook prBook)
-    {
-        if (genre == "everything")
-            return true;
-        
-        if (genre != "")
-            if (prBook.genre.ToLower().Contains(genre.ToLower()))
-                return true;
-            else
-                return false;
-        if (ageFrom != 0 && ageTo != 0)
-            if (ageFrom <= prBook.ageFrom && prBook.ageTo <= ageTo)
-                return true;
-            else
-                return false;
-
-        return true;
-    }
-}
-
-public class BooksScrollView : MonoBehaviour
+public class BookstoreScrollView : MonoBehaviour
 {
     [SerializeField]
     private Transform scrollViewContent;
@@ -54,13 +22,10 @@ public class BooksScrollView : MonoBehaviour
     private List<PRBook> prBooks;
     private Filter filter = new Filter();
 
-    // Cover-thumbnail downloads are throttled. Firing 67 parallel
-    // UnityWebRequests at CloudFront on Library entry was tripping
-    // intermittent 403 "Access denied" responses (visible in the log as
-    // four random book covers failing per Library load). Keeping ≤8
-    // requests in flight at any time stays comfortably under any AWS
-    // WAF rate-based rule and the macOS HTTP stack's per-host cap.
-    // Same pattern as OverlayHost.LoadAndStartSprites.
+    // Throttled cover downloads — same pattern as BooksScrollView.
+    // Without this, opening the bookstore fires one parallel HTTP request
+    // per book, which can trip AWS WAF rate-based rules / macOS HTTP
+    // stack caps and produce intermittent 403s.
     private const int MAX_INFLIGHT_COVERS = 8;
     private int _inflightCovers = 0;
     private readonly Queue<(string url, Image image)> _pendingCovers =
@@ -74,26 +39,28 @@ public class BooksScrollView : MonoBehaviour
 
     public void AddBook(PRBook prBook)
     {
-        if (prBook.bookViewItem != null)
+        if (prBook.bookstoreViewItem != null)
         {
-            prBook.bookViewItem.gameObject.SetActive(true);
+            prBook.bookstoreViewItem.gameObject.SetActive(true);
             return;
         }
 
         GameObject newBookGameObject = Instantiate(bookPrefab, scrollViewContent);
-        if (newBookGameObject.TryGetComponent<BookViewItem>(out BookViewItem bookViewItem))
+
+        if (newBookGameObject.TryGetComponent<BookstoreViewItem>(out BookstoreViewItem bookstoreViewItem))
         {
-            bookViewItem.prBook = prBook;
+            bookstoreViewItem.prBook = prBook;
             string imageBookUrl = Globals.baseURL + prBook.bookImageUrl;
-            EnqueueCoverDownload(imageBookUrl, bookViewItem.imageBook);
-            bookViewItem.SetBookProperties(prBook);
-            prBook.bookViewItem = bookViewItem;
+            EnqueueCoverDownload(imageBookUrl, bookstoreViewItem.imageBook);
+            bookstoreViewItem.SetBookProperties(prBook);
+            prBook.bookstoreViewItem = bookstoreViewItem;
         }
     }
 
-    /// <summary>Throttled wrapper around PRUtils.DownloadImage for book
-    /// covers. Either kicks off the download immediately or queues it for
-    /// later, based on how many cover requests are already in flight.</summary>
+    /// <summary>Throttled wrapper around PRUtils.DownloadImage for
+    /// bookstore covers. Either kicks off the download immediately or
+    /// queues it for later, based on how many requests are already in
+    /// flight. Same pattern as BooksScrollView.</summary>
     private void EnqueueCoverDownload(string url, Image image)
     {
         if (_inflightCovers < MAX_INFLIGHT_COVERS)
@@ -113,7 +80,6 @@ public class BooksScrollView : MonoBehaviour
         // modal dialog — the NoImage placeholder is sufficient feedback.
         yield return PRUtils.DownloadImage(url, image, true, true);
         _inflightCovers--;
-        // Hand the slot to the next pending request, if any.
         if (_pendingCovers.Count > 0 && _inflightCovers < MAX_INFLIGHT_COVERS)
         {
             var next = _pendingCovers.Dequeue();
@@ -176,8 +142,8 @@ public class BooksScrollView : MonoBehaviour
 
         children.Sort((t1, t2) => 
         {
-            BookViewItem bvi1 = t1.GetComponent<BookViewItem>();
-            BookViewItem bvi2 = t2.GetComponent<BookViewItem>();
+            BookstoreViewItem bvi1 = t1.GetComponent<BookstoreViewItem>();
+            BookstoreViewItem bvi2 = t2.GetComponent<BookstoreViewItem>();
 
             if (bvi1 != null && bvi2 != null)
             {
@@ -186,7 +152,7 @@ public class BooksScrollView : MonoBehaviour
                 else
                     return bvi2.prBook.ageFrom.CompareTo(bvi1.prBook.ageFrom);
             }
-            return 0;  // Consider how you wish to handle the case where BookViewItem component is missing.
+            return 0;  // Consider how you wish to handle the case where BookstoreViewItem component is missing.
         });
 
         for (int i = 0; i < children.Count; i++)

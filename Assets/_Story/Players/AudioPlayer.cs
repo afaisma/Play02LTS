@@ -50,7 +50,7 @@ public class AudioPlayer : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"Error loading audio clip: {www.error}");
+                Debug.LogError($"Error loading audio clip '{audioClipName}': {www.error}  (url={audioURL})");
             }
         }
     }

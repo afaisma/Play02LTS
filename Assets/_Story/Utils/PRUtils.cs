@@ -155,7 +155,7 @@ public class PRUtils
 
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {
-                Debug.Log($"Error: {request.error}");
+                Debug.LogError($"DownloadFile failed: {request.error}  (url={url})");
             }
             else
             {
@@ -208,7 +208,7 @@ public class PRUtils
         return Sprite.Create(texture, rect, pivot);
     }
 
-    public static IEnumerator DownloadImage(string url, Image image, bool bPreserveAspect = true )
+    public static IEnumerator DownloadImage(string url, Image image, bool bPreserveAspect = true, bool suppressAlert = false)
     {
         image.preserveAspect = bPreserveAspect;
         if (cacheImages.Contains(url))
@@ -230,7 +230,12 @@ public class PRUtils
             if (request.result != UnityWebRequest.Result.Success) //
             {
                 Debug.Log($"Failed to download image {url}: " + request.error);
-                AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
+                // suppressAlert is for high-volume callers (e.g. the library
+                // cover-grid load) where one failed thumbnail shouldn't pop a
+                // modal dialog. The NoImage fallback below is sufficient
+                // user-visible feedback in those cases.
+                if (!suppressAlert)
+                    AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
                 image.sprite = Resources.Load<Sprite>("NoImage");;
             }
             else

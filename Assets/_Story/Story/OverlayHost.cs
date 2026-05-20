@@ -204,7 +204,7 @@ public class OverlayHost : MonoBehaviour
 
         vp.errorReceived += (player, message) =>
         {
-            Debug.LogError($"OverlayVideo[{key}] error: {message}");
+            Debug.LogError($"OverlayVideo[{key}] error: {message}  (url={player.url})");
         };
 
         vp.prepareCompleted += (player) =>
@@ -359,7 +359,10 @@ public class OverlayHost : MonoBehaviour
         {
             go    = go,
             image = image,
-            fps   = 12f,           // sane default until manifest loads
+            fps   = 0f,            // 0 = sentinel "not yet set". LoadAndStartSprites
+                                   // fills it from manifest.json only if still 0;
+                                   // SetOverlayProperty's fps case can set it earlier
+                                   // and the manifest will then leave it alone.
         };
         _overlayVideos[key] = entry;
 
@@ -521,29 +524,36 @@ public class OverlayHost : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError($"OverlaySprites[{key}] manifest parse failed: {e.Message}");
+                Debug.LogError($"OverlaySprites[{key}] manifest parse failed: {e.Message}  (url={manifestUrl})");
                 yield break;
             }
         }
         if (manifest == null || manifest.count <= 0)
         {
-            Debug.LogError($"OverlaySprites[{key}] manifest has no frames");
+            Debug.LogError($"OverlaySprites[{key}] manifest has no frames  (url={manifestUrl})");
             yield break;
         }
-        if (manifest.fps > 0f) entry.fps = manifest.fps;
+        // Manifest fills fps ONLY if the user hasn't already set it via
+        // SetOverlayProperty("fps", X) between AddOverlaySprites and now.
+        // entry.fps starts at 0 (sentinel); the property setter writes a
+        // positive value, in which case we leave it untouched here.
+        if (entry.fps <= 0f && manifest.fps > 0f) entry.fps = manifest.fps;
+        // PlaySpritesLoop has a Mathf.Max(1f, fps) guard, so a manifest
+        // with no fps and no user override defaults to 1 fps rather than
+        // dividing by zero.
         entry.frames = new Sprite[manifest.count];
 
-        // 2. Kick off all frame downloads in parallel.
+        // 2. Download frames in parallel, throttled to MAX_INFLIGHT to avoid
+        // flooding CloudFront / macOS HTTP stack. A 5-butterfly page firing
+        // 5×61 ≈ 300 simultaneous requests can trip AWS WAF rate-based rules
+        // or NSURLSession per-host connection caps, producing intermittent
+        // 403 "Access denied" responses on some frames. Throttling to ~8
+        // in-flight requests keeps every file fetchable while still
+        // finishing the whole download in a couple of seconds.
+        const int MAX_INFLIGHT = 8;
         UnityWebRequest[] reqs = new UnityWebRequest[manifest.count];
-        for (int i = 0; i < manifest.count; i++)
-        {
-            string url = baseUrl + i.ToString("D3") + ".png";
-            reqs[i] = UnityWebRequestTexture.GetTexture(url);
-            reqs[i].SendWebRequest();
-        }
+        int next = 0;   // index of the next request to start
 
-        // 3. Wait for all to finish, bailing out if the page changed in the
-        // meantime so we don't leak the half-loaded textures.
         while (true)
         {
             if (entry.go == null)
@@ -551,10 +561,24 @@ public class OverlayHost : MonoBehaviour
                 DisposeRequests(reqs);
                 yield break;
             }
-            bool allDone = true;
-            for (int i = 0; i < reqs.Length; i++)
-                if (!reqs[i].isDone) { allDone = false; break; }
-            if (allDone) break;
+
+            // Count requests that are started but not finished.
+            int inflight = 0;
+            for (int i = 0; i < next; i++)
+                if (reqs[i] != null && !reqs[i].isDone) inflight++;
+
+            // Top up the inflight pool from the head of the queue.
+            while (next < manifest.count && inflight < MAX_INFLIGHT)
+            {
+                string url = baseUrl + next.ToString("D3") + ".png";
+                reqs[next] = UnityWebRequestTexture.GetTexture(url);
+                reqs[next].SendWebRequest();
+                inflight++;
+                next++;
+            }
+
+            // Done when every request has been started AND every one is done.
+            if (next >= manifest.count && inflight == 0) break;
             yield return null;
         }
 
@@ -586,7 +610,7 @@ public class OverlayHost : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"OverlaySprites[{key}] frame {i} failed: {req.error}");
+                Debug.LogError($"OverlaySprites[{key}] frame {i} failed: {req.error}  (url={req.url})");
             }
             req.Dispose();
         }
