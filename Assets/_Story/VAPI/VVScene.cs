@@ -690,6 +690,7 @@ public class VVScene : MonoBehaviour
         else
         {
             UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
+            www.timeout = 30;
 
             // Send the request and yield until it completes
             yield return www.SendWebRequest();

@@ -461,6 +461,8 @@ public class Globals : MonoBehaviour
         IsDownloading = true;
         using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
+            request.timeout = 20;  // CSV is startup-critical; fail fast so the
+                                   // retry button surfaces instead of hanging.
             yield return request.SendWebRequest();
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {

@@ -43,6 +43,7 @@ public class DraggableButton : Button, IBeginDragHandler, IDragHandler, IEndDrag
     IEnumerator LoadSprite(string url)
     {
         UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
+        www.timeout = 30;
         yield return www.SendWebRequest();
 
         if (www.result == UnityWebRequest.Result.Success)

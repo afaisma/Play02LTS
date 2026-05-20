@@ -67,6 +67,7 @@ public class DraggableImage : Image, IBeginDragHandler, IDragHandler, IEndDragHa
     IEnumerator LoadImageFromUrl(string url)
     {
         UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
+        request.timeout = 30;
         yield return request.SendWebRequest();
         if(request.isNetworkError || request.isHttpError) 
         {

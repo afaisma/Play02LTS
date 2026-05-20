@@ -21,6 +21,8 @@ public class NetworkStatus : MonoBehaviour
         lastReachability = Application.internetReachability;
         using (UnityWebRequest request = UnityWebRequest.Get("http://www.google.com"))
         {
+            request.timeout = 5;  // connectivity probe; short timeout so the
+                                  // poll itself doesn't hang on a dead network
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)

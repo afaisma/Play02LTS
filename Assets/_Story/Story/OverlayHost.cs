@@ -508,6 +508,7 @@ public class OverlayHost : MonoBehaviour
         SpritesManifest manifest = null;
         using (var req = UnityWebRequest.Get(manifestUrl))
         {
+            req.timeout = 15;  // tiny JSON file — short timeout
             yield return req.SendWebRequest();
             // Page change during the fetch could have torn down the entry.
             // Unity disposes the `using` UnityWebRequest for us on yield break.
@@ -572,6 +573,7 @@ public class OverlayHost : MonoBehaviour
             {
                 string url = baseUrl + next.ToString("D3") + ".png";
                 reqs[next] = UnityWebRequestTexture.GetTexture(url);
+                reqs[next].timeout = 30;   // per-frame PNG — slow connections ok
                 reqs[next].SendWebRequest();
                 inflight++;
                 next++;

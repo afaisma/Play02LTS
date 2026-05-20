@@ -39,6 +39,7 @@ public class MicrosoftTextToSpeech : MonoBehaviour
         www.SetRequestHeader("Content-Type", "application/ssml+xml");
         www.SetRequestHeader("Ocp-Apim-Subscription-Key", apiKey);
         www.SetRequestHeader("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm");
+        www.timeout = 30;
 
         yield return www.SendWebRequest();
 

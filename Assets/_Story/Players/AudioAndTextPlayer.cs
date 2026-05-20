@@ -296,6 +296,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             {
                 using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioURL, AudioType.MPEG))
                 {
+                    uwr.timeout = 60;  // narration MP3s are larger than other content
                     yield return uwr.SendWebRequest();
 
                     if (uwr.result == UnityWebRequest.Result.ConnectionError ||
@@ -323,6 +324,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             {
                 using (UnityWebRequest www = UnityWebRequest.Get(textURL))
                 {
+                    www.timeout = 20;  // small JSON timings file
                     yield return www.SendWebRequest();
 
                     if (www.result == UnityWebRequest.Result.ConnectionError ||

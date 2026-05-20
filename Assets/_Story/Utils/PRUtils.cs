@@ -151,6 +151,7 @@ public class PRUtils
         // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on by default.
         using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
+            request.timeout = 20;  // small text/JSON: fail fast if the server stalls
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
@@ -225,6 +226,7 @@ public class PRUtils
         // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on.
         using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
         {
+            request.timeout = 30;  // images: tolerate slow connections for ~5 MB
             yield return request.SendWebRequest();
 
             if (request.result != UnityWebRequest.Result.Success) //

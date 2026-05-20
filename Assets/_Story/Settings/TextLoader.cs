@@ -40,6 +40,7 @@ public class TextLoader : MonoBehaviour, IPointerClickHandler
         {
             using (UnityWebRequest webRequest = UnityWebRequest.Get(textUrl))
             {
+                webRequest.timeout = 20;
                 yield return webRequest.SendWebRequest();
 
                 if (webRequest.result == UnityWebRequest.Result.Success)
