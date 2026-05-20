@@ -19,34 +19,31 @@ public class NetworkStatus : MonoBehaviour
     public IEnumerator TryAgain()
     {
         lastReachability = Application.internetReachability;
-        using (UnityWebRequest request = UnityWebRequest.Get("http://www.google.com"))
+
+        // Probe the actual CDN we depend on, not a third-party host. If the
+        // device has internet but our CDN is down (WAF block, S3 outage,
+        // DNS), we want the offline dialog up — and conversely we don't
+        // want to claim offline just because google.com is unreachable.
+        // HEAD avoids re-downloading the CSV body on every poll.
+        string probeUrl = !string.IsNullOrEmpty(Globals.CSVURL)
+            ? Globals.CSVURL
+            : "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
+
+        using (UnityWebRequest request = UnityWebRequest.Head(probeUrl))
         {
             request.timeout = 5;  // connectivity probe; short timeout so the
                                   // poll itself doesn't hang on a dead network
             yield return request.SendWebRequest();
 
-            if (request.result == UnityWebRequest.Result.Success)
+            bool cdnReachable = request.result == UnityWebRequest.Result.Success;
+
+            if (cdnReachable && Application.internetReachability != NetworkReachability.NotReachable)
             {
-                switch (Application.internetReachability)
-                {
-                    case NetworkReachability.NotReachable:
-                        Debug.Log("No internet connection");
-                        // Display your message that there is no internet connection here
-                        onNetworkStatusChange(false);
-                        break;
-                    case NetworkReachability.ReachableViaCarrierDataNetwork:
-                        //Debug.Log("Internet connection via Carrier Data Network");
-                        onNetworkStatusChange(true);
-                        break;
-                    case NetworkReachability.ReachableViaLocalAreaNetwork:
-                        //Debug.Log("Internet connection via Local Area Network");
-                        onNetworkStatusChange(true);
-                        break;
-                }
+                onNetworkStatusChange(true);
             }
             else
             {
-                Debug.Log("No internet connection");
+                Debug.Log($"NetworkStatus: CDN probe failed ({request.result}) for {probeUrl}");
                 onNetworkStatusChange(false);
             }
         }

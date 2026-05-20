@@ -204,7 +204,8 @@ public class OverlayHost : MonoBehaviour
 
         vp.errorReceived += (player, message) =>
         {
-            Debug.LogError($"OverlayVideo[{key}] error: {message}  (url={player.url})");
+            // Asset-level failure: page still works without this overlay.
+            Debug.LogWarning($"OverlayVideo[{key}] error: {message}  (url={player.url})");
         };
 
         vp.prepareCompleted += (player) =>
@@ -515,8 +516,9 @@ public class OverlayHost : MonoBehaviour
             if (entry.go == null) yield break;
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"OverlaySprites[{key}] manifest fetch failed: " +
-                               $"{req.error} ({manifestUrl})");
+                // Asset-level failure: page still works without this overlay.
+                Debug.LogWarning($"OverlaySprites[{key}] manifest fetch failed: " +
+                                 $"{req.error} ({manifestUrl})");
                 yield break;
             }
             try
@@ -525,13 +527,13 @@ public class OverlayHost : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError($"OverlaySprites[{key}] manifest parse failed: {e.Message}  (url={manifestUrl})");
+                Debug.LogWarning($"OverlaySprites[{key}] manifest parse failed: {e.Message}  (url={manifestUrl})");
                 yield break;
             }
         }
         if (manifest == null || manifest.count <= 0)
         {
-            Debug.LogError($"OverlaySprites[{key}] manifest has no frames  (url={manifestUrl})");
+            Debug.LogWarning($"OverlaySprites[{key}] manifest has no frames  (url={manifestUrl})");
             yield break;
         }
         // Manifest fills fps ONLY if the user hasn't already set it via
@@ -612,7 +614,8 @@ public class OverlayHost : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"OverlaySprites[{key}] frame {i} failed: {req.error}  (url={req.url})");
+                // Per-frame failure: animation will be sparse but the page still works.
+                Debug.LogWarning($"OverlaySprites[{key}] frame {i} failed: {req.error}  (url={req.url})");
             }
             req.Dispose();
         }

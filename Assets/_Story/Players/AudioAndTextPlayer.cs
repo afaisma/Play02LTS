@@ -292,28 +292,58 @@ public class AudioAndTextPlayer : MonoBehaviour
             };
 
             // --- Download the audio (if audioURL is not empty) ---
+            // Disk cache first: if a previous session cached the MP3, decode
+            // from the local file via a file:// URL — same code path Unity
+            // uses for streaming, just from a local origin. Falls back to
+            // network if the disk file is missing or fails to decode.
             if (!string.IsNullOrEmpty(audioURL))
             {
-                using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioURL, AudioType.MPEG))
+                string diskAudioPath = DiskCache.PathFor(audioURL, "audio", ".mp3");
+                if (System.IO.File.Exists(diskAudioPath))
                 {
-                    uwr.timeout = 60;  // narration MP3s are larger than other content
-                    yield return uwr.SendWebRequest();
-
-                    if (uwr.result == UnityWebRequest.Result.ConnectionError ||
-                        uwr.result == UnityWebRequest.Result.ProtocolError)
+                    using (UnityWebRequest diskReq = UnityWebRequestMultimedia.GetAudioClip(
+                        "file://" + diskAudioPath, AudioType.MPEG))
                     {
-                        Debug.LogError($"Error loading audio clip {audioURL}: {uwr.error}");
-                    }
-                    else
-                    {
-                        AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
-                        if (clip != null)
+                        yield return diskReq.SendWebRequest();
+                        if (diskReq.result == UnityWebRequest.Result.Success)
                         {
-                            audioAndTextStruct.audioClip = clip;
+                            AudioClip clip = DownloadHandlerAudioClip.GetContent(diskReq);
+                            if (clip != null) audioAndTextStruct.audioClip = clip;
+                        }
+                    }
+                }
+
+                // Network fallback if disk was empty or corrupt.
+                if (audioAndTextStruct.audioClip == null)
+                {
+                    using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioURL, AudioType.MPEG))
+                    {
+                        uwr.timeout = 60;  // narration MP3s are larger than other content
+                        yield return uwr.SendWebRequest();
+
+                        if (uwr.result == UnityWebRequest.Result.ConnectionError ||
+                            uwr.result == UnityWebRequest.Result.ProtocolError)
+                        {
+                            // Asset-level failure: page still renders text without audio.
+                            Debug.LogWarning($"AudioAndTextPlayer: audio fetch failed — {uwr.error}  (url={audioURL})");
                         }
                         else
                         {
-                            Debug.LogError("Downloaded AudioClip is null.");
+                            AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
+                            if (clip != null)
+                            {
+                                audioAndTextStruct.audioClip = clip;
+                                // Persist for future sessions. Unity exposes the raw
+                                // download bytes on downloadHandler.data even for the
+                                // multimedia handler.
+                                DiskCache.WriteBytes(audioURL, "audio", ".mp3",
+                                    uwr.downloadHandler.data, DiskCache.MaxAudios);
+                            }
+                            else
+                            {
+                                // Asset-level failure: page still renders text without audio.
+                                Debug.LogWarning($"AudioAndTextPlayer: decoded AudioClip is null  (url={audioURL})");
+                            }
                         }
                     }
                 }
@@ -322,39 +352,58 @@ public class AudioAndTextPlayer : MonoBehaviour
             // --- Download JSON Timings if available ---
             if (!string.IsNullOrEmpty(textURL))
             {
-                using (UnityWebRequest www = UnityWebRequest.Get(textURL))
+                // Disk cache first.
+                string diskTimings = DiskCache.TryReadText(textURL, "timings", ".json");
+                if (diskTimings != null)
                 {
-                    www.timeout = 20;  // small JSON timings file
-                    yield return www.SendWebRequest();
-
-                    if (www.result == UnityWebRequest.Result.ConnectionError ||
-                        www.result == UnityWebRequest.Result.ProtocolError)
+                    content = diskTimings;
+                    audioAndTextStruct.content = content;
+                    if (pageNum == -1)
                     {
-                        Debug.Log(www.error);
+                        timings = JSON.Parse(content);
+                        audioAndTextStruct.jsonNodeTimings = timings;
                     }
-                    else
+                }
+                else
+                {
+                    using (UnityWebRequest www = UnityWebRequest.Get(textURL))
                     {
-                        content = www.downloadHandler.text;
-                        audioAndTextStruct.content = content;
-                        // if page number == -1, we're dealing with JSON timings
-                        if (pageNum == -1)
+                        www.timeout = 20;  // small JSON timings file
+                        yield return www.SendWebRequest();
+
+                        if (www.result == UnityWebRequest.Result.ConnectionError ||
+                            www.result == UnityWebRequest.Result.ProtocolError)
                         {
-                            timings = JSON.Parse(content);
-                            audioAndTextStruct.jsonNodeTimings = timings;
+                            // Asset-level failure: text still renders, just without word-level highlighting.
+                            Debug.LogWarning($"AudioAndTextPlayer: timings fetch failed — {www.error}  (url={textURL})");
                         }
-                        // we're dealing with a page from static text
                         else
                         {
-                            /*
-                            String page = GetPageFromTextContent(content, pageNum);
-                            var singleChunk = new JSONArray();
-                            JSONNode singleNode = new JSONObject();
-                            singleNode["word"] = page;
-                            singleNode["time"] = 0.0f;
-                            singleChunk.Add(singleNode);
+                            content = www.downloadHandler.text;
+                            audioAndTextStruct.content = content;
+                            // Persist for future sessions.
+                            DiskCache.WriteText(textURL, "timings", ".json",
+                                content, DiskCache.MaxTimings);
+                            // if page number == -1, we're dealing with JSON timings
+                            if (pageNum == -1)
+                            {
+                                timings = JSON.Parse(content);
+                                audioAndTextStruct.jsonNodeTimings = timings;
+                            }
+                            // we're dealing with a page from static text
+                            else
+                            {
+                                /*
+                                String page = GetPageFromTextContent(content, pageNum);
+                                var singleChunk = new JSONArray();
+                                JSONNode singleNode = new JSONObject();
+                                singleNode["word"] = page;
+                                singleNode["time"] = 0.0f;
+                                singleChunk.Add(singleNode);
 
-                            audioAndTextStruct.jsonNodeTimings = singleChunk;
-                        */
+                                audioAndTextStruct.jsonNodeTimings = singleChunk;
+                            */
+                            }
                         }
                     }
                 }

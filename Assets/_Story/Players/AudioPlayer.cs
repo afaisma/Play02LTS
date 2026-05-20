@@ -34,25 +34,58 @@ public class AudioPlayer : MonoBehaviour
         if (!audioClipURL.ToLower().StartsWith("http"))
             audioURL = baseURL + audioClipURL;
 
-        using (var www = new WWW(audioURL))
+        // Migrated from deprecated `new WWW(url)` to UnityWebRequestMultimedia
+        // so we can set a timeout — `WWW` cannot, which meant a hung HTTP
+        // request would stall the page indefinitely. AudioType is inferred
+        // from the URL extension because AddAudio is content-driven and may
+        // see .wav / .ogg / .mp3 (UnityWebRequestMultimedia requires the
+        // type up front; the old WWW path auto-detected from headers).
+        AudioType type = GuessAudioTypeFromUrl(audioURL);
+        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(audioURL, type))
         {
-            yield return www;
+            www.timeout = 60;  // SFX audio is small but still over the network
+            yield return www.SendWebRequest();
 
-            if (www.error == null)
+            if (www.result == UnityWebRequest.Result.Success)
             {
-                AudioClipStruct audioClipStruct = new AudioClipStruct
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+                if (clip != null)
                 {
-                    audioClipName = audioClipName,
-                    audioClipURL = audioClipURL,
-                    audioClip = www.GetAudioClip()
-                };
-                audioClipStructs.Add(audioClipStruct);
+                    AudioClipStruct audioClipStruct = new AudioClipStruct
+                    {
+                        audioClipName = audioClipName,
+                        audioClipURL = audioClipURL,
+                        audioClip = clip
+                    };
+                    audioClipStructs.Add(audioClipStruct);
+                }
+                else
+                {
+                    // Asset-level failure: page still works without this SFX.
+                    Debug.LogWarning($"AudioPlayer: decoded AudioClip is null for '{audioClipName}'  (url={audioURL}, type={type})");
+                }
             }
             else
             {
-                Debug.LogError($"Error loading audio clip '{audioClipName}': {www.error}  (url={audioURL})");
+                // Asset-level failure: page still works without this SFX.
+                Debug.LogWarning($"AudioPlayer: load failed for '{audioClipName}' — {www.error}  (url={audioURL})");
             }
         }
+    }
+
+    /// <summary>Pick the AudioType matching the URL extension. Defaults to
+    /// MPEG, which covers our chunk audio and most existing AddAudio assets.</summary>
+    private static AudioType GuessAudioTypeFromUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return AudioType.MPEG;
+        // Strip query string before extension lookup.
+        int q = url.IndexOf('?');
+        string clean = q >= 0 ? url.Substring(0, q) : url;
+        string lower = clean.ToLowerInvariant();
+        if (lower.EndsWith(".wav"))  return AudioType.WAV;
+        if (lower.EndsWith(".ogg"))  return AudioType.OGGVORBIS;
+        if (lower.EndsWith(".aiff") || lower.EndsWith(".aif")) return AudioType.AIFF;
+        return AudioType.MPEG;  // .mp3 and everything else
     }
     
     /*

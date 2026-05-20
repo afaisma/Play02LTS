@@ -212,6 +212,7 @@ public class PRUtils
     public static IEnumerator DownloadImage(string url, Image image, bool bPreserveAspect = true, bool suppressAlert = false)
     {
         image.preserveAspect = bPreserveAspect;
+        // 1) In-memory cache.
         if (cacheImages.Contains(url))
         {
             Sprite cached = cacheImages[url] as Sprite;
@@ -222,7 +223,25 @@ public class PRUtils
             yield break;
         }
 
-        // H3: dispose UnityWebRequest when done.
+        // 2) Disk cache. Persists across sessions, so re-opening a book
+        //    works offline once any page has been loaded once.
+        byte[] diskBytes = DiskCache.TryReadBytes(url, "images", ".png");
+        if (diskBytes != null)
+        {
+            var tex = new Texture2D(2, 2);
+            // LoadImage auto-detects PNG/JPG; resizes the texture to fit.
+            if (tex.LoadImage(diskBytes))
+            {
+                Sprite spr = Texture2DToSprite(tex);
+                image.sprite = spr;
+                AddToCacheImages(url, spr);
+                yield break;
+            }
+            // If the on-disk file is corrupt, fall through to network.
+            UnityEngine.Object.Destroy(tex);
+        }
+
+        // 3) Network. H3: dispose UnityWebRequest when done.
         // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on.
         using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
         {
@@ -231,7 +250,8 @@ public class PRUtils
 
             if (request.result != UnityWebRequest.Result.Success) //
             {
-                Debug.Log($"Failed to download image {url}: " + request.error);
+                // Asset-level failure: page falls back to NoImage placeholder.
+                Debug.LogWarning($"PRUtils: image download failed — {request.error}  (url={url})");
                 // suppressAlert is for high-volume callers (e.g. the library
                 // cover-grid load) where one failed thumbnail shouldn't pop a
                 // modal dialog. The NoImage fallback below is sufficient
@@ -247,6 +267,9 @@ public class PRUtils
                 image.sprite = imageSprite;
 
                 AddToCacheImages(url, imageSprite);
+                // Persist the encoded bytes (PNG/JPG) for the next session.
+                DiskCache.WriteBytes(url, "images", ".png",
+                    request.downloadHandler.data, DiskCache.MaxImages);
             }
         }
     }
