@@ -29,8 +29,12 @@ public class Globals : MonoBehaviour
     [SerializeField] private string targetScene = "_Library";
     [SerializeField] private float minTimeInScene = 2f;
 
-    // Retry button and message
-    [SerializeField] private Button buttonLoadingRetryContinue; // Assign through Inspector, may be null
+    // Retry button. No longer Inspector-authored — Globals auto-binds it by
+    // GameObject name (`ButtonLoadingRetryContinue`) on first Start and on
+    // every scene change. Step 1 of the Globals → prefab/single-instance
+    // migration: removing scene-specific Inspector wiring so the Globals
+    // GameObject can be lifted out of every scene and onto a prefab.
+    private Button buttonLoadingRetryContinue;
 
     // Game statistics variables
     private float totalMinutesInGame = 0f;
@@ -82,6 +86,14 @@ public class Globals : MonoBehaviour
             // slowest target device.
             SceneManager.activeSceneChanged += (oldScene, newScene) =>
             {
+                // Re-bind the loading-screen button if the newly-active scene
+                // contains it. Used by the scene(s) that show "Loading…" /
+                // "Continue" / "Connect to the Internet and Retry" — typically
+                // _Message in the current dev workflow. No-op for scenes
+                // without the button; the runtime keeps the previously-bound
+                // reference if still alive, or clears it if destroyed.
+                TryBindLoadingButton();
+
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 Resources.UnloadUnusedAssets();
                 sw.Stop();
@@ -94,12 +106,32 @@ public class Globals : MonoBehaviour
         }
     }
 
+    /// <summary>Locate the loading-screen button in the active scene by
+    /// GameObject name and bind it. Cheap (one GameObject.Find per scene
+    /// change, ~O(N) over root objects, ~microseconds at this scene size).
+    /// No-op if the field is already bound to a live object or if no scene
+    /// currently contains the button. Replaces the prior [SerializeField]
+    /// Inspector wiring so Globals can live on a prefab rather than in
+    /// every scene.</summary>
+    private void TryBindLoadingButton()
+    {
+        // Already-bound and still alive? Nothing to do.
+        if (buttonLoadingRetryContinue != null) return;
+        var go = GameObject.Find("ButtonLoadingRetryContinue");
+        if (go != null) buttonLoadingRetryContinue = go.GetComponent<Button>();
+    }
+
     void Start()
     {
         gameStartTime = Time.time; // Initialize game start time for statistics
         CSVURL = csvUrl;
         baseURL = PRUtils.RemoveFileNameFromUrl(csvUrl);
-        
+
+        // Try to bind the button in case the current scene already contains
+        // it (otherwise the activeSceneChanged hook above catches it on the
+        // next scene activation).
+        TryBindLoadingButton();
+
         // Initialize retry button and set it non-interactable
         if (buttonLoadingRetryContinue != null)
         {
