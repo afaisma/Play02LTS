@@ -26,7 +26,14 @@ public static class GameObjectExtensions
 }
 public class PRUtils
 {
-    public static int maxCacheImagesSize = 30;
+    // Cap chosen above the library's typical working set (~60+ book covers
+    // visible across a session). Below that, every cover beyond the first
+    // 30 evicts a Sprite that a BookViewItem.Image is still displaying —
+    // not currently harmful (we don't Destroy on eviction) but it forces
+    // re-download from DiskCache on every library re-entry. At 100 entries
+    // × ~150 KB GPU per sprite, peak is ~15 MB, well within tablet/phone
+    // budgets.
+    public static int maxCacheImagesSize = 100;
     private static  OrderedDictionary cacheImages = new OrderedDictionary();
 
     public static float alpha = 0.35f;
@@ -247,6 +254,13 @@ public class PRUtils
         {
             request.timeout = 30;  // images: tolerate slow connections for ~5 MB
             yield return request.SendWebRequest();
+
+            // The caller's Image may have been destroyed during the
+            // network wait (typical: user taps a book and the library
+            // unloads while its cover-grid coroutines are still in flight).
+            // Don't assign to a dead Unity object — Unity's overloaded ==
+            // returns true for destroyed components, so this is safe.
+            if (image == null) yield break;
 
             if (request.result != UnityWebRequest.Result.Success) //
             {

@@ -77,7 +77,13 @@ public class AudioAndTextPlayer : MonoBehaviour
     public string hilightTextColor = "FF55FF";
     public string hilightBackColor = "00FF0044";
 
-    private static readonly int MaxAudioCacheSize = 30;
+    // Bumped from 30 — a typical book of 10 pages × ~5 chunks per page
+    // already strains a cap of 30. Holding more lets us survive a
+    // Library → Story → Library round-trip with audio still warm in cache,
+    // and reduces re-decode pressure on a slow device. At ~1 MB per
+    // AudioClip × 50 entries the peak is ~50 MB CPU memory, fine on
+    // modern hardware.
+    private static readonly int MaxAudioCacheSize = 50;
     private static readonly OrderedDictionary CacheAudioAndTimingsStructs = new OrderedDictionary();
 
     private List<WordTiming> currentWordTimings;
