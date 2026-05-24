@@ -186,3 +186,25 @@ The command is then immediately available in story `.txt` script files.
 | QFSW Quantum Console | Runtime debug console; use `[Command]` attribute to expose methods |
 | ParticleImage (`Assets/AssetKits/ParticleImage/`) | UI particle effects |
 | Microsoft Azure TTS (`Players/TTS/MicrosoftTextToSpeech.cs`) | Computer voice narration |
+
+## Working principles
+
+### Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+
+* Don't "improve" adjacent code, comments, or formatting.
+* Don't refactor things that aren't broken.
+* Match existing style, even if you'd do it differently.
+* If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+
+* Remove imports/variables/functions that YOUR changes made unused.
+* Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+*(Adapted verbatim from §3 of [multica-ai/andrej-karpathy-skills/CLAUDE.md](https://github.com/multica-ai/andrej-karpathy-skills/blob/main/CLAUDE.md).)*
