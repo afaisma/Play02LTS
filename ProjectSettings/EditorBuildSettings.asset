@@ -29,5 +29,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Story/Bookstore/_Bookstore.unity
     guid: 1cc828da001bc469ab0e0e1301920e13
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.adaptivePerformance.basic.provider_settings: {fileID: 11400000, guid: dde0d45293c474b168d5afd46c39a552, type: 2}
+    com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: 65def3139cb434a44bfe574e21cebf0b, type: 2}
+    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 48a9965759c164ebfb28e47d122b74df, type: 2}
   m_UseUCBPForAssetBundles: 0

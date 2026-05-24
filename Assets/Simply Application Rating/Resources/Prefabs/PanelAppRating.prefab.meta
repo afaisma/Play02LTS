@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8235f0c84fbc8b84382fc0bc43160e56
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 119790
+  packageName: Simply Application Rating
+  packageVersion: 1.2
+  assetPath: Assets/Simply Application Rating/Resources/Prefabs/PanelAppRating.prefab
+  uploadId: 256654

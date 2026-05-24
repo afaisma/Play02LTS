@@ -198,7 +198,7 @@ Easier: read the diff and confirm the conditional. The fix is a single ternary; 
 ```
 grep -n "isPlayingSegment = false" Assets/_Story/Players/PRVideoPlayer.cs
 ```
-Expected: three hits — in `PlaySegment` (the existing logic), in `InterruptPlaySegment`, in `Update`, and now also in `Stop`.
+Expected: four hits — `InterruptPlaySegment`, `Update` (twice: the segment-ended path and the interrupted path), and the new one in `Stop`.
 
 **Manual test:** this fix has no user-visible effect today (the bug it prevents is dormant). The verification is that nothing breaks.
 

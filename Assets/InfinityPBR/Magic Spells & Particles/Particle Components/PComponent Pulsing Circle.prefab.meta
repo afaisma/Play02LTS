@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: eceb09383390045f98867f838b2fd25c
+timeCreated: 18446744011573954816
+NativeFormatImporter:
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 14330
+  packageName: Magic Spells & Particles
+  packageVersion: 1.0.2
+  assetPath: Assets/InfinityPBR/Magic Spells & Particles/Particle Components/PComponent
+    Pulsing Circle.prefab
+  uploadId: 599623
