@@ -87,43 +87,6 @@ public class AudioPlayer : MonoBehaviour
         if (lower.EndsWith(".aiff") || lower.EndsWith(".aif")) return AudioType.AIFF;
         return AudioType.MPEG;  // .mp3 and everything else
     }
-    
-    /*
-    [Command]
-    public void PlayAudio1(string audioClipName, float dFrom, float dTo)
-    {
-        AudioClipStruct audioClipStruct = audioClipStructs.Find(x => x.audioClipName == audioClipName);
-        if (audioClipStruct.audioClip != null)
-        {
-            audioSource.clip = audioClipStruct.audioClip;
-            audioSource.time = dFrom;
-            audioSource.Play();
-            StartCoroutine(StopAudioAtTime(audioClipName, dTo));
-        }
-        else
-        {
-            Debug.Log($"Audio clip not found: {audioClipName}");
-        }
-    }
-
-    */
-    /*
-    public void PlayAudio2(string audioClipName, float dFrom, float dTo)
-    {
-        AudioClipStruct audioClipStruct = audioClipStructs.Find(x => x.audioClipName == audioClipName);
-        if (audioClipStruct.audioClip != null)
-        {
-            audioSource.clip = audioClipStruct.audioClip;
-            audioSource.time = dFrom;
-            audioSource.Play();
-            //StartCoroutine(StopAudioAtTime(audioClipName, dTo));
-        }
-        else
-        {
-            Debug.Log($"Audio clip not found: {audioClipName}");
-        }
-    }
-    */
 
     public void PlayAudio(string audioClipName, float dFrom, float dTo)
     {
@@ -155,20 +118,4 @@ public class AudioPlayer : MonoBehaviour
     {
         audioSource.Stop();
     }
-
-    /*
-    private IEnumerator StopAudioAtTime(string audioClipName, float dTo)
-    {
-        yield return new WaitForSeconds(dTo - audioSource.time);
-        OnAudioPlaybackFinished(audioClipName);
-    }
-    */
-
-    /*
-    private void OnAudioPlaybackFinished(string audioClipName)
-    {
-        audioSource.Stop();
-        Debug.Log("Audio playback finished.");
-    }
-*/
 }
