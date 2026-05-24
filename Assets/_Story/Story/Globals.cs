@@ -45,15 +45,22 @@ public class Globals : MonoBehaviour
     private int daysSinceFirstRun = 0;
     private Coroutine waitAndNavigateCoroutine; 
     
+    // Single instance, populated by Awake() of the prefab-Instantiated
+    // Globals (see Bootstrap below). The legacy auto-create fallback was
+    // removed in Step 5 of the single-instance migration — Bootstrap fires
+    // BeforeSceneLoad and is the only path that creates Globals.
     public static Globals Instance
     {
         get
         {
             if (instance == null)
             {
-                GameObject go = new GameObject("Globals");
-                instance = go.AddComponent<Globals>();
-                DontDestroyOnLoad(go);
+                // Should be unreachable in normal flow. Most likely cause:
+                // Resources/Globals.prefab is missing (Bootstrap logged an
+                // error at app launch). Defensive log so the next failure
+                // is diagnosable, not silent.
+                Debug.LogError("Globals.Instance accessed before Bootstrap " +
+                               "instantiated the prefab — see Bootstrap log.");
             }
             return instance;
         }
@@ -95,49 +102,35 @@ public class Globals : MonoBehaviour
 
     void Awake()
     {
-        if (instance == null)
-        {
-            instance = this;
-            DontDestroyOnLoad(gameObject);
-            // Reclaim engine-side asset memory at scene boundaries.
-            // Background: cacheImages (PRUtils) and CacheAudioAndTimingsStructs
-            // (AudioAndTextPlayer) are private-static OrderedDictionaries that
-            // survive scene unload. When the user leaves _Library / _Story, the
-            // UI components referencing previously-cached Sprites/AudioClips are
-            // destroyed, but Unity does NOT auto-call UnloadUnusedAssets on
-            // SceneManager.LoadScene (post-5.x behaviour). Without this hook,
-            // every orphaned Texture2D / AudioClip stays in memory until the
-            // process exits — a small but monotonic leak over a long session.
-            //
-            // Items still referenced by either cache are kept (UnloadUnusedAssets
-            // is reference-aware), so a Library → Story → Library round-trip
-            // doesn't force a reload of warm covers. The subscription happens
-            // exactly once because Globals' singleton guard above destroys any
-            // duplicate Globals before its Awake reaches this line.
-            //
-            // Temporary Debug.Log so first on-device deploys surface the hitch
-            // length; drop the timing once we know the real number on the
-            // slowest target device.
-            SceneManager.activeSceneChanged += (oldScene, newScene) =>
-            {
-                // Re-bind the loading-screen button if the newly-active scene
-                // contains it. Used by the scene(s) that show "Loading…" /
-                // "Continue" / "Connect to the Internet and Retry" — typically
-                // _Message in the current dev workflow. No-op for scenes
-                // without the button; the runtime keeps the previously-bound
-                // reference if still alive, or clears it if destroyed.
-                TryBindLoadingButton();
+        // Awake runs exactly once — Globals is instantiated once by Bootstrap
+        // (BeforeSceneLoad) and lives for the lifetime of the app via
+        // DontDestroyOnLoad. No scene-resident Globals exist after Step 4 of
+        // the single-instance migration, so the legacy duplicate-guard was
+        // removed in Step 5.
+        instance = this;
+        DontDestroyOnLoad(gameObject);
 
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                Resources.UnloadUnusedAssets();
-                sw.Stop();
-                Debug.Log($"UnloadUnusedAssets after {oldScene.name} → {newScene.name}: {sw.ElapsedMilliseconds} ms");
-            };
-        }
-        else
+        // Re-bind the loading-screen button on every scene activation —
+        // catches the scene that owns it (typically _Message in the current
+        // dev workflow). No-op for scenes without the button; existing
+        // binding is preserved if still alive.
+        //
+        // We previously also called Resources.UnloadUnusedAssets() here as
+        // a memory reclaim, but it tripped URP 17.x Render Graph mid-frame
+        // with `PostProcessPassRenderGraph IndexOutOfRangeException` — the
+        // pooled intermediate textures URP holds via internal handles (not
+        // long-lived C# refs) look orphaned to the sweep and get freed
+        // between record-time and execute-time. The cap bumps on
+        // cacheImages (100) and CacheAudioAndTimingsStructs (50) already
+        // bound the leak to ~15 MB GPU + ~50 MB CPU peak, which is
+        // acceptable on the target devices. If we ever need to reclaim
+        // again, defer to WaitForEndOfFrame + a real yield on the
+        // AsyncOperation, but test thoroughly against URP rendering — the
+        // straightforward inline call is unsafe in Unity 6's Render Graph.
+        SceneManager.activeSceneChanged += (oldScene, newScene) =>
         {
-            Destroy(gameObject);
-        }
+            TryBindLoadingButton();
+        };
     }
 
     /// <summary>Locate the loading-screen button in the active scene by
