@@ -59,6 +59,40 @@ public class Globals : MonoBehaviour
         }
     }
 
+    /// <summary>Step 3 of the Globals → single-instance migration.
+    /// Instantiate the canonical Globals from <c>Resources/Globals.prefab</c>
+    /// before any scene's Awake fires. This becomes the prefab-loaded
+    /// singleton, and the existing Awake duplicate-guard below destroys
+    /// any scene-resident Globals on first scene load — so the prefab's
+    /// Inspector values are the source of truth from now on.
+    ///
+    /// Coexists harmlessly with the scene-resident Globals during the
+    /// migration: if a scene still has a Globals component (Step 4 hasn't
+    /// removed it yet), its Awake will fire after this method, find
+    /// <c>instance != null</c>, and self-destroy. No behavior change is
+    /// visible until Step 4 lets the prefab values take effect by removing
+    /// the in-scene copies.
+    ///
+    /// If <c>Resources/Globals.prefab</c> is missing (e.g. a fresh clone
+    /// before Step 2 was completed), we log an error and fall through to
+    /// the legacy scene-resident path — the app still works.</summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Bootstrap()
+    {
+        if (instance != null) return;
+        var prefab = Resources.Load<GameObject>("Globals");
+        if (prefab == null)
+        {
+            Debug.LogError("Globals.Bootstrap: Resources/Globals.prefab not found; " +
+                           "falling back to scene-resident Globals (Step 2 of the " +
+                           "migration may be incomplete).");
+            return;
+        }
+        var go = Instantiate(prefab);
+        go.name = "Globals";   // strip the "(Clone)" suffix
+        // DontDestroyOnLoad happens inside the new instance's Awake().
+    }
+
     void Awake()
     {
         if (instance == null)
@@ -254,7 +288,18 @@ public class Globals : MonoBehaviour
 
     private IEnumerator WaitAndNavigate(string targetScene, float delay)
     {
+        // Capture the scene we were in when the wait began. If the user
+        // navigates away during the delay (e.g. taps a book → enters _Story),
+        // we must NOT yank them back to targetScene when the timer fires.
+        //
+        // Pre-Step-3 this couldn't happen — Globals.Start ran when its
+        // scene-resident host scene loaded, so the wait/navigate ran inside
+        // that scene's lifetime. Post-Step-3, Globals.Start runs at app
+        // launch (BeforeSceneLoad via Bootstrap), so the coroutine outlives
+        // multiple scene loads and the user is the one driving navigation.
+        string sceneAtStart = SceneManager.GetActiveScene().name;
         yield return new WaitForSeconds(delay);
+        if (SceneManager.GetActiveScene().name != sceneAtStart) yield break;
         LoadTargetScene();
     }
     
