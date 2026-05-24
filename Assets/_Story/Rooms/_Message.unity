@@ -4315,60 +4315,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1222276245}
   m_CullTransparentMesh: 1
---- !u!1 &1328418433
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1328418435}
-  - component: {fileID: 1328418434}
-  m_Layer: 0
-  m_Name: Globals
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1328418434
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1328418433}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4499c62ab17334a43bdfa4cad5b21de5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  csvUrl: https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.csv
-  convinienceLocal: http://localhost:8080/api/files/download/stories/stories.csv
-  convinienceS3_02: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv
-  convinienceS3_01: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_01/stories.csv
-  convinienceS3: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv
-  convinienceS3QA: http://d5wtw8f0w3ire.cloudfront.net/uploads/stories-qa/stories.csv
-  convinienceEC2: http://35.90.126.120:8080/api/files/download/stories/stories.csv
-  targetScene: _Library
-  minTimeInScene: 10
-  buttonLoadingRetryContinue: {fileID: 1554775496}
---- !u!4 &1328418435
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1328418433}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 785.853, y: -1097.677, z: -14.010829}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1343056441
 GameObject:
   m_ObjectHideFlags: 0
@@ -7503,5 +7449,4 @@ SceneRoots:
   - {fileID: 1725468088}
   - {fileID: 562196561}
   - {fileID: 1408454488}
-  - {fileID: 1328418435}
   - {fileID: 1824434447}
