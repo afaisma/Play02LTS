@@ -40,20 +40,14 @@ public class MapManager : MonoBehaviour
         */
     }
     
-    public void Settings()
-    {
-        SceneManager.LoadScene("_Settings");
-    }
+    // Public wrapper methods preserved so scene-side button onClick
+    // wirings keep working (this component is referenced by _Settings,
+    // _Parents, _Message scenes for their nav buttons). Bodies
+    // delegated to Navigation (see Story/Navigation.cs).
+    public void Settings() => Navigation.GoToSettings();
+    public void Library()  => Navigation.GoToLibrary();
 
-    public void Library()
-    {
-        SceneManager.LoadScene("_Library");
-    }
-
-    public void GotoScene(string sceneName)
-    {
-        SceneManager.LoadScene(sceneName);
-    }
+    public void GotoScene(string sceneName) => Navigation.GoToScene(sceneName);
 
     public static void GotoBook(string name)
     {

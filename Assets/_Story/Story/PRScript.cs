@@ -903,13 +903,13 @@ public class PRScript : MonoBehaviour
     public void Home()
     {
         Globals.g_scriptName = "";
-        SceneManager.LoadScene("_Library");
+        Navigation.GoToLibrary();
     }
-    
+
     public void Map()
     {
         Globals.g_scriptName = "";
-        SceneManager.LoadScene("_Map");
+        Navigation.GoToMap();
     }
     
     public void ReplayCurrenStep()

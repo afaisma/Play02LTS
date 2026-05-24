@@ -37,7 +37,7 @@ public class AlertDialog : MonoBehaviour
     public void RetryLibrary()
     {
         AlertDialogManager.DestroyDialogInstance();
-        SceneManager.LoadScene("_Library");
+        Navigation.GoToLibrary();
     }
     
 }

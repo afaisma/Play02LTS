@@ -93,14 +93,12 @@ public class TextLoader : MonoBehaviour, IPointerClickHandler
         PRBook prBook = books[0];
         Globals.g_scriptName = prBook.bookFullUrl;
         Globals.g_prbook = prBook;
+        // Tablet branch is currently identical to phone (the commented
+        // _StoryTablet was an old per-form-factor scene that was never
+        // built). Kept as branch in case we re-introduce one.
         if (Globals.IsTablet())
-        {
-            //SceneManager.LoadScene("_StoryTablet");
-            SceneManager.LoadScene("_Story");
-        }
+            Navigation.GoToStory();
         else
-        {
-            SceneManager.LoadScene("_Story");
-        }        
+            Navigation.GoToStory();
     }
 }

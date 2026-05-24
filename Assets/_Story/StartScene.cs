@@ -12,7 +12,7 @@ public class StartScene : MonoBehaviour
         // string sName = PlayerPrefs.GetString("startSceneName", startSceneName);
         // if (sName != "")
         //     startSceneName = sName;        
-        SceneManager.LoadScene(startSceneName);        
+        Navigation.GoToScene(startSceneName);
     }
 
     // Update is called once per frame

@@ -104,7 +104,7 @@ public class ParentalGate : MonoBehaviour
     {
         if (sceneNavigateTo != "")
         {
-            SceneManager.LoadScene(sceneNavigateTo);
+            Navigation.GoToScene(sceneNavigateTo);
         }
         else
         {

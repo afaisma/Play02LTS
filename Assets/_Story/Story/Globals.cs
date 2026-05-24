@@ -308,7 +308,7 @@ public class Globals : MonoBehaviour
             {
                 StopCoroutine(waitAndNavigateCoroutine);
             }
-            SceneManager.LoadScene(targetScene);
+            Navigation.GoToScene(targetScene);
         }
     }
 
@@ -326,7 +326,7 @@ public class Globals : MonoBehaviour
     {
         if (!IsDownloading)
         {
-            SceneManager.LoadScene("_Library");
+            Navigation.GoToLibrary();
         }
         else
         {
@@ -441,14 +441,12 @@ public class Globals : MonoBehaviour
     {
         g_scriptName = prBook.bookFullUrl;
         g_prbook = prBook;
+        // Tablet/phone branches are currently identical; kept as a branch in
+        // case we re-introduce a form-factor-specific Story scene.
         if (IsTablet())
-        {
-            SceneManager.LoadScene("_Story");
-        }
+            Navigation.GoToStory();
         else
-        {
-            SceneManager.LoadScene("_Story");
-        }
+            Navigation.GoToStory();
     }
 
     public static void GotoBook(string name)
@@ -461,20 +459,16 @@ public class Globals : MonoBehaviour
             g_scriptName = prBook.bookFullUrl;
             g_prbook = prBook;
             if (IsTablet())
-            {
-                SceneManager.LoadScene("_Story");
-            }
+                Navigation.GoToStory();
             else
-            {
-                SceneManager.LoadScene("_Story");
-            }
+                Navigation.GoToStory();
         }
     }
 
     public static void GotoLibrary(string libraryFilter)
     {
         g_libraryFilter = libraryFilter;
-        SceneManager.LoadScene("_Library");
+        Navigation.GoToLibrary();
     }
 
     public static List<PRBook> ParseCSV(string csv)

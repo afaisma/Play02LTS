@@ -124,20 +124,12 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         return prbooks.FindAll(s => s.notesForParents.ToLower().Contains(notesForParents.ToLower()));
     }   
     
-    public void Settings()
-    {
-        SceneManager.LoadScene("_Settings");
-    }
-
-    public void Map()
-    {
-        SceneManager.LoadScene("_Map");
-    }
-
-    public void Parents()
-    {
-        SceneManager.LoadScene("_Parents");
-    }
+    // Public wrapper methods preserved so scene-side button onClick
+    // wirings keep working. Bodies delegated to Navigation (see
+    // Story/Navigation.cs).
+    public void Settings() => Navigation.GoToSettings();
+    public void Map()      => Navigation.GoToMap();
+    public void Parents()  => Navigation.GoToParents();
 
     public void SetFilter(string filter)
     {
@@ -170,7 +162,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         // Check if we are in a different scene
         if (sceneName != currentScene)
         {
-            SceneManager.LoadScene(sceneName);  // Load the new scene
+            Navigation.GoToScene(sceneName);  // Load the new scene
         }
         else
         {
@@ -181,7 +173,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Home()
     {
         Globals.g_scriptName = "";
-        SceneManager.LoadScene("_Library");
+        Navigation.GoToLibrary();
     }
 
 
