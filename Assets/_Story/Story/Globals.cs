@@ -14,11 +14,6 @@ public class Globals : MonoBehaviour
     public static string baseURL;
     public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
-    public string convinienceS3_02 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
-    public string convinienceS3_01 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_01/stories.csv";
-    public string convinienceS3 = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories/stories.csv";
-    public string convinienceS3QA = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories-qa/stories.csv";
-    public string convinienceEC2 = "http://35.90.126.120:8080/api/files/download/stories/stories.csv";
 
     public static List<PRBook> g_listPRBooks;
 
@@ -66,6 +61,32 @@ public class Globals : MonoBehaviour
         {
             instance = this;
             DontDestroyOnLoad(gameObject);
+            // Reclaim engine-side asset memory at scene boundaries.
+            // Background: cacheImages (PRUtils) and CacheAudioAndTimingsStructs
+            // (AudioAndTextPlayer) are private-static OrderedDictionaries that
+            // survive scene unload. When the user leaves _Library / _Story, the
+            // UI components referencing previously-cached Sprites/AudioClips are
+            // destroyed, but Unity does NOT auto-call UnloadUnusedAssets on
+            // SceneManager.LoadScene (post-5.x behaviour). Without this hook,
+            // every orphaned Texture2D / AudioClip stays in memory until the
+            // process exits — a small but monotonic leak over a long session.
+            //
+            // Items still referenced by either cache are kept (UnloadUnusedAssets
+            // is reference-aware), so a Library → Story → Library round-trip
+            // doesn't force a reload of warm covers. The subscription happens
+            // exactly once because Globals' singleton guard above destroys any
+            // duplicate Globals before its Awake reaches this line.
+            //
+            // Temporary Debug.Log so first on-device deploys surface the hitch
+            // length; drop the timing once we know the real number on the
+            // slowest target device.
+            SceneManager.activeSceneChanged += (oldScene, newScene) =>
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Resources.UnloadUnusedAssets();
+                sw.Stop();
+                Debug.Log($"UnloadUnusedAssets after {oldScene.name} → {newScene.name}: {sw.ElapsedMilliseconds} ms");
+            };
         }
         else
         {
