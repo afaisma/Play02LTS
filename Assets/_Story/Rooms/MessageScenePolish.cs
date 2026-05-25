@@ -23,9 +23,11 @@ public class MessageScenePolish : MonoBehaviour
     [Tooltip("OverlayHost that hosts the decorations. Defaults to one on this GameObject if left empty.")]
     [SerializeField] private OverlayHost overlayHost;
 
-    [Tooltip("Base URL for the butterfly sprite folders. Defaults to the local FileServer's TestBook content.")]
-    [SerializeField] private string baseURL =
-        "http://localhost:8080/api/files/download/stories/TestBook/gen/";
+    [Tooltip("Base URL for the butterfly sprite folders. Leave empty to derive " +
+             "from Globals.baseURL + 'TestBook/gen/' — that way the URL tracks " +
+             "the active CSV environment (dev FileServer, QA CDN, prod CDN) " +
+             "automatically. Set explicitly only to override.")]
+    [SerializeField] private string baseURL = "";
 
     [Tooltip("Butterfly sprite folder names (relative to baseURL). One overlay is spawned per entry.")]
     [SerializeField] private List<string> butterflyFolders = new List<string>
@@ -60,6 +62,21 @@ public class MessageScenePolish : MonoBehaviour
             return;
         }
 
+        // baseURL Inspector field empty → derive from Globals.baseURL so the
+        // butterflies live in whatever environment the CSV is pointed at
+        // (dev FileServer, QA CDN, prod CDN). Globals.Start runs before this
+        // scene's Start, so Globals.baseURL is already populated.
+        string effectiveBaseURL = baseURL;
+        if (string.IsNullOrEmpty(effectiveBaseURL))
+        {
+            if (string.IsNullOrEmpty(Globals.baseURL))
+            {
+                Debug.LogWarning("MessageScenePolish: baseURL is empty and Globals.baseURL is not yet populated; skipping butterflies.");
+                return;
+            }
+            effectiveBaseURL = Globals.baseURL + "TestBook/gen/";
+        }
+
         // Listen for our own scheduled callbacks (each butterfly schedules
         // its own next move under event name "msgFly", target=overlay name).
         overlayHost.onOverlayEvent += OnOverlayEvent;
@@ -76,7 +93,7 @@ public class MessageScenePolish : MonoBehaviour
             Vector2 origin = new Vector2(
                 Random.Range(0.05f, 1f - butterflySize.x - 0.05f),
                 Random.Range(0.05f, 0.35f));
-            overlayHost.AddOverlaySprites(name, baseURL + folder + "/",
+            overlayHost.AddOverlaySprites(name, effectiveBaseURL + folder + "/",
                 origin.x, origin.y,
                 origin.x + butterflySize.x, origin.y + butterflySize.y);
             overlayHost.SetOverlayProperty(name, "autoplay",    1f);

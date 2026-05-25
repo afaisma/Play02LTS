@@ -2734,7 +2734,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MessageScenePolish
   overlayHost: {fileID: 614021090}
-  baseURL: http://localhost:8080/api/files/download/stories/TestBook/gen/
+  baseURL:
   butterflyFolders:
   - butterfly_orange
   - butterfly_blue
