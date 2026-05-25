@@ -44,7 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4499c62ab17334a43bdfa4cad5b21de5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  csvUrl: https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.csv
+  csvUrl: http://localhost:8080/api/files/download/stories/stories.csv
   convinienceLocal: http://localhost:8080/api/files/download/stories/stories.csv
+  convinienceAWS: http://localhost:8080/api/files/download/stories/stories.csv
   targetScene: _Library
   minTimeInScene: 5
