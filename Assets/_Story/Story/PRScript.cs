@@ -630,6 +630,36 @@ public class PRScript : MonoBehaviour
             audioPlayer.PlayAudio(audioname, fBegin, fEnd);
             return new Intrinsic.Result(ValNumber.one);
         };
+        // Loop / Stop / IsAudioPlaying — for tappable musical instruments
+        // and other "tap to start, tap again to stop" patterns. LoopAudio
+        // creates a dedicated AudioSource per clip so multiple instruments
+        // can sound simultaneously without cutting each other off; StopAudio
+        // targets that specific clip; IsAudioPlaying lets event handlers
+        // check state for toggle behavior. AddAudio must precede LoopAudio.
+        f = Intrinsic.Create("LoopAudio");
+        f.AddParam("audioname", "");
+        f.code = (context, partialResult) =>
+        {
+            string audioname = context.GetVar("audioname").ToString();
+            audioPlayer.LoopAudio(audioname);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("StopAudio");
+        f.AddParam("audioname", "");
+        f.code = (context, partialResult) =>
+        {
+            string audioname = context.GetVar("audioname").ToString();
+            audioPlayer.StopAudio(audioname);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        f = Intrinsic.Create("IsAudioPlaying");
+        f.AddParam("audioname", "");
+        f.code = (context, partialResult) =>
+        {
+            string audioname = context.GetVar("audioname").ToString();
+            return new Intrinsic.Result(audioPlayer.IsAudioPlaying(audioname)
+                ? ValNumber.one : ValNumber.zero);
+        };
         // f = Intrinsic.Create("PlayAudioText");
         // f.AddParam("audioname", "");
         // f.AddParam("timings", "");
