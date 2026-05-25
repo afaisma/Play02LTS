@@ -132,6 +132,9 @@ public class Gallery : MonoBehaviour
     public void StopOverlayAnimation(string name)
         => overlayHost.StopOverlayAnimation(name);
 
+    public void PlayOverlayVideoSegment(string name, float fromSec, float toSec)
+        => overlayHost.PlayOverlayVideoSegment(name, fromSec, toSec);
+
     public void Schedule(float seconds, string eventName, string target = "")
         => overlayHost.Schedule(seconds, eventName, target);
 

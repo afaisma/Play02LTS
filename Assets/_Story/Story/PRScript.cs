@@ -78,7 +78,6 @@ public class PRScript : MonoBehaviour
     public string convHumanSoundsS3 = "http://35.90.126.120:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
     public StoryStepsUI storyStepsUI;
     public AudioPlayer audioPlayer;
-    public PRVideoPlayer videoPlayer;
     public MicrosoftTextToSpeech microsoftTextToSpeech;
     public AudioAndTextPlayer audioAndTextPlayer;
     public ParentalGate parentalGate;
@@ -201,7 +200,6 @@ public class PRScript : MonoBehaviour
         
         baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
-        videoPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioAndTextPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         VoiceOptions(new bool[] { false, true, true });
         audioAndTextPlayer.OnAudioFinished.AddListener(OnAudioPlaybackFinished);
@@ -365,11 +363,33 @@ public class PRScript : MonoBehaviour
         f = Intrinsic.Create("AddVideo");
         f.AddParam("videoname", "");
         f.AddParam("url", "");
+        // Optional rect — defaults to full page so existing scripts that
+        // omit these args (the legacy PRVideoPlayer convention) keep behaving
+        // the same. Pass smaller values to make the video a windowed overlay.
+        f.AddParam("x1", 0);
+        f.AddParam("y1", 0);
+        f.AddParam("x2", 1);
+        f.AddParam("y2", 1);
         f.code = (context, partialResult) =>
         {
+            // Routes through the overlay system: persistent across chunk
+            // transitions. Replaces the old PRVideoPlayer path. The
+            // "persistent" flag is what lets a single MP4 declared in the
+            // script preamble survive the per-chunk OverlayHost.Clear() —
+            // chunks then play different time ranges of it via PlayVideo
+            // (see below). Default volume is 1 because AddVideo is for
+            // narrated videos (cf. Sea_Story_ru.txt) — matches the legacy
+            // PRVideoPlayer's unconditional audio. Decorative video overlays
+            // declared via AddOverlayVideo still default to silent.
             string videoname = context.GetVar("videoname").ToString();
             string url = NormalizeUrl(context.GetVar("url").ToString());
-            videoPlayer.LoadVideo(url);
+            float x1 = context.GetVar("x1").FloatValue();
+            float y1 = context.GetVar("y1").FloatValue();
+            float x2 = context.GetVar("x2").FloatValue();
+            float y2 = context.GetVar("y2").FloatValue();
+            storyStepsUI.AddOverlayVideo(videoname, url, x1, y1, x2, y2);
+            storyStepsUI.SetOverlayVideo(videoname, "persistent", 1f);
+            storyStepsUI.SetOverlayVideo(videoname, "volume",     1f);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("DisplayMainImage");
@@ -729,11 +749,14 @@ public class PRScript : MonoBehaviour
         f.AddParam("end", 0);
         f.code = (context, partialResult) =>
         {
-            Debug.Log("PlayVideo");
+            // Routes through the overlay system. The named overlay was
+            // created by AddVideo with persistent=1, so it survives chunk
+            // transitions; this call seeks to the time range and plays
+            // until OverlayHost.Update pauses on segment-end.
             string videoname = context.GetVar("videoname").ToString();
             float fBegin = context.GetVar("begin").FloatValue();
             float fEnd = context.GetVar("end").FloatValue();
-            videoPlayer.PlaySegment(fBegin, fEnd);
+            storyStepsUI.PlayOverlayVideoSegment(videoname, fBegin, fEnd);
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("SetPuzzleEnabled");

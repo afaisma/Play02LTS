@@ -46,6 +46,14 @@ public class OverlayHost : MonoBehaviour
                                           // (e.g. butterflies) whose tap should
                                           // mean something other than "stop
                                           // the wings animation".
+        public bool  persistent;      // when true, Clear() (called on page
+                                      // change) skips this entry. Used by
+                                      // book-scope overlays declared in the
+                                      // story-script preamble that survive
+                                      // chunk transitions — e.g. a
+                                      // pre-rendered narrated video whose
+                                      // chunks play different time segments
+                                      // of the same MP4 (Sea_Story_ru.txt).
     }
 
     private class OverlayVideoEntry : OverlayEntry
@@ -54,6 +62,23 @@ public class OverlayHost : MonoBehaviour
         public bool  autoplay;        // start playback when Prepare completes
         public float volume;          // 0..1 audio gain
         public bool  wasPlayingWhenHidden;  // pause-on-hide, resume-on-show
+
+        // Segment-playback state (the AddVideo/PlayVideo pattern from
+        // story scripts — see PlayOverlayVideoSegment). When segmentMode
+        // is true, Update() polls vp.time and pauses on reaching
+        // segmentEndSec. If a segment is requested before the video has
+        // finished Prepare()'ing, the requested range is parked in
+        // pendingSegment* fields and applied in prepareCompleted.
+        public bool  segmentMode;
+        public float segmentEndSec;
+        public bool  pendingSegment;
+        public float pendingFrom;
+        public float pendingTo;
+        // Active segment-start coroutine. Tracked so a back-to-back
+        // PlayOverlayVideoSegment can cancel the prior one — otherwise
+        // two parallel coroutines could race to arm segmentMode at
+        // conflicting values.
+        public Coroutine segmentStartCoroutine;
     }
 
     private class OverlaySpritesEntry : OverlayEntry
@@ -229,7 +254,20 @@ public class OverlayHost : MonoBehaviour
                 player.SetDirectAudioVolume(0, Mathf.Clamp01(entry.volume));
             }
 
-            if (entry.autoplay)
+            // A segment request fired before Prepare finished gets honored
+            // here — that's the typical case for the AddVideo/PlayVideo
+            // pattern, where the script's first chunk calls PlayVideo while
+            // the MP4 is still buffering. The pending segment takes priority
+            // over autoplay/tap-to-play.
+            if (entry.pendingSegment)
+            {
+                entry.pendingSegment = false;
+                player.time = entry.pendingFrom;
+                entry.segmentEndSec = entry.pendingTo;
+                entry.segmentMode = true;
+                player.Play();
+            }
+            else if (entry.autoplay)
             {
                 // Start playback immediately. Loop / volume already configured
                 // via SetOverlayProperty are now in effect.
@@ -237,11 +275,15 @@ public class OverlayHost : MonoBehaviour
             }
             else
             {
-                // Tap-to-play overlay: play+pause-after-one-frame so the
-                // RenderTexture shows frame 0 as a still. Calling Play and
-                // Pause in the same call stack is a no-op on Unity macOS —
-                // the engine needs an Update tick between them for the
-                // video pipeline to actually rasterize the frame.
+                // Tap-to-play overlay (or persistent overlay awaiting a
+                // PlayVideo): play+pause-after-one-frame so the RenderTexture
+                // shows frame 0 as a still. Calling Play and Pause in the
+                // same call stack is a no-op on Unity macOS — the engine
+                // needs an Update tick between them for the video pipeline
+                // to actually rasterize the frame. PauseAfterOneFrame bails
+                // out if segmentMode has been switched on in the meantime
+                // (PlayOverlayVideoSegment racing prepareCompleted) so the
+                // deferred pause doesn't clobber a freshly-started segment.
                 player.Play();
                 StartCoroutine(PauseAfterOneFrame(entry));
             }
@@ -711,6 +753,120 @@ public class OverlayHost : MonoBehaviour
     /// type-specific extras (volume for video, fps for sprites). Unknown
     /// properties log a warning and are ignored.
     /// </summary>
+    /// <summary>Play a time-range segment of a named overlay video, then
+    /// pause at the end. Implements the PlayVideo MiniScript intrinsic —
+    /// books like Sea_Story_ru.txt have a single full-page MP4 declared in
+    /// the preamble (via AddVideo) and each chunk plays a different time
+    /// range of it. If the video hasn't finished Prepare()'ing yet, the
+    /// request is parked and honored in prepareCompleted.</summary>
+    public void PlayOverlayVideoSegment(string name, float fromSec, float toSec)
+    {
+        if (string.IsNullOrEmpty(name)
+            || !_overlayVideos.TryGetValue(name, out OverlayEntry entry)
+            || entry == null || entry.go == null
+            || !(entry is OverlayVideoEntry v) || v.vp == null)
+        {
+            Debug.LogWarning($"PlayOverlayVideoSegment: no video overlay named '{name}'");
+            return;
+        }
+
+        if (toSec <= fromSec)
+        {
+            // Defensive: a script-side typo (sea_story chunk 4 has
+            // "293, 280" — end before start) would otherwise play
+            // forever. Treat as a no-op and warn.
+            Debug.LogWarning($"PlayOverlayVideoSegment[{name}]: invalid range " +
+                             $"({fromSec}, {toSec}) — to <= from. Ignored.");
+            return;
+        }
+
+        if (!v.prepareHandled)
+        {
+            // Video still buffering. Stash the request; prepareCompleted
+            // will apply it.
+            v.pendingSegment = true;
+            v.pendingFrom = fromSec;
+            v.pendingTo   = toSec;
+            return;
+        }
+
+        // Disarm any previous segment immediately. Without this, Update()
+        // would observe vp.isPlaying=true with vp.time still at the
+        // PREVIOUS segment's end (the seek to fromSec is async — Unity
+        // hasn't applied it yet) and pause the video right after we
+        // start it.
+        v.segmentMode = false;
+        v.segmentEndSec = toSec;
+
+        // Cancel any in-flight segment-start coroutine on this entry so
+        // a rapid Prev/Next doesn't end up with two coroutines fighting
+        // over segmentMode arming.
+        if (v.segmentStartCoroutine != null)
+        {
+            StopCoroutine(v.segmentStartCoroutine);
+            v.segmentStartCoroutine = null;
+        }
+        v.segmentStartCoroutine = StartCoroutine(StartSegmentCoroutine(v, fromSec));
+    }
+
+    /// <summary>Robust segment-start sequence. seekCompleted is unreliable
+    /// when the seek is large (e.g. paging from chunk_1 paused at 60 back
+    /// to chunk_butterflies requesting 0-30), so we poll vp.time directly.
+    /// Play() must precede the seek so Unity actually processes the seek
+    /// against an active decoder; on a paused player, time-set is
+    /// frequently deferred indefinitely.</summary>
+    private IEnumerator StartSegmentCoroutine(OverlayVideoEntry v, float fromSec)
+    {
+        if (v == null || v.vp == null) yield break;
+        var vp = v.vp;
+
+        // 1. Activate the decoder, then yield one frame so Unity's video
+        //    pipeline picks it up before we issue the seek.
+        vp.Play();
+        yield return null;
+        if (v.go == null || v.vp == null) yield break;
+
+        // 2. Issue the seek.
+        vp.time = fromSec;
+
+        // 3. Poll until vp.time reflects the seek (within 1s tolerance,
+        //    since vp.time may already be advancing as it plays). Bail
+        //    after 60 frames (~1s @ 60fps) so we don't hang if the seek
+        //    silently failed — the segment will still be approximately
+        //    correct, just shifted forward.
+        for (int i = 0; i < 60; i++)
+        {
+            if (v.go == null || v.vp == null) yield break;
+            if (Mathf.Abs((float)vp.time - fromSec) < 1.0f) break;
+            yield return null;
+        }
+        if (v.go == null || v.vp == null) yield break;
+
+        // 4. Arm segmentMode so Update() will pause when vp.time reaches
+        //    segmentEndSec. Clear the coroutine handle so it's eligible
+        //    for GC and so a future cancel doesn't try to stop a finished
+        //    coroutine.
+        v.segmentMode = true;
+        v.segmentStartCoroutine = null;
+    }
+
+    /// <summary>Per-frame check for segment-mode video overlays: when
+    /// VideoPlayer.time crosses the requested end, pause playback and
+    /// exit segment mode. Cheap (one float compare per active video
+    /// overlay; typical scene has ≤5).</summary>
+    private void Update()
+    {
+        foreach (var entry in _overlayVideos.Values)
+        {
+            if (entry is OverlayVideoEntry v && v.segmentMode && v.vp != null
+                && v.vp.isPlaying && v.vp.time >= v.segmentEndSec)
+            {
+                v.vp.Pause();
+                v.segmentMode = false;
+            }
+        }
+    }
+
     public void SetOverlayProperty(string name, string property, float value)
     {
         if (string.IsNullOrEmpty(name)
@@ -735,6 +891,11 @@ public class OverlayHost : MonoBehaviour
                 return;
             case "tapplayback":
                 entry.tapPlayback = value != 0f;
+                return;
+            case "persistent":
+                // Survive Clear() across page changes. Used by the
+                // AddVideo/PlayVideo pattern — see OverlayEntry.persistent.
+                entry.persistent = value != 0f;
                 return;
         }
 
@@ -990,21 +1151,50 @@ public class OverlayHost : MonoBehaviour
         // onto the RenderTexture, one extra for safety on slower devices.
         yield return null;
         yield return null;
-        if (entry?.vp != null && !entry.userInteracted)
+        // Bail out if the user has tapped (which means they explicitly
+        // started playback) OR if segmentMode has been activated by a
+        // PlayOverlayVideoSegment call that arrived during the 2-frame
+        // priming window. Without the segmentMode check, a script-side
+        // PlayVideo issued shortly after AddVideo would have its just-
+        // started segment paused right before it gets a chance to play.
+        if (entry?.vp != null && !entry.userInteracted && !entry.segmentMode)
             entry.vp.Pause();
     }
 
     private void ClearOverlayVideos()
     {
-        foreach (var entry in _overlayVideos.Values)
-            DestroyOverlayEntry(entry);
-        _overlayVideos.Clear();
-        _anonOverlayCounter = 0;
+        // Persistent entries (book-scope overlays declared in the script
+        // preamble) survive Clear() and continue across page changes. The
+        // page-scoped overlays defined inside a chunk are destroyed here
+        // as before.
+        var toRemove = new List<string>();
+        foreach (var kv in _overlayVideos)
+        {
+            if (kv.Value != null && kv.Value.persistent) continue;
+            DestroyOverlayEntry(kv.Value);
+            toRemove.Add(kv.Key);
+        }
+        foreach (var key in toRemove)
+            _overlayVideos.Remove(key);
+
+        // Reset the anonymous-overlay counter only when nothing persistent
+        // remains — otherwise a future __anon_N could collide with a still-
+        // alive entry from before.
+        if (_overlayVideos.Count == 0)
+            _anonOverlayCounter = 0;
     }
 
     private void DestroyOverlayEntry(OverlayEntry entry)
     {
         if (entry == null || entry.go == null) return;
+
+        // Kill any in-flight DOTween tweens (AnimateOverlayTo) targeted at
+        // this RectTransform before tearing down the GameObject. Without
+        // this, the tween's setter closure keeps writing anchorMin/anchorMax
+        // into the destroyed RT for the rest of the tween's duration —
+        // DOTween's safe mode catches it but spams 8+ warnings per page turn.
+        var rt = entry.go.GetComponent<RectTransform>();
+        if (rt != null) DOTween.Kill(rt);
 
         // Video: release the RenderTexture before destroying the GameObject.
         if (entry is OverlayVideoEntry)

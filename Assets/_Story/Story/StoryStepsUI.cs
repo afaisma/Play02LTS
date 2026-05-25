@@ -295,6 +295,11 @@ public class StoryStepsUI : MonoBehaviour
         gallery.SetOverlayProperty(name, property, value);
     }
 
+    public void PlayOverlayVideoSegment(string name, float fromSec, float toSec)
+    {
+        gallery.PlayOverlayVideoSegment(name, fromSec, toSec);
+    }
+
     public void ShowOverlay(string name)   { gallery.ShowOverlay(name); }
     public void HideOverlay(string name)   { gallery.HideOverlay(name); }
     public void ToggleOverlay(string name) { gallery.ToggleOverlay(name); }
