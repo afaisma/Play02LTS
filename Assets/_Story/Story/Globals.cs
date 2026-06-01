@@ -29,6 +29,11 @@ public class Globals : MonoBehaviour
 
     [SerializeField] private string targetScene = "_Library";
     [SerializeField] private float minTimeInScene = 2f;
+    // Only the launch/loading screen auto-advances to targetScene. Gating on
+    // this (rather than "did the active scene change during the wait?") keeps
+    // the auto-advance from firing wherever the user happens to be sitting
+    // when the one-shot CSV load finishes (e.g. a debug start in _Story).
+    [SerializeField] private string loadingSceneName = "_Message";
 
     // Retry button. No longer Inspector-authored — Globals auto-binds it by
     // GameObject name (`ButtonLoadingRetryContinue`) on first Start and on
@@ -146,7 +151,46 @@ public class Globals : MonoBehaviour
         // Already-bound and still alive? Nothing to do.
         if (buttonLoadingRetryContinue != null) return;
         var go = GameObject.Find("ButtonLoadingRetryContinue");
-        if (go != null) buttonLoadingRetryContinue = go.GetComponent<Button>();
+        if (go != null)
+        {
+            buttonLoadingRetryContinue = go.GetComponent<Button>();
+            // Binding only stores the reference. The label and click handler
+            // must be (re)applied from current state on every fresh bind: the
+            // one-shot CSV download no longer re-runs once the catalog is
+            // cached at app launch, so it can't be relied on to configure the
+            // freshly-loaded button when a scene (e.g. _Message) appears.
+            ConfigureLoadingButton();
+        }
+    }
+
+    /// <summary>Set the loading button's label, interactability and click
+    /// handler from the current catalog/download state. Safe to call on every
+    /// (re)bind and whenever that state changes. Per product decision this
+    /// button always goes straight to the Library — never via
+    /// targetScene/LoadTargetScene.</summary>
+    private void ConfigureLoadingButton()
+    {
+        if (buttonLoadingRetryContinue == null) return;
+        // Never stack handlers across scene changes / state transitions.
+        buttonLoadingRetryContinue.onClick.RemoveAllListeners();
+        if (IsDownloading)
+        {
+            SetButtonText("Loading Library Catalog");
+            buttonLoadingRetryContinue.interactable = false;
+        }
+        else if (g_listPRBooks != null)
+        {
+            SetButtonText("Enter Library");
+            buttonLoadingRetryContinue.interactable = true;
+            buttonLoadingRetryContinue.onClick.AddListener(Library);
+        }
+        else
+        {
+            // Not downloading and no catalog: the last attempt failed.
+            SetButtonText("Connect to the Internet and Retry");
+            buttonLoadingRetryContinue.interactable = true;
+            buttonLoadingRetryContinue.onClick.AddListener(RetryDownload);
+        }
     }
 
     void Start()
@@ -282,21 +326,30 @@ public class Globals : MonoBehaviour
 
     private IEnumerator WaitAndNavigate(string targetScene, float delay)
     {
-        // Capture the scene we were in when the wait began. If the user
-        // navigates away during the delay (e.g. taps a book → enters _Story),
-        // we must NOT yank them back to targetScene when the timer fires.
-        //
-        // Pre-Step-3 this couldn't happen — Globals.Start ran when its
-        // scene-resident host scene loaded, so the wait/navigate ran inside
-        // that scene's lifetime. Post-Step-3, Globals.Start runs at app
-        // launch (BeforeSceneLoad via Bootstrap), so the coroutine outlives
-        // multiple scene loads and the user is the one driving navigation.
-        string sceneAtStart = SceneManager.GetActiveScene().name;
         yield return new WaitForSeconds(delay);
-        if (SceneManager.GetActiveScene().name != sceneAtStart) yield break;
+        // Auto-advance only from the launch/loading screen. Since Globals boots
+        // at app launch (BeforeSceneLoad via Bootstrap) and outlives every
+        // scene, this positive check is what keeps the timer from yanking the
+        // user out of _Story (debug start) or anywhere else they happen to be.
+        if (SceneManager.GetActiveScene().name != loadingSceneName) yield break;
         LoadTargetScene();
     }
     
+    // Cancel any queued startup catalog-load navigation. Called when the user
+    // opens a book: a late CSV download must not yank the reader out of _Story
+    // back to targetScene (the Library). Clearing targetScene also disarms the
+    // PreLoadBooks early-return branch and download callback, which both gate
+    // on a non-empty targetScene.
+    public void CancelPendingNavigation()
+    {
+        if (waitAndNavigateCoroutine != null)
+        {
+            StopCoroutine(waitAndNavigateCoroutine);
+            waitAndNavigateCoroutine = null;
+        }
+        targetScene = "";
+    }
+
     public void LoadTargetScene()
     {
         if (SceneManager.GetActiveScene().name == targetScene)
@@ -442,6 +495,10 @@ public class Globals : MonoBehaviour
     {
         g_scriptName = prBook.bookFullUrl;
         g_prbook = prBook;
+        // Opening a book cancels any pending startup catalog-load navigation so
+        // a late CSV download can't yank the reader back to the Library.
+        if (Instance != null)
+            Instance.CancelPendingNavigation();
         // Tablet/phone branches are currently identical; kept as a branch in
         // case we re-introduce a form-factor-specific Story scene.
         if (IsTablet())
@@ -550,34 +607,21 @@ public class Globals : MonoBehaviour
             request.timeout = 20;  // CSV is startup-critical; fail fast so the
                                    // retry button surfaces instead of hanging.
             yield return request.SendWebRequest();
+            // Clear the downloading flag before configuring the button so the
+            // shared ConfigureLoadingButton() resolves to the settled state
+            // (catalog ready → "Enter Library", or failed → retry).
+            IsDownloading = false;
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {
                 Debug.Log(request.error);
-
-                // On error, enable the retry button and change the text
-                if (buttonLoadingRetryContinue != null)
-                {
-                    SetButtonText("Connect to the Internet and Retry");  // Call SetButtonText to update message
-                    buttonLoadingRetryContinue.interactable = true;  // Enable interaction
-                    buttonLoadingRetryContinue.onClick.RemoveAllListeners();  // Clear previous listeners
-                    buttonLoadingRetryContinue.onClick.AddListener(RetryDownload);  // Add listener for retry
-                }
+                ConfigureLoadingButton();  // catalog still null → shows retry
             }
             else
             {
                 onComplete(request.downloadHandler.text);
-
-                // On success, change the button text to "Continue" and enable interaction
-                if (buttonLoadingRetryContinue != null)
-                {
-                    SetButtonText("Continue");  // Call SetButtonText to update message
-                    buttonLoadingRetryContinue.interactable = true;  // Enable interaction
-                    buttonLoadingRetryContinue.onClick.RemoveAllListeners();  // Clear previous listeners
-                    buttonLoadingRetryContinue.onClick.AddListener(LoadTargetScene);  // Add listener to load the target scene
-                }
+                ConfigureLoadingButton();  // catalog now loaded → "Enter Library"
             }
         }
-        IsDownloading = false;
     }
 
     // Helper method to set button text, supporting both legacy Text and TextMeshProUGUI

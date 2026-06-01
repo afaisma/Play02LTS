@@ -46,6 +46,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   csvUrl: http://localhost:8080/api/files/download/stories/stories.csv
   convinienceLocal: http://localhost:8080/api/files/download/stories/stories.csv
-  convinienceAWS: http://localhost:8080/api/files/download/stories/stories.csv
+  convinienceAWS: https://d1lgnf093kp9w0.cloudfront.net/uploads/stories_02/stories.csv
   targetScene: _Library
   minTimeInScene: 5
+  loadingSceneName: _Message
