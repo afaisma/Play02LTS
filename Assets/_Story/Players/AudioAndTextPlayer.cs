@@ -427,7 +427,11 @@ public class AudioAndTextPlayer : MonoBehaviour
             }
 
             // 3) Add to cache
-            AddToCache(audioURL, audioAndTextStruct);
+            // Skip caching only on a real audio-fetch failure (non-empty URL but no
+            // clip) so the download is retried on the next visit instead of being
+            // negatively cached. The empty-audioURL static-text case still caches.
+            if (string.IsNullOrEmpty(audioURL) || audioAndTextStruct.audioClip != null)
+                AddToCache(audioURL, audioAndTextStruct);
         }
 
         // 4) Apply Timings & Audio
@@ -477,6 +481,16 @@ public class AudioAndTextPlayer : MonoBehaviour
                 {
                     audioSource.clip = originalClip;
                 }
+            }
+            else if (!string.IsNullOrEmpty(audioURL))
+            {
+                // Audio fetch failed for this page: clear any stale clip so we play
+                // silence instead of replaying the previous page's narration.
+                if (audioSource.clip != null && audioSource.clip.name.StartsWith("Fragment_"))
+                {
+                    Destroy(audioSource.clip);
+                }
+                audioSource.clip = null;
             }
         }
 

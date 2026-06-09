@@ -147,7 +147,9 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void SetFilter(string filter)
     {
         Debug.Log("SetFilter: " + filter);
-        currentCategory = bookCategories.FindIndex(c => c.Settings == filter);
+        int idx = bookCategories.FindIndex(c => c.Settings == filter);
+        if (idx >= 0)
+            currentCategory = idx;
 
         filterContainer?._SetFilter(filter);
         txtTitle.text = PRUtils.CapitalizeFirstLetter(filter);

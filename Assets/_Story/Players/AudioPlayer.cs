@@ -84,7 +84,7 @@ public class AudioPlayer : MonoBehaviour
 
     /// <summary>Pick the AudioType matching the URL extension. Defaults to
     /// MPEG, which covers our chunk audio and most existing AddAudio assets.</summary>
-    private static AudioType GuessAudioTypeFromUrl(string url)
+    public static AudioType GuessAudioTypeFromUrl(string url)
     {
         if (string.IsNullOrEmpty(url)) return AudioType.MPEG;
         // Strip query string before extension lookup.
@@ -118,6 +118,13 @@ public class AudioPlayer : MonoBehaviour
         {
             // Time range: produce a subclip and play it monophonically.
             // (This is the historical chunk-audio path.)
+            // Free the previous subclip (if any) before assigning a new one.
+            // MakeSubclip names subclips "<name>_Subclip"; AddAudio'd originals
+            // don't carry that suffix, so they're never destroyed here.
+            if (audioSource.clip != null && audioSource.clip.name.EndsWith("_Subclip"))
+            {
+                Destroy(audioSource.clip);
+            }
             audioSource.clip = AudioClipUtilities.MakeSubclip(audioClipStruct.audioClip, dFrom, dTo);
             audioSource.Play();
         }

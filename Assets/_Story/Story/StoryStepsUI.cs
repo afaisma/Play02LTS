@@ -46,6 +46,7 @@ public class StoryStepsUI : MonoBehaviour
     [Command]
     public void CleanupStorySteps()
     {
+        _alStoryPlates.Clear();
         StoryStepUI[] instances = FindObjectsOfType<StoryStepUI>();
         foreach (StoryStepUI instance in instances)
             Destroy(instance.gameObject);

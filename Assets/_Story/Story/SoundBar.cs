@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Networking;
 using System.Collections.Specialized;
 
 class AudioStruct
@@ -37,18 +38,19 @@ public class SoundBar : MonoBehaviour
         {
             acudioStruct = new AudioStruct();
             acudioStruct.audioURL = audioURL;
-            using (var www = new WWW(audioURL))
+            // Migrated from deprecated `new WWW(url)` to UnityWebRequestMultimedia
+            // so we can set a timeout — `WWW` cannot, so a hung request would stall
+            // the sound bar indefinitely. AudioType is inferred from the URL because
+            // gallery sounds may be .wav / .mp3.
+            AudioType type = AudioPlayer.GuessAudioTypeFromUrl(audioURL);
+            using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(audioURL, type))
             {
-                yield return www;
+                www.timeout = 60;
+                yield return www.SendWebRequest();
 
-                if (www.error == null)
+                if (www.result == UnityWebRequest.Result.Success)
                 {
-                    AudioClipStruct audioClipStruct = new AudioClipStruct
-                    {
-                        audioClip = www.GetAudioClip()
-                    };
-                    acudioStruct.audioClip = audioClipStruct.audioClip;
-                    //audioSource.clip = audioClipStruct.audioClip;
+                    acudioStruct.audioClip = DownloadHandlerAudioClip.GetContent(www);
                 }
                 else
                 {
@@ -56,7 +58,10 @@ public class SoundBar : MonoBehaviour
                 }
             }
 
-            AddToCache(audioURL, acudioStruct);
+            // Skip negative caching: a failed download leaves audioClip null, so
+            // don't cache it — a later tap retries instead of staying silent.
+            if (acudioStruct.audioClip != null)
+                AddToCache(audioURL, acudioStruct);
         }
 
         audioSource.clip = acudioStruct.audioClip;
