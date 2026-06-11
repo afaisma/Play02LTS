@@ -7,6 +7,7 @@ using System.Collections;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using TMPro; // Include TextMeshPro
+using SimpleJSON;
 
 public class Globals : MonoBehaviour
 {
@@ -311,7 +312,7 @@ public class Globals : MonoBehaviour
 
         StartDownloadCSV(csvUrl, (csv) =>
         {
-            List<PRBook> prbooks = ParseCSV(csv);
+            List<PRBook> prbooks = ParseCatalog(csvUrl, csv);
             g_listPRBooks = prbooks;
 
             if (!string.IsNullOrEmpty(targetScene) && (g_listPRBooks != null))
@@ -591,6 +592,123 @@ public class Globals : MonoBehaviour
         }
 
         return parsedPRBooks;
+    }
+
+    // Dispatch a downloaded catalog to the right parser by URL extension: stories.json
+    // → ParseJSON, anything else (stories.csv) → ParseCSV. Kept as the single dispatch
+    // point so the prefab-URL rollback to stories.csv needs no code change.
+    public static List<PRBook> ParseCatalog(string url, string content)
+    {
+        if (url != null && url.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            return ParseJSON(content);
+        return ParseCSV(content);
+    }
+
+    // Highest catalog schema_version this build knows how to map. A newer catalog is
+    // logged (not rejected) and parsed with the current field mapping — unknown fields
+    // are ignored everywhere, which is what keeps the NEXT schema change painless.
+    private const int KnownSchemaVersion = 1;
+
+    // Parse the generated stories.json catalog into the same List<PRBook> ParseCSV
+    // produces, so the library UI, filters and PlayerPrefs progress keys need zero
+    // changes. Uses the vendored SimpleJSON (already used by AudioAndTextPlayer) rather
+    // than JsonUtility, which can't handle a top-level object wrapping an array of
+    // objects with optional fields. ParseCSV stays the rollback path and is untouched.
+    public static List<PRBook> ParseJSON(string json)
+    {
+        List<PRBook> parsedPRBooks = new List<PRBook>();
+
+        JSONNode root = JSON.Parse(json);
+        if (root == null || !root.IsObject)
+        {
+            Debug.LogWarning("ParseJSON: catalog JSON did not parse to an object; returning empty catalog.");
+            return parsedPRBooks;
+        }
+
+        // Tolerate (don't reject) a catalog newer than this build understands.
+        int schemaVersion = root["schema_version"].AsInt;
+        if (schemaVersion > KnownSchemaVersion)
+        {
+            Debug.LogWarning($"ParseJSON: catalog schema_version {schemaVersion} is newer than known " +
+                             $"version {KnownSchemaVersion}; parsing with current mapping and ignoring unknown fields.");
+        }
+
+        JSONNode booksNode = root["books"];
+        int counter = 0;
+        int badBookCount = 0;
+        for (int i = 0; i < booksNode.Count; i++)
+        {
+            JSONNode b = booksNode[i];
+
+            // Per-book isolation, mirroring ParseCSV's C2 row isolation: one malformed
+            // book entry is logged and skipped, the rest of the catalog still loads.
+            // counter (book.number) only advances on a successful parse, so numbering
+            // stays contiguous regardless of how many entries were skipped.
+            try
+            {
+                // bookUrl = the "script" string VERBATIM. It keys PlayerPrefs progress
+                // ({bookUrl}_page / {bookUrl}_done); any drift silently resets a child's
+                // progress for that book — the critical invariant of this migration.
+                string scriptUrl = b["script"].Value;
+
+                PRBook book = new PRBook
+                {
+                    bookName = b["name"].Value,
+                    bookAuthor = b["author"].Value,
+                    bookImageUrl = b["cover"].Value,
+                    bookUrl = scriptUrl,
+                    ageFrom = b["age_from"].AsInt,
+                    ageTo = b["age_to"].AsInt,
+                    // genres array → legacy " : " joined string, so Filter.Conforms and
+                    // the library UI keep working unchanged.
+                    genre = JoinGenres(b["genres"]),
+                    notesForParents = b["notes_for_parents"].Value,
+                    id = b["id"].Value,
+                    // Missing optional fields resolve to "" via SimpleJSON's lazy node,
+                    // matching the CSV path's defaults.
+                    bookStoreUrlPrinted = b["store_url_printed"].Value,
+                    bookStoreUrlKindle = b["store_url_kindle"].Value,
+                    number = counter++,
+                    currentPage = Prefs_Get_Book_Page(scriptUrl),
+                    book_done = Prefs_Get_Book_Done(scriptUrl)
+                    // Unknown / not-yet-consumed fields (content_rev, level, read_to_me)
+                    // are parsed-and-ignored for now.
+                };
+                book.bookFullUrl = book.bookUrl;
+                if (book.bookFullUrl.StartsWith("http") == false)
+                {
+                    book.bookFullUrl = baseURL + book.bookFullUrl;
+                }
+
+                parsedPRBooks.Add(book);
+            }
+            catch (Exception ex)
+            {
+                badBookCount++;
+                Debug.LogWarning($"ParseJSON: skipping malformed book entry #{counter + badBookCount} " +
+                                 $"({ex.GetType().Name}: {ex.Message}).");
+            }
+        }
+
+        if (badBookCount > 0)
+        {
+            Debug.LogWarning($"ParseJSON: loaded {parsedPRBooks.Count} books, skipped {badBookCount} malformed entry(ies).");
+        }
+
+        return parsedPRBooks;
+    }
+
+    // Join a JSON genres array into the legacy " : " separated string PRBook.genre holds.
+    // A missing/non-array node (optional field absent) yields "", matching the CSV default.
+    private static string JoinGenres(JSONNode genresNode)
+    {
+        if (genresNode == null || !genresNode.IsArray)
+            return "";
+
+        List<string> genres = new List<string>();
+        foreach (JSONNode g in genresNode.Children)
+            genres.Add(g.Value);
+        return string.Join(" : ", genres);
     }
 
     public void StartDownloadCSV(string url, Action<string> onComplete)
