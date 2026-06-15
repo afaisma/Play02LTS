@@ -102,6 +102,7 @@ public class FXRuntime : MonoBehaviour
 
             float d = fx.duration;
             var seq = DOTween.Sequence();
+            seq.SetLink(img.gameObject); // auto-kill if the sparkle GO is torn down mid-flight
             seq.Append(rt.DOAnchorPos(dest, d).SetEase(Ease.OutCubic));
             seq.Join(rt.DOScale(Vector3.one * fx.scale, d * 0.35f).SetEase(Ease.OutBack));
             seq.Insert(d * 0.45f, rt.DOScale(Vector3.zero, d * 0.55f).SetEase(Ease.InCubic));
@@ -137,10 +138,13 @@ public class FXRuntime : MonoBehaviour
         if (fx.loop)
         {
             float p = Mathf.Max(0.3f, fx.duration);
+            // SetLink ties the endless tween's lifetime to the decoration GO, so it
+            // auto-kills when the tile is destroyed on scene unload — without this,
+            // DOTween's safe mode logs "target destroyed" warnings every reload.
             rt.DOScale(Vector3.one * 1.35f, p * 0.5f)
-              .SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo).SetUpdate(true);
+              .SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo).SetUpdate(true).SetLink(go);
             img.DOFade(0.45f, p * 0.5f)
-              .SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo).SetUpdate(true);
+              .SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo).SetUpdate(true).SetLink(go);
         }
 
         return new FXHandle { go = go };

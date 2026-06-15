@@ -1,6 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
-using ReadingBuddy.UI;   // PuzzleImage (from Assembly-CSharp, one-way reference)
+using ReadingBuddy.UI;   // PuzzleImage namespace
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
