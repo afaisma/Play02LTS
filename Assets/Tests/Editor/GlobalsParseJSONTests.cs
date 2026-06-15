@@ -346,5 +346,31 @@ namespace ReadingBuddy.Tests
                 Assert.AreEqual("", fromCsv[i].phonicsFocus, $"csv phonicsFocus at {i}");
             }
         }
+
+        // --- Navigation-tile field: action mapping (nav-tiles feature) ---
+
+        [Test]
+        public void Action_WhenPresent_IsMapped()
+        {
+            // A nav tile carries an action (a Nav address) and no script.
+            string json = @"{ ""schema_version"": 1, ""books"": [
+              { ""name"": ""Level 1"", ""cover"": ""nav/level1.jpg"", ""id"": ""nav_level1"",
+                ""action"": ""library?filter=level1"" } ] }";
+
+            List<PRBook> books = Globals.ParseJSON(json);
+
+            Assert.AreEqual(1, books.Count);
+            Assert.AreEqual("library?filter=level1", books[0].action);
+        }
+
+        [Test]
+        public void Action_WhenAbsent_DefaultsToEmptyString()
+        {
+            // Realistic fixture's books are normal books — no action → "" (a normal book).
+            List<PRBook> books = Globals.ParseJSON(CatalogJson);
+
+            foreach (PRBook b in books)
+                Assert.AreEqual("", b.action, $"action should default to \"\" for {b.bookName}");
+        }
     }
 }

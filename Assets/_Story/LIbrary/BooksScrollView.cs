@@ -41,6 +41,10 @@ public class Filter
 
     public bool Conforms(PRBook prBook)
     {
+        // Navigation tiles (entries with an action) show only on the home "All Books" view.
+        if (!string.IsNullOrEmpty(prBook.action))
+            return level == 0 && (string.IsNullOrEmpty(genre) || genre == "everything");
+
         if (level > 0)
             return prBook.level == level;
 

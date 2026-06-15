@@ -65,7 +65,14 @@ public class BookViewItem : MonoBehaviour, IPointerClickHandler
         // dereferences prBook.bookFullUrl immediately and would NRE on null.
         // BookstoreViewItem.OnPointerClick already has this guard.
         if (prBook != null)
-            Globals.GotoPrBook(prBook);
+        {
+            // A navigation tile (non-empty action) runs a Nav address instead of
+            // opening a story; a normal book (action "") opens as before.
+            if (!string.IsNullOrEmpty(prBook.action))
+                Nav.Go(prBook.action);
+            else
+                Globals.GotoPrBook(prBook);
+        }
     }
     
 }

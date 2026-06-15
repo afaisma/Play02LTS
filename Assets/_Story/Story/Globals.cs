@@ -672,6 +672,9 @@ public class Globals : MonoBehaviour
                     // matching the CSV path where these columns don't exist.
                     level = b["level"].AsInt,
                     phonicsFocus = b["phonics_focus"].Value,
+                    // Non-empty action = a navigation tile (Nav address), not a book.
+                    // Missing key → "" (SimpleJSON default) → normal book.
+                    action = b["action"].Value,
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(scriptUrl),
                     book_done = Prefs_Get_Book_Done(scriptUrl)

@@ -106,5 +106,52 @@ namespace ReadingBuddy.Tests
             Assert.IsTrue(filter.Conforms(Book("rhymebooks : family")));
             Assert.IsFalse(filter.Conforms(Book("math")));
         }
+
+        // ---- Navigation tiles (action set) show only on the home "All Books" view ----
+
+        private static PRBook NavTile(string action)
+        {
+            // A nav tile is a catalog entry with an action and (typically) no genre.
+            return new PRBook { genre = "", action = action };
+        }
+
+        [Test]
+        public void NavTile_ConformsOnHomeView_EmptyGenreAndLevelZero()
+        {
+            var filter = new Filter(); // genre "", level 0 — the home view
+            Assert.IsTrue(filter.Conforms(NavTile("library?filter=level1")));
+        }
+
+        [Test]
+        public void NavTile_ConformsOnEverythingView()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "everything");
+            Assert.IsTrue(filter.Conforms(NavTile("library?filter=level1")));
+        }
+
+        [Test]
+        public void NavTile_DoesNotConformUnderLevelFilter()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "level1");
+            Assert.IsFalse(filter.Conforms(NavTile("library?filter=level1")));
+        }
+
+        [Test]
+        public void NavTile_DoesNotConformUnderGenreFilter()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "science");
+            Assert.IsFalse(filter.Conforms(NavTile("library?filter=level1")));
+        }
+
+        [Test]
+        public void NormalBook_Unaffected_ByNavTileRule()
+        {
+            // A normal book (action "") still matches the home view as before — no regression.
+            var filter = new Filter();
+            Assert.IsTrue(filter.Conforms(Book("math")));
+        }
     }
 }
