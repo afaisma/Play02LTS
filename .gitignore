@@ -108,3 +108,18 @@ mono_crash.*.json
 *\ 2.meta
 *\ 2.unity
 *\ 2.prefab
+
+/Assets/Recognissimo/
+/Assets/Recognissimo.meta
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta
+
+/Assets/Recognissimo/
+/Assets/Recognissimo.meta
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta
+
+/Assets/Recognissimo/
+/Assets/Recognissimo.meta
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta
