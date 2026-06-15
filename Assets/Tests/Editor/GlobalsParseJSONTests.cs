@@ -298,5 +298,53 @@ namespace ReadingBuddy.Tests
 
             Assert.AreEqual(3, books.Count);
         }
+
+        // --- Learn-to-read ladder fields: level / phonics_focus mapping (v1 feature) ---
+
+        [Test]
+        public void Level_WhenPresent_IsMapped()
+        {
+            string json = @"{ ""schema_version"": 1, ""books"": [
+              { ""name"": ""The Sun Is Up"", ""author"": ""A"", ""cover"": ""c.jpg"", ""script"": ""good/script.txt"",
+                ""age_from"": 3, ""age_to"": 6, ""genres"": [ ""learn to read"" ], ""notes_for_parents"": ""n"", ""id"": ""1"",
+                ""level"": 2, ""phonics_focus"": ""the oa sound"" } ] }";
+
+            List<PRBook> books = Globals.ParseJSON(json);
+
+            Assert.AreEqual(1, books.Count);
+            Assert.AreEqual(2, books[0].level);
+            Assert.AreEqual("the oa sound", books[0].phonicsFocus);
+        }
+
+        [Test]
+        public void Level_WhenAbsent_DefaultsToZeroAndEmptyPhonics()
+        {
+            // The realistic fixture's three books carry no level/phonics_focus — they must
+            // default exactly like the CSV path (0 / "").
+            List<PRBook> books = Globals.ParseJSON(CatalogJson);
+
+            foreach (PRBook b in books)
+            {
+                Assert.AreEqual(0, b.level, $"level should default to 0 for {b.bookName}");
+                Assert.AreEqual("", b.phonicsFocus, $"phonicsFocus should default to \"\" for {b.bookName}");
+            }
+        }
+
+        [Test]
+        public void Csv_AndJson_BothDefaultLevelAndPhonics_ForBooksWithoutThem()
+        {
+            // Equivalence-partner books (no level data on either path) stay identical:
+            // CSV never carries these columns, JSON omits them here → both default.
+            List<PRBook> fromJson = Globals.ParseJSON(CatalogJson);
+            List<PRBook> fromCsv = Globals.ParseCSV(CatalogCsv);
+
+            for (int i = 0; i < fromJson.Count; i++)
+            {
+                Assert.AreEqual(fromCsv[i].level, fromJson[i].level, $"level at {i}");
+                Assert.AreEqual(fromCsv[i].phonicsFocus, fromJson[i].phonicsFocus, $"phonicsFocus at {i}");
+                Assert.AreEqual(0, fromCsv[i].level, $"csv level at {i}");
+                Assert.AreEqual("", fromCsv[i].phonicsFocus, $"csv phonicsFocus at {i}");
+            }
+        }
     }
 }

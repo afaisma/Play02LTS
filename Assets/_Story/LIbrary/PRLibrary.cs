@@ -35,7 +35,8 @@ public class PRLibrary : MonoBehaviour
         ("_Library", "sound & speech"),
         ("_Library", "math"),
         ("_Library", "nature"),
-        ("_Library", "manners")
+        ("_Library", "manners"),
+        ("_Library", "learn to read")
         // ,
         // ("_Map", "")
     };
@@ -55,7 +56,14 @@ public class PRLibrary : MonoBehaviour
         Debug.Log("PRLibrary Start, currentCategory: " + currentCategory);
         
         LoadBooks(this);
-        GotoCategory();
+        // Only re-apply the remembered category when entering with no explicit
+        // filter. An incoming non-"everything" filter (e.g. a "levelN" token from
+        // Nav) is applied by LoadBooksWithRetry's SetFilter(g_libraryFilter); calling
+        // GotoCategory() here would clobber it back to the stale currentCategory
+        // (which only tracks bookCategories entries, not level tokens) — that's the
+        // "shows All Books" bug.
+        if (Globals.g_libraryFilter == "everything")
+            GotoCategory();
         booksScrollView.ResetScrollPosition();
     }
 
@@ -218,6 +226,15 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
             imgBackground.sprite = Resources.Load<Sprite>("Library/manners_background");
             txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
         }
+        else if (filter == "learn to read")
+        {
+            txtTitle.text = "Learn to Read";
+            // Use the dedicated background if the art has shipped, else fall back to the
+            // default Library background (asset can come later; do not block on art).
+            Sprite bg = Resources.Load<Sprite>("Library/learn_to_read_background");
+            imgBackground.sprite = bg != null ? bg : Resources.Load<Sprite>("Library/Library_background");
+            txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
+        }
         else
         {
             Debug.Log("filter unknown: " + filter);
@@ -274,6 +291,8 @@ public class PRBook
     public string notesForParents;
     public string bookFullUrl;
     public string id;
+    public int level;                 // 0 = not a learn-to-read ladder book (CSV path leaves 0)
+    public string phonicsFocus = "";  // "" default; CSV path never sets it, so initialize here
     public int number;
     public int book_done;
     public int currentPage;

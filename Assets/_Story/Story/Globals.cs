@@ -668,10 +668,14 @@ public class Globals : MonoBehaviour
                     // matching the CSV path's defaults.
                     bookStoreUrlPrinted = b["store_url_printed"].Value,
                     bookStoreUrlKindle = b["store_url_kindle"].Value,
+                    // Learn-to-read ladder fields. Missing → 0 / "" (SimpleJSON defaults),
+                    // matching the CSV path where these columns don't exist.
+                    level = b["level"].AsInt,
+                    phonicsFocus = b["phonics_focus"].Value,
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(scriptUrl),
                     book_done = Prefs_Get_Book_Done(scriptUrl)
-                    // Unknown / not-yet-consumed fields (content_rev, level, read_to_me)
+                    // Unknown / not-yet-consumed fields (content_rev, read_to_me)
                     // are parsed-and-ignored for now.
                 };
                 book.bookFullUrl = book.bookUrl;

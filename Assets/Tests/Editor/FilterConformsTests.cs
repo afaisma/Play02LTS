@@ -63,5 +63,48 @@ namespace ReadingBuddy.Tests
             var filter = new Filter();
             Assert.IsTrue(filter.Conforms(Book("anything", ageFrom: 4, ageTo: 9)));
         }
+
+        // ---- "levelN" addressable filter ----
+
+        private static PRBook LevelBook(int level)
+        {
+            return new PRBook { genre = "", level = level };
+        }
+
+        [Test]
+        public void LevelFilter_MatchesBookOfSameLevel()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "level1");
+            Assert.IsTrue(filter.Conforms(LevelBook(1)));
+        }
+
+        [Test]
+        public void LevelFilter_DoesNotMatchDifferentLevel()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "level1");
+            Assert.IsFalse(filter.Conforms(LevelBook(2)));
+        }
+
+        [Test]
+        public void LevelFilter_IsCaseInsensitive()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "LEVEL3");
+            Assert.IsTrue(filter.Conforms(LevelBook(3)));
+            Assert.IsFalse(filter.Conforms(LevelBook(1)));
+        }
+
+        [Test]
+        public void GenreFilter_StillConforms_NoRegressionFromLevel()
+        {
+            // A real genre token is not a level token: level stays 0, genre logic unchanged.
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "family");
+            Assert.AreEqual(0, filter.level);
+            Assert.IsTrue(filter.Conforms(Book("rhymebooks : family")));
+            Assert.IsFalse(filter.Conforms(Book("math")));
+        }
     }
 }

@@ -59,6 +59,15 @@ public class FilterContainer : MonoBehaviour
         {
             booksScrollView.SetFilter(0, 0, currentFilter);
         }
+        else if (System.Text.RegularExpressions.Regex.IsMatch(
+                     currentFilter ?? "", @"^level[1-4]$",
+                     System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            // "levelN" tokens aren't in bookCategories, so route them through the
+            // same SetFilter passthrough genres use. Filter.SetFilter/Conforms
+            // interpret the token and apply the level match.
+            booksScrollView.SetFilter(0, 0, currentFilter);
+        }
         else if (currentFilter == "2-3 years")
         {
             booksScrollView.SetFilter(2, 3, "");

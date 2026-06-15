@@ -12,19 +12,41 @@ public class Filter
     public int ageFrom = 0;
     public int ageTo = 0;
     public String genre = "";
+    // 0 = no level filter; 1-4 = "learn to read" ladder level. Set when the
+    // filter token is "level1".."level4" (see SetFilter), so a string address
+    // like "library?filter=level1" becomes a level match without disturbing
+    // the existing genre/age logic.
+    public int level = 0;
 
     public void SetFilter(int ageFrom, int ageTo, String genre)
     {
         this.ageFrom = ageFrom;
         this.ageTo = ageTo;
-        this.genre = genre;
+        // "levelN" (case-insensitive) is a level filter, not a genre — strip it
+        // out of the genre substring test and record the level instead.
+        this.level = ParseLevelToken(genre);
+        this.genre = this.level > 0 ? "" : genre;
     }
-    
+
+    // Returns N for a "levelN" (N = 1..4, case-insensitive) token, else 0.
+    private static int ParseLevelToken(String token)
+    {
+        if (token == null)
+            return 0;
+        var match = System.Text.RegularExpressions.Regex.Match(
+            token.Trim(), @"^level([1-4])$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+    }
+
     public bool Conforms(PRBook prBook)
     {
+        if (level > 0)
+            return prBook.level == level;
+
         if (genre == "everything")
             return true;
-        
+
         if (genre != "")
             if (prBook.genre.ToLower().Contains(genre.ToLower()))
                 return true;
@@ -135,8 +157,22 @@ public class BooksScrollView : MonoBehaviour
             return;
         
         ClearScrollView();
-        
-        foreach (PRBook prBook in prBooks)
+
+        // The learn-to-read shelf reads as a ladder, so order it by (level, number).
+        // Every other filter iterates the catalog list unchanged (byte-identical order).
+        IEnumerable<PRBook> ordered = prBooks;
+        if (filter != null && (filter.genre == "learn to read" || filter.level > 0))
+        {
+            List<PRBook> sorted = new List<PRBook>(prBooks);
+            sorted.Sort((a, b) =>
+            {
+                int byLevel = a.level.CompareTo(b.level);
+                return byLevel != 0 ? byLevel : a.number.CompareTo(b.number);
+            });
+            ordered = sorted;
+        }
+
+        foreach (PRBook prBook in ordered)
         {
             if (this.filter != null && !filter.Conforms(prBook))
                 continue;

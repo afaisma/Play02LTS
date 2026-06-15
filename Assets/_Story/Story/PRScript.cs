@@ -811,6 +811,13 @@ public class PRScript : MonoBehaviour
             _puzzleEnabledCurrentPage = context.GetVar("enable").IntValue() != 0;
             return new Intrinsic.Result(ValNumber.one);
         };
+        f = Intrinsic.Create("OpenAddress");
+        f.AddParam("address", "");
+        f.code = (context, partialResult) =>
+        {
+            Nav.Go(context.GetVar("address").ToString());
+            return new Intrinsic.Result(ValNumber.one);
+        };
         ConfigOutput();
     }
 
