@@ -294,6 +294,7 @@ public class PRBook
     public int level;                 // 0 = not a learn-to-read ladder book (CSV path leaves 0)
     public string phonicsFocus = "";  // "" default; CSV path never sets it, so initialize here
     public string action = "";        // non-empty = navigation tile (Nav address), not a book; CSV path never sets it
+    public string contentRev = "";    // catalog content hash; folded into media URLs as ?v= to bust stale caches. CSV path never sets it
     public int number;
     public int book_done;
     public int currentPage;

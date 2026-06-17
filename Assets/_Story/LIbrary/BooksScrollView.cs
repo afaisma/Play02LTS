@@ -111,6 +111,9 @@ public class BooksScrollView : MonoBehaviour
         {
             bookViewItem.prBook = prBook;
             string imageBookUrl = Globals.baseURL + prBook.bookImageUrl;
+            // Cache-bust the cover by this book's content_rev (in the Library g_prbook is
+            // null, so DownloadImage's wrap is a no-op — the item knows its own book here).
+            imageBookUrl = Globals.WithContentRev(imageBookUrl, prBook.contentRev);
             EnqueueCoverDownload(imageBookUrl, bookViewItem.imageBook);
             bookViewItem.SetBookProperties(prBook);
             prBook.bookViewItem = bookViewItem;

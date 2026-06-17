@@ -530,6 +530,16 @@ public class Globals : MonoBehaviour
         Navigation.GoToLibrary();
     }
 
+    // Appends ?v=<rev> for cache-busting. Idempotent and safe: no-op when rev is empty,
+    // when url isn't http(s), or when the url already carries a query string.
+    public static string WithContentRev(string url, string rev)
+    {
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(rev)) return url;
+        if (!url.StartsWith("http", System.StringComparison.OrdinalIgnoreCase)) return url;
+        if (url.Contains("?")) return url;            // already busted / has query → leave it
+        return url + "?v=" + rev;
+    }
+
     public static List<PRBook> ParseCSV(string csv)
     {
         List<PRBook> parsedPRBooks = new List<PRBook>();
@@ -675,11 +685,13 @@ public class Globals : MonoBehaviour
                     // Non-empty action = a navigation tile (Nav address), not a book.
                     // Missing key → "" (SimpleJSON default) → normal book.
                     action = b["action"].Value,
+                    // Catalog content hash, folded into media URLs (?v=) to bust stale
+                    // image/audio/timings caches when a book is re-rendered. Missing → "".
+                    contentRev = b["content_rev"].Value,
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(scriptUrl),
                     book_done = Prefs_Get_Book_Done(scriptUrl)
-                    // Unknown / not-yet-consumed fields (content_rev, read_to_me)
-                    // are parsed-and-ignored for now.
+                    // Unknown / not-yet-consumed fields (read_to_me) are parsed-and-ignored for now.
                 };
                 book.bookFullUrl = book.bookUrl;
                 if (book.bookFullUrl.StartsWith("http") == false)

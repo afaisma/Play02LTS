@@ -218,6 +218,11 @@ public class PRUtils
 
     public static IEnumerator DownloadImage(string url, Image image, bool bPreserveAspect = true, bool suppressAlert = false)
     {
+        // Cache-bust story media by the current book's content_rev so a re-rendered book
+        // serves fresh images. No-op when no book is open (e.g. Library, where g_prbook is
+        // null and covers are busted at the call site instead). Idempotent → safe if the
+        // url is already busted.
+        url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
         image.preserveAspect = bPreserveAspect;
         // 1) In-memory cache.
         if (cacheImages.Contains(url))
