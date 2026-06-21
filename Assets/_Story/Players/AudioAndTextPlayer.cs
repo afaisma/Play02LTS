@@ -74,6 +74,10 @@ public class AudioAndTextPlayer : MonoBehaviour
     [SerializeField] private TMP_Text uiForeground;
     [SerializeField] private TMP_Text uiBackground;
 
+    // True while a pre-generated prompt/narration clip is playing. Used by Mode B
+    // (SpeechListenService) to gate the recognizer so the mic never hears the app's own prompt.
+    public bool IsPlaying => audioSource != null && audioSource.isPlaying;
+
     public string hilightTextColor = "FF55FF";
     public string hilightBackColor = "00FF0044";
 
@@ -288,6 +292,20 @@ public class AudioAndTextPlayer : MonoBehaviour
         JSONNode timings = null;
         AudioAndTextStruct audioAndTextStruct = null;
 
+        // Instant text on page entry (esp. slow connections): paint the script-provided
+        // page text immediately from `content`, before the audio/timings download. The real
+        // word-timings replace this list as soon as they're parsed (ParseTimings on cache
+        // hit, or after download), so the highlight upgrade needs no extra code. Resetting
+        // currentWordTimings here also fixes a latent stale-text bug: if the timings fetch
+        // fails, ParseTimings early-returns and the PREVIOUS page's words would otherwise
+        // remain on screen — now the current page's text is always what shows.
+        if (!string.IsNullOrEmpty(content))
+        {
+            currentWordTimings = new List<WordTiming> { new WordTiming { Word = content, Time = 0f } };
+            currentWordIndex = 0;
+            UpdateHighlightedText(0, false); // render plain, unhighlighted, no audio
+        }
+
         // 1) Check Cache
         if (CacheAudioAndTimingsStructs.Contains(audioURL))
         {
@@ -310,7 +328,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             // from the local file via a file:// URL — same code path Unity
             // uses for streaming, just from a local origin. Falls back to
             // network if the disk file is missing or fails to decode.
-            if (!string.IsNullOrEmpty(audioURL))
+            if (!string.IsNullOrEmpty(audioURL) && !ReadAlongActive)
             {
                 string diskAudioPath = DiskCache.PathFor(audioURL, "audio", ".mp3");
                 if (System.IO.File.Exists(diskAudioPath))
@@ -451,6 +469,18 @@ public class AudioAndTextPlayer : MonoBehaviour
                 endTime = audioAndTextStruct.audioClip.length;
 
             ParseTimings(audioAndTextStruct, pageNum);
+
+            // ---- read-along ---- When read-along owns this page, the child reads it aloud: skip
+            // page narration AND the audio-driven highlight loop entirely, then hand off to the
+            // ReadAlongService. Inert when ReadAlongActive is false (mode OFF) → the path below is
+            // byte-identical. (Single guarded block; rest of the read-along code lives in the marked
+            // region at the end of this file.)
+            if (ReadAlongActive)
+            {
+                if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+                OnReadAlongPageParsed();
+                yield break;
+            }
 
             // Set up audio clip
             if (audioAndTextStruct.audioClip != null)
@@ -754,7 +784,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         // Cache + fetch by the FULL book URL so two books (or two revs) can never share a cache
         // entry even though the filename is identical across books (section 2a).
         string suffix = string.IsNullOrEmpty(rev) ? "" : "?v=" + rev;
-        StartCoroutine(LoadWordBankAssets(
+        Runnable.Run(LoadWordBankAssets(
             baseURL + "wordbank.mp3" + suffix,
             baseURL + "wordbank.json" + suffix));
     }
@@ -1107,5 +1137,147 @@ public class AudioAndTextPlayer : MonoBehaviour
     private static bool IsWordBankChar(char c)
     {
         return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '\'';
+    }
+
+    // ====================================================================================
+    // ---- read-along ----
+    // Mode A read-along hooks. The child reads the page aloud; ReadAlongService (the single owner)
+    // runs Recognissimo + the validated matcher and calls SetReadProgress(cursor) to advance the
+    // highlight WITH NO PAGE AUDIO PLAYING. Fully additive + opt-in: every member here is inert
+    // unless ReadAlongActive is set true by the service, and the audio-driven highlight path
+    // (UpdateHighlightedText) is never modified. Rollback = delete this region + the one guarded
+    // block in LoadAudioAndTimings + ReadAlongService + the toggle.
+    // ====================================================================================
+
+    // True only while the read-along service owns the current page. Gates every hook below and the
+    // one guarded branch in LoadAudioAndTimings. False (default) → the app behaves exactly as today.
+    public bool ReadAlongActive { get; set; }
+
+    // Fired (only when ReadAlongActive) once a page's timings are parsed and its words are ready, so
+    // the service can (re)start recognition with this page's grammar. Page audio is NOT played.
+    public event Action<AudioAndTextPlayer> ReadAlongPageReady;
+
+    // The current page's normalized words (reading order) + the map from each word ordinal to its
+    // token index in currentWordTimings (which also holds the space/punctuation tokens). Rebuilt
+    // whenever currentWordTimings is replaced (i.e. per page).
+    private List<string> _expectedWords;
+    private List<int> _expectedWordTokenIndex;
+    private List<int> _expectedSentenceEnd;   // ascending expected-word indices that end a sentence
+    private List<WordTiming> _expectedWordsBuiltFrom;
+    private static readonly char[] ReadAlongSentenceEnders = { '.', '!', '?' };
+
+    private void EnsureExpectedWords()
+    {
+        if (ReferenceEquals(_expectedWordsBuiltFrom, currentWordTimings) && _expectedWords != null)
+            return;
+
+        _expectedWords = new List<string>();
+        _expectedWordTokenIndex = new List<int>();
+        _expectedSentenceEnd = new List<int>();
+        if (currentWordTimings != null)
+        {
+            for (int i = 0; i < currentWordTimings.Count; i++)
+            {
+                string nw = NormalizeWord(currentWordTimings[i].Word);
+                if (nw.Length > 0)
+                {
+                    _expectedWords.Add(nw);
+                    _expectedWordTokenIndex.Add(i);
+                }
+            }
+
+            // An expected word ends a sentence if any raw token from it up to (but not including) the
+            // next expected word contains [.!?] — punctuation may be attached to the word or a
+            // separate token. Derived from the raw token text (the normalized words drop punctuation).
+            for (int k = 0; k < _expectedWordTokenIndex.Count; k++)
+            {
+                int ti = _expectedWordTokenIndex[k];
+                int nextTi = (k + 1 < _expectedWordTokenIndex.Count)
+                    ? _expectedWordTokenIndex[k + 1] : currentWordTimings.Count;
+                for (int t = ti; t < nextTi; t++)
+                {
+                    string w = currentWordTimings[t].Word;
+                    if (!string.IsNullOrEmpty(w) && w.IndexOfAny(ReadAlongSentenceEnders) >= 0)
+                    {
+                        _expectedSentenceEnd.Add(k);
+                        break;
+                    }
+                }
+            }
+        }
+        _expectedWordsBuiltFrom = currentWordTimings;
+    }
+
+    // The current page's normalized words, in reading order. Empty until a page is loaded.
+    public IReadOnlyList<string> ExpectedWords
+    {
+        get { EnsureExpectedWords(); return _expectedWords; }
+    }
+
+    // Ascending expected-word indices immediately followed by sentence-ending punctuation in the raw
+    // page text. Used by ReadAlongService's sentence-tail flush. Empty until a page is loaded.
+    public IReadOnlyList<int> ExpectedSentenceEndIndices
+    {
+        get { EnsureExpectedWords(); return _expectedSentenceEnd; }
+    }
+
+    // Read-along progress: wordIndex = number of words read so far (the matcher cursor). Highlights
+    // the word at that ordinal (clamped) via the SAME rich-text render the audio path uses, but
+    // driven by this index instead of audio time. No-op unless ReadAlongActive; never touches audio.
+    public void SetReadProgress(int wordIndex)
+    {
+        if (!ReadAlongActive) return;
+        EnsureExpectedWords();
+        if (_expectedWordTokenIndex == null || _expectedWordTokenIndex.Count == 0) return;
+
+        int ordinal = Mathf.Clamp(wordIndex, 0, _expectedWordTokenIndex.Count - 1);
+        currentWordIndex = _expectedWordTokenIndex[ordinal];
+        RenderReadAlongHighlight();
+    }
+
+    // Stop any page narration + the audio-driven highlight coroutine so they can't fight the
+    // recognition-driven highlight. Used when read-along is switched on for an already-loaded page.
+    public void StopPageAudioForReadAlong()
+    {
+        if (!ReadAlongActive) return;
+        StopAllCoroutines();
+        if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+    }
+
+    // Index-driven highlight render. Mirrors UpdateHighlightedText's render block (the audio path is
+    // left untouched) but does NO audio-time search, so it renders with no page audio playing.
+    private void RenderReadAlongHighlight()
+    {
+        if (currentWordTimings == null || currentWordTimings.Count == 0) return;
+
+        string newForegroundText = "";
+        string newBackgroundText = "";
+        for (int i = 0; i < currentWordTimings.Count; i++)
+        {
+            // Read-along ALWAYS shows the highlight: drop the showHighlight gate (set by the audio
+            // voice mode) — this method only runs when ReadAlongActive.
+            bool isHighlighted = (i == currentWordIndex && !IsWordPunctuation(i));
+            if (isHighlighted)
+            {
+                newForegroundText += $"<color=#{hilightTextColor}>{currentWordTimings[i].Word}</color>";
+                newBackgroundText += $"<mark=#{hilightBackColor}>{currentWordTimings[i].Word}</mark>";
+            }
+            else
+            {
+                newForegroundText += currentWordTimings[i].Word;
+                newBackgroundText += currentWordTimings[i].Word;
+            }
+        }
+        uiForeground.text = newForegroundText.TrimEnd();
+        uiBackground.text = newBackgroundText.TrimEnd();
+    }
+
+    // Called from the one guarded block in LoadAudioAndTimings (read-along only): render the page
+    // text (highlight reset to the first word) and notify the service its words are ready.
+    private void OnReadAlongPageParsed()
+    {
+        currentWordIndex = 0;
+        RenderReadAlongHighlight();
+        ReadAlongPageReady?.Invoke(this);
     }
 }
