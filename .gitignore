@@ -123,3 +123,8 @@ mono_crash.*.json
 /Assets/Recognissimo.meta
 /Assets/StreamingAssets/
 /Assets/StreamingAssets.meta
+
+# local build artifacts / backups
+/iOS/
+Unity-iPhone */
+_RemovedLanguageModels_backup/

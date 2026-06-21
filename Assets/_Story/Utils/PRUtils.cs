@@ -221,17 +221,57 @@ public class PRUtils
         // Cache-bust story media by the current book's content_rev so a re-rendered book
         // serves fresh images. No-op when no book is open (e.g. Library, where g_prbook is
         // null and covers are busted at the call site instead). Idempotent → safe if the
-        // url is already busted.
+        // url is already busted. LoadImageSprite applies the SAME transform; we apply it
+        // here too so the alert below reports the busted url, exactly as before.
         url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
         image.preserveAspect = bPreserveAspect;
+
+        Sprite sprite = null;
+        string error = null;
+        yield return LoadImageSprite(url, (s, e) => { sprite = s; error = e; });
+
+        // The caller's Image may have been destroyed during the
+        // network wait (typical: user taps a book and the library
+        // unloads while its cover-grid coroutines are still in flight).
+        // Don't assign to a dead Unity object — Unity's overloaded ==
+        // returns true for destroyed components, so this is safe.
+        if (image == null) yield break;
+
+        if (sprite != null)
+        {
+            image.sprite = sprite;
+        }
+        else
+        {
+            // Asset-level failure: page falls back to NoImage placeholder.
+            // suppressAlert is for high-volume callers (e.g. the library
+            // cover-grid load) where one failed thumbnail shouldn't pop a
+            // modal dialog. The NoImage fallback below is sufficient
+            // user-visible feedback in those cases.
+            if (!suppressAlert)
+                AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + error);
+            image.sprite = Resources.Load<Sprite>("NoImage");;
+        }
+    }
+
+    // Shared cache-miss/hit body for image loading, with NO UI target. Applies the
+    // content_rev cache-bust, then resolves the Sprite through the in-memory cache, the
+    // disk cache, and finally the network — warming both caches as a side effect.
+    // DownloadImage and PrefetchImage both route through here so they can never compute a
+    // different cache key for the same url. Reports the Sprite (null on failure) and, on a
+    // network failure, the error text via onResult.
+    private static IEnumerator LoadImageSprite(string url, System.Action<Sprite, string> onResult)
+    {
+        url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
+
         // 1) In-memory cache.
         if (cacheImages.Contains(url))
         {
             Sprite cached = cacheImages[url] as Sprite;
-            image.sprite = cached;
             // C3: move to most-recently-used position so frequent items survive eviction.
             cacheImages.Remove(url);
             cacheImages[url] = cached;
+            onResult(cached, null);
             yield break;
         }
 
@@ -245,8 +285,8 @@ public class PRUtils
             if (tex.LoadImage(diskBytes))
             {
                 Sprite spr = Texture2DToSprite(tex);
-                image.sprite = spr;
                 AddToCacheImages(url, spr);
+                onResult(spr, null);
                 yield break;
             }
             // If the on-disk file is corrupt, fall through to network.
@@ -260,39 +300,44 @@ public class PRUtils
             request.timeout = 30;  // images: tolerate slow connections for ~5 MB
             yield return request.SendWebRequest();
 
-            // The caller's Image may have been destroyed during the
-            // network wait (typical: user taps a book and the library
-            // unloads while its cover-grid coroutines are still in flight).
-            // Don't assign to a dead Unity object — Unity's overloaded ==
-            // returns true for destroyed components, so this is safe.
-            if (image == null) yield break;
-
             if (request.result != UnityWebRequest.Result.Success) //
             {
-                // Asset-level failure: page falls back to NoImage placeholder.
                 Debug.LogWarning($"PRUtils: image download failed — {request.error}  (url={url})");
-                // suppressAlert is for high-volume callers (e.g. the library
-                // cover-grid load) where one failed thumbnail shouldn't pop a
-                // modal dialog. The NoImage fallback below is sufficient
-                // user-visible feedback in those cases.
-                if (!suppressAlert)
-                    AlertDialogManager.Instance.ShowAlertDialog($"Failed to download image {url}: \n" + request.error);
-                image.sprite = Resources.Load<Sprite>("NoImage");;
+                onResult(null, request.error);
             }
             else
             {
                 Texture2D texture = DownloadHandlerTexture.GetContent(request);
                 Sprite imageSprite = Texture2DToSprite(texture);
-                image.sprite = imageSprite;
-
                 AddToCacheImages(url, imageSprite);
                 // Persist the encoded bytes (PNG/JPG) for the next session.
                 DiskCache.WriteBytes(url, "images", ".png",
                     request.downloadHandler.data, DiskCache.MaxImages);
+                onResult(imageSprite, null);
             }
         }
     }
-    
+
+    // Warm the image caches for a url with NO UI target — used to prefetch the next page's
+    // images so a page turn doesn't wait on a cold download. Routes through the same
+    // LoadImageSprite body (and applies the same content_rev cache-bust first), so a
+    // successful prefetch is a guaranteed cache hit when the page later calls DownloadImage.
+    // Completely silent: it assigns the result to nothing, never alerts, and never throws;
+    // a network failure logs at most one line inside LoadImageSprite.
+    public static IEnumerator PrefetchImage(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            yield break;
+
+        // Same transform DownloadImage applies first, so this early-out tests the real key.
+        url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
+        if (cacheImages.Contains(url))
+            yield break;
+
+        // Result is intentionally discarded — the point is the cache-warm side effect.
+        yield return LoadImageSprite(url, (s, e) => { });
+    }
+
     private static void AddToCacheImages(string url, Sprite sprite)
     {
         if (cacheImages.Count >= maxCacheImagesSize)

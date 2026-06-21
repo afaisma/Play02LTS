@@ -20,6 +20,10 @@ public class AudioPlayer : MonoBehaviour
     private List<AudioClipStruct> audioClipStructs;
     public string baseURL;
 
+    // True while a clip is playing on the shared source. Used by Mode B (SpeechListenService) to gate
+    // the recognizer so the mic never hears the app's own audio.
+    public bool IsPlaying => audioSource != null && audioSource.isPlaying;
+
     // Per-clip AudioSources created lazily by LoopAudio. The shared
     // audioSource above only supports PlayOneShot (polyphonic, fire-and-
     // forget — no way to stop an individual one-shot mid-flight), which

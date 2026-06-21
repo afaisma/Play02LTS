@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Miniscript;
@@ -87,6 +88,11 @@ public class PRScript : MonoBehaviour
     public int nCurrentStep = 0;
     private Interpreter _interpreter;
     private List<Scriptlet> _scriptlets;
+    // Next-page image prefetch: the in-flight warm routine (0 = none) and how long to
+    // wait before it starts. Run via Runnable so a page turn's StopAllCoroutines can't
+    // cancel it; cancelled on each page turn if still pending.
+    private int _prefetchRoutineId = 0;
+    private const float PrefetchDelaySec = 1.5f;
     // Keyed by (eventName, target). target is "" for global events (e.g. OnExecuteStep);
     // for per-overlay events the target is the overlay's name (e.g. ("onTap", "octopus")).
     // Populated by parse() from `////////[event NAME [TARGET]]` block headers.
@@ -207,6 +213,8 @@ public class PRScript : MonoBehaviour
     }
     void OnDestroy()
     {
+        SpeechListenService.Instance?.Disarm(); // leaving _Story → drop any Mode B listener
+        if (_prefetchRoutineId != 0) Runnable.Stop(_prefetchRoutineId); // cancel any pending next-page warm
         audioAndTextPlayer.OnAudioFinished.RemoveListener(OnAudioPlaybackFinished);
         _interpreter?.Reset();
         Debug.Log("OnDestroy PRScript");
@@ -311,6 +319,26 @@ public class PRScript : MonoBehaviour
                 PrevStep();
             else
                 GotoStep(label);
+            return new Intrinsic.Result(ValNumber.one);
+        };
+        // ---- Mode B (speech summon) ---- Listen for ONE keyword on this page. Arms the dedicated
+        // SpeechListenService; OnHeard / OnNotUnderstood story events + a silence hint do the rest.
+        // Purely additive: a page that never calls ListenFor never starts the listener.
+        f = Intrinsic.Create("ListenFor");
+        f.AddParam("word", "");
+        f.AddParam("hintAfter", 4);
+        f.code = (context, partialResult) =>
+        {
+            string word = context.GetVar("word").ToString();
+            float hintAfter = context.GetVar("hintAfter").FloatValue();
+            int armStep = nCurrentStep; // re-prompt only if still on this page
+            SpeechListenService.Get().Arm(
+                word, hintAfter,
+                () => RunStoryEvent("OnHeard", word),
+                () => RunStoryEvent("OnNotUnderstood"),
+                () => { if (nCurrentStep == armStep) ExecuteScriptlet(_scriptlets[nCurrentStep].Content); },
+                () => (audioAndTextPlayer != null && audioAndTextPlayer.IsPlaying)
+                   || (audioPlayer != null && audioPlayer.IsPlaying));
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("Speak");
@@ -866,6 +894,43 @@ public class PRScript : MonoBehaviour
         _interpreter.RunUntilDone(10);
     }
 
+    /// <summary>
+    /// Run a global [event NAME] handler (parsed into _mapEvents like OnExecuteStep), if defined.
+    /// Used by Mode B for OnHeard / OnNotUnderstood. Sets nCurrentStep / nSteps (so handlers can
+    /// branch exactly like OnExecuteStep) and, when provided, the MiniScript global `heardWord`.
+    /// </summary>
+    public void RunStoryEvent(string evName, string heardWord = null)
+    {
+        if (_mapEvents == null) return;
+        if (!_mapEvents.TryGetValue((evName, ""), out Scriptlet scriptlet))
+        {
+            Debug.Log($"RunStoryEvent: no [event {evName}] handler defined");
+            return;
+        }
+        SetupInterpreter();
+        _interpreter.Reset(scriptlet.Content);
+        _interpreter.Compile();
+        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep));
+        _interpreter.SetGlobalValue("nSteps",       new ValNumber(this._scriptlets.Count));
+        if (heardWord != null)
+            _interpreter.SetGlobalValue("heardWord", new ValString(heardWord));
+        _interpreter.RunUntilDone(10);
+    }
+
+    /// <summary>
+    /// Read-along (Mode A) finished the current page. If the book defines an [event OnPageRead]
+    /// handler, run it (e.g. reveal a creature) and stay on the page; otherwise preserve the default
+    /// read-along behavior of auto-advancing to the next page. Called by ReadAlongService at lenient
+    /// completion instead of NextStep().
+    /// </summary>
+    public void OnPageReadComplete()
+    {
+        if (_mapEvents != null && _mapEvents.ContainsKey(("OnPageRead", "")))
+            RunStoryEvent("OnPageRead"); // reveal hook — do NOT advance
+        else
+            NextStep();                  // default read-along auto-advance
+    }
+
     public void ExecuteStep(int index)
     {
         if (index < 0 || index >= _scriptlets.Count)
@@ -882,7 +947,68 @@ public class PRScript : MonoBehaviour
                 ExecuteScriptlet(_mapEvents[execKey].Content);
             }
             ExecuteScriptlet(_scriptlets[nCurrentStep].Content);
+
+            // Warm the next page's image caches so a forward page turn doesn't wait on a
+            // cold download. Forward-only, delayed, and cancellable (see PrefetchNextPage)
+            // — purely additive: it only warms the EXISTING caches ahead of time.
+            if (index + 1 < _scriptlets.Count)
+            {
+                if (_prefetchRoutineId != 0) Runnable.Stop(_prefetchRoutineId);
+                _prefetchRoutineId = Runnable.Run(PrefetchNextPage(index + 1));
+            }
         }
+    }
+
+    // Scan a scriptlet's text (without executing it) for the image intrinsics whose asset
+    // the page will display, and return fully-resolved urls using the SAME resolution the
+    // intrinsics use — baseURL + NormalizeUrl(ref) — so the prefetch warms the cache under
+    // the key DownloadImage will later look up. PrefetchImage appends the ?v=<contentRev>
+    // suffix itself, so we hand back the rev-less url, exactly as the intrinsics do.
+    // DisplayBackgroundImage is intentionally not handled in this version.
+    private List<string> ScanScriptletImageUrls(string scriptlet)
+    {
+        var urls = new List<string>();
+        if (string.IsNullOrEmpty(scriptlet))
+            return urls;
+
+        // Matches  DisplayMainImage "x.jpg"  and  DisplayMainImage("x.jpg")  (same for
+        // AddGalleryImage); group 1 is the first quoted argument.
+        var rx = new Regex(
+            "\\b(?:DisplayMainImage|AddGalleryImage)\\s*\\(?\\s*\"([^\"]+)\"",
+            RegexOptions.IgnoreCase);
+
+        foreach (string rawLine in PRUtils.SplitStringIntoLines(scriptlet))
+        {
+            // Skip commented-out lines. Matching them would be harmless (the prefetch is
+            // cache-guarded and silent), but it is cheap to avoid.
+            if (rawLine.TrimStart().StartsWith("//"))
+                continue;
+
+            foreach (Match m in rx.Matches(rawLine))
+            {
+                string reference = m.Groups[1].Value;
+                string lower = reference.ToLower();
+                if (!(lower.EndsWith(".jpg") || lower.EndsWith(".jpeg") || lower.EndsWith(".png")))
+                    continue;
+                urls.Add(baseURL + NormalizeUrl(reference));
+            }
+        }
+        return urls;
+    }
+
+    private IEnumerator PrefetchNextPage(int nextIndex)
+    {
+        // Delay so prefetch never contends with the CURRENT page's still-in-flight
+        // download (ExecuteStep returning does NOT mean the visible page finished
+        // loading — its downloads are async). On rapid paging this also means the
+        // pending prefetch is usually cancelled (Runnable.Stop) before any request starts.
+        yield return new WaitForSeconds(PrefetchDelaySec);
+
+        if (nextIndex < 0 || nextIndex >= _scriptlets.Count)
+            yield break;
+
+        foreach (string fullUrl in ScanScriptletImageUrls(_scriptlets[nextIndex].Content))
+            yield return PRUtils.PrefetchImage(fullUrl);   // SEQUENTIAL, one at a time
     }
 
     void ExecuteScriptlet(string scriptlet)
@@ -939,6 +1065,7 @@ public class PRScript : MonoBehaviour
 
     public void PrevStep()
     {
+        SpeechListenService.Instance?.Disarm(); // page change → drop any Mode B listener
         buttonController.DisableButtonsForTime(1f);
         bool bStepChanged = SetCurrentStep(nCurrentStep - 1);
         if (!bStepChanged)
@@ -951,6 +1078,7 @@ public class PRScript : MonoBehaviour
     
     public void NextStep()
     {
+        SpeechListenService.Instance?.Disarm(); // page change → drop any Mode B listener
         buttonController.DisableButtonsForTime(1f);
         bool bStepChanged = SetCurrentStep(nCurrentStep + 1);
         if (!bStepChanged)

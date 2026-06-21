@@ -9,6 +9,10 @@ public class MicrosoftTextToSpeech : MonoBehaviour
     private string apiUrl = "https://";
     private AudioSource audioSource;
     private AudioClip audioClip;
+
+    // True while a prompt is playing through the speaker. Used by Mode B (SpeechListenService) so the
+    // recognizer never hears the app's own voice say the keyword.
+    public bool IsSpeaking => audioSource != null && audioSource.isPlaying;
     //private string ; //""en-US-JennyNeural";
 
     void Start()
