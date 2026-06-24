@@ -8,7 +8,8 @@ using UnityEngine.UI;
 // Welcome / loading scene (_Welcome) — kid-friendly intro that replaces the old _Message launcher.
 // Light & playful (UiTheme): warm cream page, bright pastel demo cards, rounded Fredoka font.
 // It is the app's first scene: while the catalog downloads, the shared loading button advances to
-// _Home; first launch shows the intro (no auto-advance), returning launches splash and auto-advance.
+// _Home. The rich intro (demo cards + connectivity note) is shown on every launch; first launch
+// waits for a Continue tap, returning launches auto-continue after ~5s (Continue still works early).
 // UI is built in Awake() so the loading button exists before Globals.Start() binds it.
 // ============================================================================================
 public class WelcomeController : MonoBehaviour
@@ -16,6 +17,9 @@ public class WelcomeController : MonoBehaviour
     [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
 
     private const string SeenPref = "welcome_seen";
+    private const float AutoAdvanceSeconds = 5f; // returning users auto-continue after this many seconds
+
+    private bool _firstRun;
 
     private struct Demo { public string imgA, imgB, title, sub; public Demo(string a, string b, string t, string s){imgA=a;imgB=b;title=t;sub=s;} }
     private static readonly Demo[] Demos =
@@ -25,27 +29,29 @@ public class WelcomeController : MonoBehaviour
         new Demo("welcome/demo_age_a",  "welcome/demo_age_b",  "Just-right for their age",       "Pick an age and the library tunes itself"),
     };
 
-    private bool _firstRun;
-    private const float MinSplashSeconds = 1.2f;
-
     private void Awake()
     {
+        // The rich intro (demo cards + connectivity note) is shown on every launch. First launch
+        // waits for the user to tap Continue; returning launches auto-continue after a few seconds.
         _firstRun = PlayerPrefs.GetInt(SeenPref, 0) == 0;
-        BuildUI(_firstRun);
+        BuildUI(true);
         if (_firstRun) { PlayerPrefs.SetInt(SeenPref, 1); PlayerPrefs.Save(); }
     }
 
     private void Start()
     {
-        if (!_firstRun) StartCoroutine(AutoAdvanceWhenReady());
+        if (!_firstRun) StartCoroutine(AutoAdvanceReturning());
     }
 
-    private IEnumerator AutoAdvanceWhenReady()
+    // Returning users: linger on the intro for AutoAdvanceSeconds, then go to _Home. We also wait
+    // for the catalog so _Home isn't empty — so the delay is "at least" AutoAdvanceSeconds. The
+    // Continue button is still live throughout, so the user can skip the wait by tapping it.
+    private IEnumerator AutoAdvanceReturning()
     {
         float t0 = Time.time;
         while (Globals.g_listPRBooks == null || Globals.g_listPRBooks.Count == 0)
             yield return new WaitForSeconds(0.25f);
-        float remaining = MinSplashSeconds - (Time.time - t0);
+        float remaining = AutoAdvanceSeconds - (Time.time - t0);
         if (remaining > 0f) yield return new WaitForSeconds(remaining);
         Navigation.GoToHome();
     }
