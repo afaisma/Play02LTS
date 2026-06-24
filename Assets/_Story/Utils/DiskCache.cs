@@ -24,9 +24,13 @@ using UnityEngine;
 /// </summary>
 public static class DiskCache
 {
-    public const int MaxImages  = 200;   // ~10 MB at ~50 KB avg
-    public const int MaxAudios  = 100;   // ~10 MB at ~100 KB avg
-    public const int MaxTimings = 100;   // ~1 MB at ~10 KB avg (JSON)
+    // Per-tier on-disk budgets (bytes). Sized so a child can keep a few dozen
+    // opened books fully offline (~300 MB total). Eviction is size-based LRU.
+    public const long ImageBudgetBytes   = 120L * 1024 * 1024; // page art
+    public const long AudioBudgetBytes   = 150L * 1024 * 1024; // narration + word audio
+    public const long TimingsBudgetBytes =   8L * 1024 * 1024; // word-timing JSON
+    public const long ScriptBudgetBytes  =   4L * 1024 * 1024; // per-book chunk scripts
+    public const long CatalogBudgetBytes =   2L * 1024 * 1024; // library catalog (latest)
 
     private static string Root => Path.Combine(Application.persistentDataPath, "cache");
 
@@ -74,14 +78,14 @@ public static class DiskCache
         }
     }
 
-    public static void WriteBytes(string url, string subdir, string ext, byte[] data, int maxFiles)
+    public static void WriteBytes(string url, string subdir, string ext, byte[] data, long maxBytes)
     {
         if (data == null || data.Length == 0) return;
         try
         {
             string path = PathFor(url, subdir, ext);
             File.WriteAllBytes(path, data);
-            TrimSubdir(subdir, maxFiles);
+            TrimSubdirToBudget(subdir, maxBytes);
         }
         catch (Exception e)
         {
@@ -89,14 +93,14 @@ public static class DiskCache
         }
     }
 
-    public static void WriteText(string url, string subdir, string ext, string text, int maxFiles)
+    public static void WriteText(string url, string subdir, string ext, string text, long maxBytes)
     {
         if (string.IsNullOrEmpty(text)) return;
         try
         {
             string path = PathFor(url, subdir, ext);
             File.WriteAllText(path, text);
-            TrimSubdir(subdir, maxFiles);
+            TrimSubdirToBudget(subdir, maxBytes);
         }
         catch (Exception e)
         {
@@ -104,26 +108,28 @@ public static class DiskCache
         }
     }
 
-    private static void TrimSubdir(string subdir, int maxFiles)
+    private static void TrimSubdirToBudget(string subdir, long maxBytes)
     {
         try
         {
             string dir = Path.Combine(Root, subdir);
             if (!Directory.Exists(dir)) return;
             var files = new DirectoryInfo(dir).GetFiles();
-            if (files.Length <= maxFiles) return;
+            long total = 0;
+            foreach (var f in files) total += f.Length;
+            if (total <= maxBytes) return;
             // Oldest last-access time first → those are the LRU victims.
             Array.Sort(files, (a, b) => a.LastAccessTimeUtc.CompareTo(b.LastAccessTimeUtc));
-            int toDelete = files.Length - maxFiles;
-            for (int i = 0; i < toDelete; i++)
+            for (int i = 0; i < files.Length && total > maxBytes; i++)
             {
-                try { files[i].Delete(); }
+                long len = files[i].Length;
+                try { files[i].Delete(); total -= len; }
                 catch { /* best-effort eviction; ignore lock/perm errors */ }
             }
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"DiskCache.TrimSubdir failed for {subdir}: {e.Message}");
+            Debug.LogWarning($"DiskCache.TrimSubdirToBudget failed for {subdir}: {e.Message}");
         }
     }
 

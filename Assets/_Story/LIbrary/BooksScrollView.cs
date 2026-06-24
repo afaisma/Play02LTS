@@ -17,6 +17,13 @@ public class Filter
     // like "library?filter=level1" becomes a level match without disturbing
     // the existing genre/age logic.
     public int level = 0;
+    // Selected reader age RANGE (inclusive). (0,0) = no age filter ("All"); a single age
+    // N is the range (N,N). A book passes when its own [ageFrom, ageTo] OVERLAPS this range
+    // (ageFrom <= ageHiSel && ageLoSel <= ageTo). Unlike ageFrom/ageTo below (a window the
+    // book must fit *inside*), this is an intersection test. ANDs with genre/level/everything
+    // so "fairytales for ages 3-5" works. Set from Globals.GetAgeLo()/GetAgeHi().
+    public int ageLoSel = 0;
+    public int ageHiSel = 0;
 
     public void SetFilter(int ageFrom, int ageTo, String genre)
     {
@@ -42,8 +49,14 @@ public class Filter
     public bool Conforms(PRBook prBook)
     {
         // Navigation tiles (entries with an action) show only on the home "All Books" view.
+        // They carry no age, so the age-point gate never applies to them.
         if (!string.IsNullOrEmpty(prBook.action))
             return level == 0 && (string.IsNullOrEmpty(genre) || genre == "everything");
+
+        // Age-range gate (ANDs with everything below). (0,0) = no age filter.
+        // Pass when the book's [ageFrom, ageTo] overlaps the selected [ageLoSel, ageHiSel].
+        if (ageLoSel > 0 && ageHiSel > 0 && !(prBook.ageFrom <= ageHiSel && ageLoSel <= prBook.ageTo))
+            return false;
 
         if (level > 0)
             return prBook.level == level;
@@ -52,15 +65,10 @@ public class Filter
             return true;
 
         if (genre != "")
-            if (prBook.genre.ToLower().Contains(genre.ToLower()))
-                return true;
-            else
-                return false;
+            return prBook.genre.ToLower().Contains(genre.ToLower());
+
         if (ageFrom != 0 && ageTo != 0)
-            if (ageFrom <= prBook.ageFrom && prBook.ageTo <= ageTo)
-                return true;
-            else
-                return false;
+            return ageFrom <= prBook.ageFrom && prBook.ageTo <= ageTo;
 
         return true;
     }
@@ -162,7 +170,15 @@ public class BooksScrollView : MonoBehaviour
     {
         if (prBooks == null)
             return;
-        
+
+        // Inherit the age choice made on the Home hub so the Library shows the same
+        // age-appropriate set. (0,0) = All (no age filtering).
+        if (filter != null)
+        {
+            filter.ageLoSel = Globals.GetAgeLo();
+            filter.ageHiSel = Globals.GetAgeHi();
+        }
+
         ClearScrollView();
 
         // The learn-to-read shelf reads as a ladder, so order it by (level, number).

@@ -151,6 +151,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Map()       => Navigation.GoToMap();
     public void Bookstore() => Navigation.GoToBookstore();
     public void Parents()   => Navigation.GoToParents();
+    public void Home()      => Navigation.GoToHome();
 
     public void SetFilter(string filter)
     {
@@ -300,6 +301,8 @@ public class PRBook
     public int currentPage;
     public string bookStoreUrlPrinted; 
     public string bookStoreUrlKindle; 
+    public System.Collections.Generic.List<string> voices = new() { "tts" };   // e.g. ["human","tts"]; defaults to ["tts"] (every shipped book has TTS). CSV path keeps this default; JSON path overwrites from the "voices" array.
+    public bool readToMe = false;     // catalog "read_to_me": book supports the "I read it myself" mode. CSV path leaves false; JSON path sets it.
 
     public BookViewItem bookViewItem;
     public BookstoreViewItem bookstoreViewItem;

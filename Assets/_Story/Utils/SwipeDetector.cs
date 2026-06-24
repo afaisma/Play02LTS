@@ -17,6 +17,10 @@ public class SwipeDetector : MonoBehaviour
     }
     void Update()
     {
+        // While the reading-mode picker modal is up, its EventSystem owns input — don't let raw
+        // touches reach the page (word-tap) or trigger page swipes.
+        if (UnifiedReadingModePicker.IsOpen) return;
+
         if (Input.touchCount > 0)
         {
             Touch touch = Input.GetTouch(0);

@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 using Miniscript;
 using QFSW.QC;
 using UnityEngine.SceneManagement;
-using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 public class Settings
@@ -68,13 +67,13 @@ public class ButtonStruct
 public class PRScript : MonoBehaviour
 {
     public string scriptURL;
-    public string convCounting = "http://localhost:8080/api/files/download/stories/Counting/Counting_chunks_script.txt";
-    public string convRedRidingHoodLocal = "http://localhost:8080/api/files/download/stories/RedRidingHood/RedRidingHood_chunks_script.txt";
-    public string convGoodPeopleLocal = "http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
-    public string convPeterRabbitLocal = "http://localhost:8080/api/files/download/stories/TheTaleOfPeterRabbit/pg14838-images-3_script_mp3.txt";
-    public string convSeaStoryEnLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
-    public string convSeaStoryRuLocal = "http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
-    public string convHumanSoundsLocal = "http://localhost:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
+    public string convCounting = "http://localhost:8090/api/files/download/stories/Counting/Counting_chunks_script.txt";
+    public string convRedRidingHoodLocal = "http://localhost:8090/api/files/download/stories/RedRidingHood/RedRidingHood_chunks_script.txt";
+    public string convGoodPeopleLocal = "http://localhost:8090/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt";
+    public string convPeterRabbitLocal = "http://localhost:8090/api/files/download/stories/TheTaleOfPeterRabbit/pg14838-images-3_script_mp3.txt";
+    public string convSeaStoryEnLocal = "http://localhost:8090/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt";
+    public string convSeaStoryRuLocal = "http://localhost:8090/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt";
+    public string convHumanSoundsLocal = "http://localhost:8090/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
     public string convTAHFS3 = "http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt";
     public string convHumanSoundsS3 = "http://35.90.126.120:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt";
     public StoryStepsUI storyStepsUI;
@@ -106,8 +105,7 @@ public class PRScript : MonoBehaviour
 
     public string baseURL = "";
     public ButtonController buttonController;
-    [FormerlySerializedAs("voiceSelectionController")] public ButtonSelectionController buttonSelectionController;
-        
+
     string currentVoice = "";
     string getCurrentVoicePostfix()
     {
@@ -207,7 +205,6 @@ public class PRScript : MonoBehaviour
         baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
         audioAndTextPlayer.baseURL = PRUtils.RemoveFileNameFromUrl(scriptURL);
-        VoiceOptions(new bool[] { false, true, true });
         audioAndTextPlayer.OnAudioFinished.AddListener(OnAudioPlaybackFinished);
         Reload();
     }
@@ -1091,7 +1088,7 @@ public class PRScript : MonoBehaviour
     public void Home()
     {
         Globals.g_scriptName = "";
-        Navigation.GoToLibrary();
+        Navigation.GoToHome();
     }
 
     public void Map()
@@ -1218,9 +1215,11 @@ public class PRScript : MonoBehaviour
         }
     }
 
+    // Retained as a no-op for story-script back-compat: existing books call the "VoiceOptions"
+    // intrinsic in their preamble, but reading-voice availability is now driven from the catalog
+    // by UnifiedReadingModePicker, not by per-script voice-button visibility.
     public void VoiceOptions(bool[] visibilityStates)
     {
-        buttonSelectionController.ButtonOptions(visibilityStates);
     }
     
 }

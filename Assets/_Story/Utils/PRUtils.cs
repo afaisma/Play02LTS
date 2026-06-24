@@ -163,11 +163,26 @@ public class PRUtils
 
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {
-                Debug.LogError($"DownloadFile failed: {request.error}  (url={url})");
+                // Offline / server unreachable: fall back to a disk-cached copy so a
+                // previously-opened book still loads its script with no connection.
+                string cached = DiskCache.TryReadText(url, "scripts", ".txt");
+                if (cached != null)
+                {
+                    Debug.Log($"DownloadFile: served script from cache (offline) — {url}");
+                    onComplete?.Invoke(cached);
+                }
+                else
+                {
+                    Debug.LogError($"DownloadFile failed: {request.error}  (url={url})");
+                }
             }
             else
             {
-                onComplete?.Invoke(request.downloadHandler.text);
+                string text = request.downloadHandler.text;
+                // Persist for offline re-open. Network-first keeps it fresh while online;
+                // the cache is only consulted when the network fails (above).
+                DiskCache.WriteText(url, "scripts", ".txt", text, DiskCache.ScriptBudgetBytes);
+                onComplete?.Invoke(text);
             }
         }
     }
@@ -312,7 +327,7 @@ public class PRUtils
                 AddToCacheImages(url, imageSprite);
                 // Persist the encoded bytes (PNG/JPG) for the next session.
                 DiskCache.WriteBytes(url, "images", ".png",
-                    request.downloadHandler.data, DiskCache.MaxImages);
+                    request.downloadHandler.data, DiskCache.ImageBudgetBytes);
                 onResult(imageSprite, null);
             }
         }

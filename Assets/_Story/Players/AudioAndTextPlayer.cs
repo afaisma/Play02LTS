@@ -27,12 +27,11 @@ public class WordTiming
 
 public class AudioAndTextPlayer : MonoBehaviour
 {
-    public bool staticText = true;
+    public bool staticText = false;
 
     public string nextPlayUseVoice = "";
     public bool showHighlight = true;
     public bool audioNameGenerated = true;
-    public ButtonSelectionController buttonSelectionController;
 
     [SerializeField] private bool _playAudio = true; // Backing field for playAudio
 
@@ -117,14 +116,19 @@ public class AudioAndTextPlayer : MonoBehaviour
         StopAllCoroutines();
     }
 
-    public void OnSetNextPlayVoiceSetting()
-    {
-        nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
-    }
+    // The reading-mode picker (UnifiedReadingModePicker) stages the next playback voice
+    // ("human"/"computer"/"novoice"); PreparePlayVoiceSettings reads it each Play. The picker is
+    // the single source of the playback voice.
+    public void SetReadingVoice(string voiceName) { nextPlayUseVoice = (voiceName ?? "").ToLower(); }
+
+    // Picker-driven Autopage: auto-advance to the next step when narration ends (drives the same
+    // triggerNextStep the old autopage toggle did via nextStepToggle).
+    public void SetAutopage(bool on) { triggerNextStep = on; }
 
     void PreparePlayVoiceSettings()
     {
-        nextPlayUseVoice = buttonSelectionController.GetSelectedButtonName();
+        // Voice comes from the picker via SetReadingVoice (stored in nextPlayUseVoice). Empty →
+        // the computer branch below, the same default as before when no voice was selected.
         if (nextPlayUseVoice == "human")
         {
             showHighlight = false;
@@ -369,7 +373,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                                 // download bytes on downloadHandler.data even for the
                                 // multimedia handler.
                                 DiskCache.WriteBytes(audioURL, "audio", ".mp3",
-                                    uwr.downloadHandler.data, DiskCache.MaxAudios);
+                                    uwr.downloadHandler.data, DiskCache.AudioBudgetBytes);
                             }
                             else
                             {
@@ -415,7 +419,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                             audioAndTextStruct.content = content;
                             // Persist for future sessions.
                             DiskCache.WriteText(textURL, "timings", ".json",
-                                content, DiskCache.MaxTimings);
+                                content, DiskCache.TimingsBudgetBytes);
                             // if page number == -1, we're dealing with JSON timings
                             if (pageNum == -1)
                             {
@@ -578,6 +582,7 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     private string GetPageFromTextContent(string content, int pageNum)
     {
+        if (string.IsNullOrEmpty(content)) return "";
         string[] pages = content.Split(new string[] { "###" }, StringSplitOptions.None);
         if (pageNum >= 0 && pageNum < pages.Length)
         {
@@ -819,7 +824,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                     clip = DownloadHandlerAudioClip.GetContent(uwr);
                     if (clip != null)
                         DiskCache.WriteBytes(audioURL, "audio", ".mp3",
-                            uwr.downloadHandler.data, DiskCache.MaxAudios);
+                            uwr.downloadHandler.data, DiskCache.AudioBudgetBytes);
                 }
             }
         }
@@ -842,7 +847,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                 if (www.result == UnityWebRequest.Result.Success)
                 {
                     text = www.downloadHandler.text;
-                    DiskCache.WriteText(jsonURL, "timings", ".json", text, DiskCache.MaxTimings);
+                    DiskCache.WriteText(jsonURL, "timings", ".json", text, DiskCache.TimingsBudgetBytes);
                 }
             }
         }
@@ -928,7 +933,9 @@ public class AudioAndTextPlayer : MonoBehaviour
     // when word-tap is off, there's no foreground, or no word is under the point.
     public bool TryPlayWordAtScreenPos(Vector2 screenPos)
     {
-        if (!wordTapEnabled || uiForeground == null) return false;
+        // Read-along (Mode A) has no echo-gate: a wordbank slice played here would be heard by the
+        // live mic and wrongly advance the matcher cursor — so word-tap is off while it owns the page.
+        if (!wordTapEnabled || ReadAlongActive || uiForeground == null) return false;
         // Overlay canvases hit-test with a null camera; others use their world/event camera.
         Camera cam = null;
         Canvas c = uiForeground.canvas;

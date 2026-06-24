@@ -14,7 +14,7 @@ public class Globals : MonoBehaviour
     public static string CSVURL = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public static string baseURL;
     public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
-    public string convinienceLocal = "http://localhost:8080/api/files/download/stories/stories.csv";
+    public string convinienceLocal = "http://localhost:8090/api/files/download/stories/stories.csv";
     public string convinienceAWS = "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.csv";
 
     public static List<PRBook> g_listPRBooks;
@@ -167,7 +167,7 @@ public class Globals : MonoBehaviour
     /// <summary>Set the loading button's label, interactability and click
     /// handler from the current catalog/download state. Safe to call on every
     /// (re)bind and whenever that state changes. Per product decision this
-    /// button always goes straight to the Library — never via
+    /// button goes straight to the Home hub — never via
     /// targetScene/LoadTargetScene.</summary>
     private void ConfigureLoadingButton()
     {
@@ -181,9 +181,9 @@ public class Globals : MonoBehaviour
         }
         else if (g_listPRBooks != null)
         {
-            SetButtonText("Enter Library");
+            SetButtonText("Continue");
             buttonLoadingRetryContinue.interactable = true;
-            buttonLoadingRetryContinue.onClick.AddListener(Library);
+            buttonLoadingRetryContinue.onClick.AddListener(Home);
         }
         else
         {
@@ -387,6 +387,43 @@ public class Globals : MonoBehaviour
         {
             Debug.Log("Download in progress. Please wait.");
         }
+    }
+
+    // Stage 1 (Home hub): the loading-screen "Continue" button lands the user on
+    // the new _Home hub instead of the Library. Mirrors Library() — gated on the
+    // catalog download so we never navigate away mid-load. Reversible: point the
+    // button back at Library() and restore the prefab targetScene to revert.
+    public void Home()
+    {
+        if (!IsDownloading)
+        {
+            Navigation.GoToScene("_Home");
+        }
+        else
+        {
+            Debug.Log("Download in progress. Please wait.");
+        }
+    }
+
+    // --- Home age filter (single source of truth, read by both _Home and the Library) ---
+    // Stored as an inclusive [lo, hi] age range. (0, 0) = "All ages" (no filtering).
+    // A single age N is just the range (N, N). Persisted so the choice survives scene loads.
+    public const string AgeLoPref = "home_age_lo";
+    public const string AgeHiPref = "home_age_hi";
+    public static int GetAgeLo() => PlayerPrefs.GetInt(AgeLoPref, 0);
+    public static int GetAgeHi() => PlayerPrefs.GetInt(AgeHiPref, 0);
+    public static void SetAgeRange(int lo, int hi)
+    {
+        if (lo > hi) { int t = lo; lo = hi; hi = t; }
+        PlayerPrefs.SetInt(AgeLoPref, Mathf.Max(0, lo));
+        PlayerPrefs.SetInt(AgeHiPref, Mathf.Max(0, hi));
+        PlayerPrefs.Save();
+    }
+    public static void ClearAgeRange()
+    {
+        PlayerPrefs.SetInt(AgeLoPref, 0);
+        PlayerPrefs.SetInt(AgeHiPref, 0);
+        PlayerPrefs.Save();
     }
 
     public static bool IsTablet()
@@ -688,10 +725,15 @@ public class Globals : MonoBehaviour
                     // Catalog content hash, folded into media URLs (?v=) to bust stale
                     // image/audio/timings caches when a book is re-rendered. Missing → "".
                     contentRev = b["content_rev"].Value,
+                    // Optional per-book reading modes ("human"/"tts"). Missing/empty →
+                    // ["tts"], preserving today's behavior. Consumed by UnifiedReadingModePicker.
+                    voices = ParseVoices(b["voices"]),
+                    // Opt-in flag: this book supports the "I read it myself" (read-along) mode.
+                    // Missing → false (SimpleJSON AsBool default). Gates the picker's iread tile.
+                    readToMe = b["read_to_me"].AsBool,
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(scriptUrl),
                     book_done = Prefs_Get_Book_Done(scriptUrl)
-                    // Unknown / not-yet-consumed fields (read_to_me) are parsed-and-ignored for now.
                 };
                 book.bookFullUrl = book.bookUrl;
                 if (book.bookFullUrl.StartsWith("http") == false)
@@ -730,6 +772,26 @@ public class Globals : MonoBehaviour
         return string.Join(" : ", genres);
     }
 
+    // Parse a JSON voices array (e.g. ["human","tts"]) into the lowercase string list
+    // PRBook.voices holds. A missing/empty/non-array node defaults to ["tts"] — every
+    // shipped book has TTS, so this preserves today's behavior for catalogs without the field.
+    private static List<string> ParseVoices(JSONNode voicesNode)
+    {
+        List<string> voices = new List<string>();
+        if (voicesNode != null && voicesNode.IsArray)
+        {
+            foreach (JSONNode v in voicesNode.Children)
+            {
+                string s = v.Value;
+                if (!string.IsNullOrEmpty(s))
+                    voices.Add(s.ToLowerInvariant());
+            }
+        }
+        if (voices.Count == 0)
+            voices.Add("tts");
+        return voices;
+    }
+
     public void StartDownloadCSV(string url, Action<string> onComplete)
     {
         StartCoroutine(DownloadCSV(url, onComplete));
@@ -751,12 +813,24 @@ public class Globals : MonoBehaviour
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
             {
                 Debug.Log(request.error);
-                ConfigureLoadingButton();  // catalog still null → shows retry
+                // Offline / unreachable: fall back to the last cached catalog so the
+                // library still populates and previously-opened books stay reachable.
+                string cached = DiskCache.TryReadText(url, "catalog", ".json");
+                if (!string.IsNullOrEmpty(cached))
+                {
+                    Debug.Log("DownloadCSV: served catalog from cache (offline)");
+                    onComplete(cached);
+                }
+                ConfigureLoadingButton();  // cached → "Continue"; still null → retry
             }
             else
             {
-                onComplete(request.downloadHandler.text);
-                ConfigureLoadingButton();  // catalog now loaded → "Enter Library"
+                string text = request.downloadHandler.text;
+                // Persist the catalog for offline launches. Network-first keeps it fresh
+                // while online; the cache is only consulted when the network fails (above).
+                DiskCache.WriteText(url, "catalog", ".json", text, DiskCache.CatalogBudgetBytes);
+                onComplete(text);
+                ConfigureLoadingButton();  // catalog now loaded → "Continue"
             }
         }
     }

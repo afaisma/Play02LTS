@@ -24,7 +24,7 @@ public class SoundBar : MonoBehaviour
     {
         audioSource = GetComponent<AudioSource>();
         Clear();
-        //AddSound("http://localhost:8080/api/files/download/stories/GoodPeople/chunk_2.wav");
+        //AddSound("http://localhost:8090/api/files/download/stories/GoodPeople/chunk_2.wav");
     }
     
     private IEnumerator LoadAudio(string audioURL)

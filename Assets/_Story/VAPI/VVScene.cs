@@ -26,7 +26,7 @@ public class VVScene : MonoBehaviour
     private Settings _settings;
     Dictionary<string, Scriptlet> _mapEvents = new Dictionary<string, Scriptlet>();
     public string baseURL = "";
-    public string convLocalScene = "http://localhost:8080/api/files/download/stories/VScene/vscene.txt";
+    public string convLocalScene = "http://localhost:8090/api/files/download/stories/VScene/vscene.txt";
     public string convS3Scene = "https://d5wtw8f0w3ire.cloudfront.net/uploads/stories/VScene/vscene.txt";
     [Multiline] public string embeddedScript;
     readonly int _maxCacheImagesSize = 30;

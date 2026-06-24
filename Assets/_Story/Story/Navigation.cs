@@ -23,10 +23,14 @@ public static class Navigation
     public const string Bookstore  = "_Bookstore";
     public const string Settings   = "_Settings";
     public const string Parents    = "_Parents";
-    public const string Map        = "_Map";
-    public const string Message    = "_Message";
+    public const string Map         = "_Map";
+    public const string Message     = "_Message";
+    public const string Home        = "_Home";
+    public const string LearnToRead = "_LearnToRead";
 
-    public static void GoToStart()     => SceneManager.LoadScene(StartScene);
+    public static void GoToStart()       => SceneManager.LoadScene(StartScene);
+    public static void GoToHome()        => SceneManager.LoadScene(Home);
+    public static void GoToLearnToRead() => SceneManager.LoadScene(LearnToRead);
     public static void GoToLibrary()   => SceneManager.LoadScene(Library);
     public static void GoToStory()     => SceneManager.LoadScene(Story);
     public static void GoToBookstore() => SceneManager.LoadScene(Bookstore);

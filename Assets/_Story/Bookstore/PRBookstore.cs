@@ -173,7 +173,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Home()
     {
         Globals.g_scriptName = "";
-        Navigation.GoToLibrary();
+        Navigation.GoToHome();
     }
 
 

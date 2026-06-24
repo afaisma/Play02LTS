@@ -1,0 +1,24 @@
+// OceanSummon — READ-ALONG (Mode A) with a creature-reveal hook.
+// The child READS the page aloud; ReadAlongService advances the highlight and, on lenient
+// completion, calls PRScript.OnPageReadComplete(). Because this book defines [event OnPageRead],
+// that handler runs (reveal the octopus) and the page does NOT auto-advance — the child taps Next.
+// A book WITHOUT [event OnPageRead] keeps the default read-along auto-advance.
+//
+// NO runtime TTS. Page text + (optional) pre-generated narration come via PlayAudioAndText; the
+// previous page's overlay creature is cleared automatically on page change (OverlayHost.Clear()).
+// Mode B (ListenFor / SpeechListenService) is NOT used by this book — it stays dormant in the build.
+
+////////[chunk name=page1]
+DisplayBackgroundColor("003B5C")
+PlayAudioAndText("page1", "The octopus hides in the deep blue sea.")
+
+////////[chunk name=page2]
+DisplayBackgroundColor("006A8E")
+PlayAudioAndText("page2", "You found the octopus! Hooray!")
+
+////////[event OnPageRead]
+// Read-along finished this page → reveal the creature. No GoTo: stay so the child sees it, then
+// taps Next. (On the next page change the overlay is cleared by the overlay host.)
+AddOverlaySprites("octopus", "octopus/", 0.3, 0.3, 0.7, 0.7)
+ShowOverlay("octopus")
+PlayAudioAndText("octo_reveal", "There you are, octopus!")

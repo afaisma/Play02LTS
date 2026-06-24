@@ -231,12 +231,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b0d67ff45b754aed801d080224fc006, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  toggle: {fileID: 21305554}
-  buttonNext: {fileID: 1661370713}
-  backgroundImage: {fileID: 353447514}
-  uncheckedColor: {r: 1, g: 1, b: 1, a: 0.5372549}
-  checkedColor: {r: 0, g: 1, b: 0, a: 1}
-  textLabel: {fileID: 1595853142}
 --- !u!1 &22888422
 GameObject:
   m_ObjectHideFlags: 0
@@ -272,14 +266,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c288363d4dc342b9a19df720b1895fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scriptURL: http://localhost:8080/api/files/download/stories/TimmyAndHisFamily_v2/TimmyAndHisFamily01.txt
-  convCounting: http://localhost:8080/api/files/download/stories/Counting/Counting_chunks_script.txt
-  convRedRidingHoodLocal: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
-  convGoodPeopleLocal: http://localhost:8080/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
-  convPeterRabbitLocal: http://localhost:8080/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt
-  convSeaStoryEnLocal: http://localhost:8080/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt
-  convSeaStoryRuLocal: http://localhost:8080/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt
-  convHumanSoundsLocal: http://localhost:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt
+  scriptURL: http://localhost:8090/api/files/download/stories/TimmyAndHisFamily_v2/TimmyAndHisFamily01.txt
+  convCounting: http://localhost:8090/api/files/download/stories/Counting/Counting_chunks_script.txt
+  convRedRidingHoodLocal: http://localhost:8090/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
+  convGoodPeopleLocal: http://localhost:8090/api/files/download/stories/GoodPeople/GoodPeople_chunks_script.txt
+  convPeterRabbitLocal: http://localhost:8090/api/files/download/stories/The_Tale_of_Peter_Rabbit_(1901)_script_mp3.txt
+  convSeaStoryEnLocal: http://localhost:8090/api/files/download/stories/Sea_Story_en/SeaStory_en_chunks_script.txt
+  convSeaStoryRuLocal: http://localhost:8090/api/files/download/stories/Sea_Story_ru/SeaStory_ru.txt
+  convHumanSoundsLocal: http://localhost:8090/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt
   convTAHFS3: http://35.90.126.120:8080/api/files/download/Stories/TimmyAndHisFamily/TimmyAndHisFamily01.txt
   convHumanSoundsS3: http://35.90.126.120:8080/api/files/download/Stories/HumansMakingSounds/HumansMakingSounds_chunks_script.txt
   storyStepsUI: {fileID: 22888428}
@@ -293,7 +287,6 @@ MonoBehaviour:
   nCurrentStep: -1
   baseURL: 
   buttonController: {fileID: 22888430}
-  buttonSelectionController: {fileID: 1024117414}
 --- !u!4 &22888424
 Transform:
   m_ObjectHideFlags: 0
@@ -1011,7 +1004,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f7987791e5f364f5da1ff319d523d5c7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  buttonSelectionController: {fileID: 0}
   rectTransformFilter: {fileID: 240448552}
   currentFilter: 
 --- !u!114 &240448555
@@ -1446,7 +1438,6 @@ MonoBehaviour:
   nextPlayUseVoice: 
   showHighlight: 1
   audioNameGenerated: 1
-  buttonSelectionController: {fileID: 1024117414}
   _playAudio: 1
   OnAutoNextStep:
     m_PersistentCalls:
@@ -1475,6 +1466,9 @@ MonoBehaviour:
   baseURL: 
   wordTapEnabled: 1
   _wordTapSource: {fileID: 1766112199}
+  tapHighlightHoldSec: 0.35
+  tapHighlightFadeOutSec: 0.15
+  tapHighlightColor: {r: 0.96, g: 0.88, b: 0.55, a: 0.65}
 --- !u!1 &312783517
 GameObject:
   m_ObjectHideFlags: 0
@@ -2583,7 +2577,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f7987791e5f364f5da1ff319d523d5c7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  buttonSelectionController: {fileID: 1024117414}
   rectTransformFilter: {fileID: 450625105}
   currentFilter: 
 --- !u!1 &471801524
@@ -6273,31 +6266,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eda5009c3104947d4953ec1c88ba94b2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  buttons:
-  - {fileID: 1493468599}
-  - {fileID: 89690160}
-  - {fileID: 840242967}
-  selectedColor: {r: 1, g: 1, b: 1, a: 1}
-  unselectedColor: {r: 0.7, g: 0.7, b: 0.7, a: 0.7}
-  buttonToggle: {fileID: 1580089577}
-  OnSelectionChanged:
-    m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 309576620}
-        m_TargetAssemblyTypeName: AudioAndTextPlayer, Assembly-CSharp
-        m_MethodName: OnSetNextPlayVoiceSetting
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-  OnSomethingClicked:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!1 &1037772016
 GameObject:
   m_ObjectHideFlags: 0
@@ -9172,7 +9140,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 4c4122db269784f8788a179cb8689971, type: 3}
+  m_Sprite: {fileID: 8585656782489133422, guid: eeb4cf18f28ef48769dd904204a65555, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1

@@ -4,10 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Recognissimo;
 using Recognissimo.Components;
-using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
 
 // ============================================================================================
 // Read-Along (Mode A) — the SINGLE owner of the Recognissimo stack + the validated matcher.
@@ -18,8 +15,8 @@ using UnityEngine.UI;
 // NormalizeWord — reused from AudioAndTextPlayer so the rule can't drift). The model is loaded once
 // and kept warm across pages; only the grammar + cursor reset per page.
 //
-// Fully additive + opt-in: with the "I Read" toggle OFF nothing here runs and every existing path
-// is byte-identical. Self-bootstraps in the story scene (no scene edits, no per-book script).
+// Opt-in: with read-along OFF (the default) nothing here runs. Enabled by the reading-mode picker
+// via SetEnabled. Self-bootstraps in the story scene (no scene edits, no per-book script).
 // Rollback = delete this file + the // ---- read-along ---- region in AudioAndTextPlayer.
 // ============================================================================================
 public class ReadAlongService : MonoBehaviour
@@ -75,10 +72,12 @@ public class ReadAlongService : MonoBehaviour
     private bool _active;
     private PRScript _prScript;
     private float _nextScan;
-    private Button _toggleButton;
-    private TMP_Text _toggleLabel;
 
-    // Spawn one persistent service automatically; it stays inert until a story scene + the toggle.
+    // Raised when the recognizer can't run (mic init/permission failure) AFTER read-along was
+    // active, so a listener (the picker) can fall back to narration instead of a silent page.
+    public event System.Action Unavailable;
+
+    // Spawn one persistent service automatically; it stays inert until a story scene wires it.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
@@ -93,14 +92,19 @@ public class ReadAlongService : MonoBehaviour
 
     private void Update()
     {
-        // (Re)wire to the story scene's PRScript when present; tear the toggle down otherwise.
+        // (Re)wire to the story scene's PRScript when present; stop recognition otherwise.
         if (_prScript == null)
         {
             if (Time.unscaledTime < _nextScan) return;
             _nextScan = Time.unscaledTime + 0.5f;
 
             var found = FindObjectOfType<PRScript>();
-            if (found == null) { TeardownToggleUI(); return; }
+            if (found == null)
+            {
+                // Left the story scene: drop any active recognition so a non-story scene is inert.
+                if (_active) { _active = false; Stop(); }
+                return;
+            }
             WireTo(found);
         }
 
@@ -162,12 +166,12 @@ public class ReadAlongService : MonoBehaviour
         _prScript = prScript;
         if (prScript.audioAndTextPlayer != null)
             prScript.audioAndTextPlayer.ReadAlongPageReady += OnPageReady;
-        BuildToggleUI();
     }
 
     // ---------------------------------------------------------------- activation
 
-    private void ToggleActive() => SetActive(!_active);
+    // The reading-mode picker (UnifiedReadingModePicker) enables/disables read-along through here.
+    public void SetEnabled(bool on) => SetActive(on);
 
     private void SetActive(bool on)
     {
@@ -189,7 +193,6 @@ public class ReadAlongService : MonoBehaviour
         {
             Stop();
         }
-        UpdateToggleLabel();
     }
 
     // Fired by the player once a freshly-loaded page's words are ready (only when ReadAlongActive).
@@ -237,6 +240,21 @@ public class ReadAlongService : MonoBehaviour
         // Cancel any pending deferred restart so a Stop (incl. SetActive(false)) can't be resurrected.
         if (_restartCo != null) { StopCoroutine(_restartCo); _restartCo = null; }
         if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
+    }
+
+    // Mic/recognizer can't run (init or permission failure). Turn read-along OFF cleanly so the
+    // page's next Play narrates instead of staying suppressed, then notify subscribers. Guarded on
+    // _active so a stale failure arriving after we've already switched off is a no-op.
+    private void OnRecognizerUnavailable(string why)
+    {
+        _recognizing = false;
+        Debug.LogError("[ReadAlong] " + why);
+        if (!_active) return;
+        _active = false;
+        var player = _prScript != null ? _prScript.audioAndTextPlayer : null;
+        if (player != null) player.ReadAlongActive = false;
+        Stop();
+        Unavailable?.Invoke();
     }
 
     private void StartRecognition()
@@ -304,8 +322,8 @@ public class ReadAlongService : MonoBehaviour
         _recognizer.ResultReady.AddListener(OnResult);
         _recognizer.Started.AddListener(() => _recognizing = true);
         _recognizer.Finished.AddListener(() => _recognizing = false);
-        _recognizer.InitializationFailed.AddListener(e => { _recognizing = false; Debug.LogError("[ReadAlong] init failed: " + e); });
-        _recognizer.RuntimeFailed.AddListener(e => { _recognizing = false; Debug.LogError("[ReadAlong] runtime failed: " + e); });
+        _recognizer.InitializationFailed.AddListener(e => OnRecognizerUnavailable("init failed: " + e));
+        _recognizer.RuntimeFailed.AddListener(e => OnRecognizerUnavailable("runtime failed: " + e));
 
         sttGO.SetActive(true);
         _stackReady = true;
@@ -425,68 +443,4 @@ public class ReadAlongService : MonoBehaviour
         if (_prScript != null) _prScript.OnPageReadComplete();
     }
 
-    // ---------------------------------------------------------------- toggle UI (always-available)
-
-    private void BuildToggleUI()
-    {
-        if (_toggleButton != null) return;
-
-        if (EventSystem.current == null)
-            new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-
-        var canvasGO = new GameObject("ReadAlongToggleCanvas",
-            typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        var canvas = canvasGO.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 1000; // above the story UI
-        var scaler = canvasGO.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1080, 1920);
-
-        var btnGO = new GameObject("IReadToggle", typeof(RectTransform), typeof(Image), typeof(Button));
-        btnGO.transform.SetParent(canvasGO.transform, false);
-        var rt = btnGO.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(1f, 1f);
-        rt.anchorMax = new Vector2(1f, 1f);
-        rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-20f, -20f);
-        rt.sizeDelta = new Vector2(280f, 96f);
-        var img = btnGO.GetComponent<Image>();
-        img.color = new Color(0.20f, 0.20f, 0.20f, 0.85f);
-
-        _toggleButton = btnGO.GetComponent<Button>();
-        _toggleButton.targetGraphic = img;
-        _toggleButton.onClick.AddListener(ToggleActive);
-
-        var labelGO = new GameObject("label", typeof(RectTransform));
-        labelGO.transform.SetParent(btnGO.transform, false);
-        var lrt = labelGO.GetComponent<RectTransform>();
-        lrt.anchorMin = Vector2.zero;
-        lrt.anchorMax = Vector2.one;
-        lrt.offsetMin = Vector2.zero;
-        lrt.offsetMax = Vector2.zero;
-        _toggleLabel = labelGO.AddComponent<TextMeshProUGUI>();
-        var font = TMP_Settings.defaultFontAsset;
-        if (font != null) _toggleLabel.font = font;
-        _toggleLabel.alignment = TextAlignmentOptions.Center;
-        _toggleLabel.fontSize = 34;
-        _toggleLabel.color = Color.white;
-        _toggleLabel.raycastTarget = false;
-
-        UpdateToggleLabel();
-    }
-
-    private void UpdateToggleLabel()
-    {
-        if (_toggleLabel != null) _toggleLabel.text = _active ? "I Read: ON" : "I Read: OFF";
-    }
-
-    private void TeardownToggleUI()
-    {
-        // The canvas lives in the (now-unloaded) story scene and is destroyed with it; just drop refs
-        // and any active recognition so a non-story scene is fully inert.
-        if (_active) { _active = false; Stop(); }
-        _toggleButton = null;
-        _toggleLabel = null;
-    }
 }

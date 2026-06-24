@@ -43,7 +43,7 @@ namespace ReadingBuddy.Tests
         {
             string url = "http://t/audio.mp3";
             byte[] data = Encoding.UTF8.GetBytes("hello-bytes");
-            DiskCache.WriteBytes(url, Sub, ".bin", data, DiskCache.MaxAudios);
+            DiskCache.WriteBytes(url, Sub, ".bin", data, DiskCache.AudioBudgetBytes);
 
             byte[] read = DiskCache.TryReadBytes(url, Sub, ".bin");
             Assert.AreEqual(data, read);
@@ -54,7 +54,7 @@ namespace ReadingBuddy.Tests
         {
             string url = "http://t/timings.json";
             string text = "[{\"word\":\"hi\",\"time\":0.0}]";
-            DiskCache.WriteText(url, Sub, ".json", text, DiskCache.MaxTimings);
+            DiskCache.WriteText(url, Sub, ".json", text, DiskCache.TimingsBudgetBytes);
 
             string read = DiskCache.TryReadText(url, Sub, ".json");
             Assert.AreEqual(text, read);
