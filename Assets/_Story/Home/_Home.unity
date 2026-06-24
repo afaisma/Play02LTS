@@ -159,6 +159,7 @@ MonoBehaviour:
     filter: science
   - label: All Books
     filter: everything
+  uiFont: {fileID: 11400000, guid: 89fe3183a6d8146bda736016ea0f9c3b, type: 2}
 --- !u!4 &137575311
 Transform:
   m_ObjectHideFlags: 0

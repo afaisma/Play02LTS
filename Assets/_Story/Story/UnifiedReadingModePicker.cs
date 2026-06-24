@@ -414,7 +414,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _panel.anchorMax = new Vector2(0.5f, 0f);
         _panel.pivot = new Vector2(0.5f, 0f);
         _panel.sizeDelta = new Vector2(760f, 0f);
-        panelGO.GetComponent<Image>().color = new Color(0.16f, 0.17f, 0.22f, 0.98f);
+        var panelImg = panelGO.GetComponent<Image>();
+        panelImg.sprite = RoundedSprite(); panelImg.type = Image.Type.Sliced;
+        panelImg.color = UiTheme.Surface;
 
         var vlg = panelGO.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(36, 36, 36, 36);
@@ -467,7 +469,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         // "UI/Skin/Knob.psd" doesn't resolve in this Unity version). White circle tinted red.
         xImg.sprite = CircleSprite();
         xImg.type = Image.Type.Simple;
-        xImg.color = new Color(0.85f, 0.27f, 0.25f, 1f);
+        xImg.color = UiTheme.TextSecondary;
         xGO.GetComponent<Button>().onClick.AddListener(ClosePicker);
         var xle = xGO.GetComponent<LayoutElement>();
         xle.preferredWidth = 80f; xle.preferredHeight = 80f; xle.flexibleWidth = 0f;
@@ -527,7 +529,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
         var boxRt = boxGO.GetComponent<RectTransform>();
         boxRt.anchorMin = Vector2.zero; boxRt.anchorMax = Vector2.one;
         boxRt.offsetMin = Vector2.zero; boxRt.offsetMax = Vector2.zero;
-        boxGO.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.28f);
+        var boxImg = boxGO.GetComponent<Image>();
+        boxImg.sprite = RoundedSprite(); boxImg.type = Image.Type.Sliced;
+        boxImg.color = UiTheme.Track;
 
         var checkGO = new GameObject("Check", typeof(RectTransform), typeof(Image));
         checkGO.transform.SetParent(boxGO.transform, false);
@@ -535,7 +539,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         checkRt.anchorMin = new Vector2(0.15f, 0.15f);
         checkRt.anchorMax = new Vector2(0.85f, 0.85f);
         checkRt.offsetMin = Vector2.zero; checkRt.offsetMax = Vector2.zero;
-        checkGO.GetComponent<Image>().color = new Color(0.4f, 1f, 0.5f, 0.95f);
+        checkGO.GetComponent<Image>().color = UiTheme.Primary;
 
         _autopageToggle = tglGO.GetComponent<Toggle>();
         _autopageToggle.targetGraphic = boxGO.GetComponent<Image>();
@@ -579,9 +583,10 @@ public class UnifiedReadingModePicker : MonoBehaviour
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(Outline), typeof(VerticalLayoutGroup));
         tileGO.transform.SetParent(_tilesGrid, false);
         var bg = tileGO.GetComponent<Image>();
-        bg.color = new Color(1f, 1f, 1f, 0.14f); // clearer unselected tile (was 0.06)
+        bg.sprite = RoundedSprite(); bg.type = Image.Type.Sliced;
+        bg.color = UiTheme.Surface;
         var outline = tileGO.GetComponent<Outline>();
-        outline.effectColor = new Color(0.45f, 0.8f, 1f, 1f);
+        outline.effectColor = UiTheme.Primary;
         outline.effectDistance = new Vector2(3f, 3f);
         outline.enabled = false;
 
@@ -594,9 +599,8 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
         var title = MakeText(tileGO.transform, "title", TileLabel(mode), 36, TextAlignmentOptions.Center);
         title.fontStyle = FontStyles.Bold;
-        // Sub-label stays full white (MakeText default = brightest); unselected contrast comes from
-        // the brighter tile background above.
-        MakeText(tileGO.transform, "sub", SubLabel(mode), 24, TextAlignmentOptions.Center);
+        var subL = MakeText(tileGO.transform, "sub", SubLabel(mode), 24, TextAlignmentOptions.Center);
+        subL.color = UiTheme.TextSecondary;
 
         var captured = mode;
         tileGO.GetComponent<Button>().onClick.AddListener(() => OnTileSelected(captured));
@@ -610,7 +614,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         {
             bool sel = mode == _currentMode;
             if (outline != null) outline.enabled = sel;
-            if (bg != null) bg.color = sel ? new Color(0.45f, 0.8f, 1f, 0.30f) : new Color(1f, 1f, 1f, 0.14f);
+            if (bg != null) bg.color = sel ? UiTheme.Card(0).fill : UiTheme.Surface;
         }
     }
 
@@ -690,20 +694,44 @@ public class UnifiedReadingModePicker : MonoBehaviour
         return new Vector2(sx, sy);
     }
 
+    [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
+
+    // Procedural rounded-rect (9-sliced) sprite for panel/tiles, matching the other scenes.
+    private static Sprite _roundedSprite;
+    private static Sprite RoundedSprite()
+    {
+        if (_roundedSprite != null) return _roundedSprite;
+        const int r = 28; int size = r * 2 + 4;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        var px = new Color[size * size];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float fx = x + 0.5f, fy = y + 0.5f;
+                float cx = Mathf.Clamp(fx, r, size - r);
+                float cy = Mathf.Clamp(fy, r, size - r);
+                float dx = fx - cx, dy = fy - cy;
+                px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f));
+            }
+        tex.SetPixels(px); tex.Apply();
+        _roundedSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+            100f, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
+        return _roundedSprite;
+    }
+
     private TMP_Text MakeText(Transform parent, string name, string text, float size, TextAlignmentOptions align)
     {
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        var font = TMP_Settings.defaultFontAsset;
-        if (font != null) tmp.font = font;
+        tmp.font = uiFont != null ? uiFont : UiTheme.Font();
         tmp.text = text;
         tmp.fontSize = size;
         tmp.enableAutoSizing = true;
         tmp.fontSizeMin = size * 0.6f;
         tmp.fontSizeMax = size;
         tmp.alignment = align;
-        tmp.color = Color.white;
+        tmp.color = UiTheme.TextPrimary;
         tmp.raycastTarget = false;
         return tmp;
     }

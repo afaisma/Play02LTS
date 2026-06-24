@@ -45,6 +45,8 @@ public class HomeController : MonoBehaviour
         new SectionTile("All Books",     "everything"),
     };
 
+    [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
+
     // How often the catalog-not-ready guard re-checks g_listPRBooks.
     private const float RetryInterval = 0.5f;
 
@@ -95,7 +97,7 @@ public class HomeController : MonoBehaviour
         var bg = new GameObject("Background", typeof(RectTransform), typeof(Image));
         bg.transform.SetParent(_canvasRoot.transform, false);
         Stretch(bg.GetComponent<RectTransform>());
-        bg.GetComponent<Image>().color = new Color(0.10f, 0.11f, 0.16f, 1f);
+        bg.GetComponent<Image>().color = UiTheme.Bg;
 
         // Vertical content stack with screen padding.
         var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup));
@@ -181,12 +183,10 @@ public class HomeController : MonoBehaviour
         var img = chip.GetComponent<Image>();
         img.sprite = RoundedSprite();
         img.type = Image.Type.Sliced;
-        img.color = selected
-            ? new Color(0.45f, 0.8f, 1f, 0.95f)
-            : new Color(1f, 1f, 1f, 0.08f);
+        img.color = selected ? UiTheme.Primary : UiTheme.Surface;
 
         var t = MakeText(chip.transform, "Label", label, 32, TextAlignmentOptions.Center);
-        t.color = selected ? new Color(0.03f, 0.14f, 0.24f, 1f) : Color.white;
+        t.color = selected ? UiTheme.OnPrimary : UiTheme.TextSecondary;
         Stretch(t.rectTransform);
 
         int captured = value;
@@ -223,6 +223,7 @@ public class HomeController : MonoBehaviour
 
         var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
+        title.color = UiTheme.Primary;
         Stretch(title.rectTransform);
     }
 
@@ -256,7 +257,7 @@ public class HomeController : MonoBehaviour
         var scrollGO = new GameObject("Rail",
             typeof(RectTransform), typeof(ScrollRect), typeof(Image), typeof(RectMask2D), typeof(LayoutElement));
         scrollGO.transform.SetParent(section.transform, false);
-        scrollGO.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.03f);
+        scrollGO.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.04f);
         scrollGO.GetComponent<LayoutElement>().preferredHeight = 360f;
 
         var viewport = new GameObject("Viewport", typeof(RectTransform));
@@ -295,7 +296,7 @@ public class HomeController : MonoBehaviour
         var cardGO = new GameObject("Card_" + book.bookName,
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         cardGO.transform.SetParent(parent, false);
-        cardGO.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.10f);
+        cardGO.GetComponent<Image>().color = UiTheme.Surface;
         var cle = cardGO.GetComponent<LayoutElement>();
         cle.preferredWidth = 240f; cle.preferredHeight = 340f;
         var cvlg = cardGO.GetComponent<VerticalLayoutGroup>();
@@ -347,16 +348,19 @@ public class HomeController : MonoBehaviour
         int rows = (live.Count + 1) / 2;
         gridGO.GetComponent<LayoutElement>().preferredHeight = rows * 220f + (rows - 1) * 40f;
 
-        foreach (var tile in live)
-            BuildSectionTile(gridGO.transform, tile);
+        for (int i = 0; i < live.Count; i++)
+            BuildSectionTile(gridGO.transform, live[i], i);
     }
 
-    private void BuildSectionTile(Transform parent, SectionTile tile)
+    private void BuildSectionTile(Transform parent, SectionTile tile, int idx)
     {
+        var palette = UiTheme.Card(idx);
         var tileGO = new GameObject("Tile_" + tile.filter,
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup));
         tileGO.transform.SetParent(parent, false);
-        tileGO.GetComponent<Image>().color = new Color(0.45f, 0.8f, 1f, 0.18f);
+        var tImg = tileGO.GetComponent<Image>();
+        tImg.sprite = RoundedSprite(); tImg.type = Image.Type.Sliced;
+        tImg.color = palette.fill;
         var vlg = tileGO.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(24, 24, 24, 24);
         vlg.childAlignment = TextAnchor.MiddleCenter;
@@ -365,6 +369,7 @@ public class HomeController : MonoBehaviour
 
         var label = MakeText(tileGO.transform, "Label", tile.label, 44, TextAlignmentOptions.Center);
         label.fontStyle = FontStyles.Bold;
+        label.color = palette.accent;
 
         var captured = tile.filter;
         // The "learn to read" tile opens the dedicated ladder (Stage 3) rather than a flat
@@ -442,15 +447,14 @@ public class HomeController : MonoBehaviour
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        var font = TMP_Settings.defaultFontAsset;
-        if (font != null) tmp.font = font;
+        tmp.font = uiFont != null ? uiFont : TMP_Settings.defaultFontAsset;
         tmp.text = text;
         tmp.fontSize = size;
         tmp.enableAutoSizing = true;
         tmp.fontSizeMin = size * 0.6f;
         tmp.fontSizeMax = size;
         tmp.alignment = align;
-        tmp.color = Color.white;
+        tmp.color = UiTheme.TextPrimary;
         tmp.raycastTarget = false;
         return tmp;
     }

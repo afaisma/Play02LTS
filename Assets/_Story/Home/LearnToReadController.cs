@@ -28,6 +28,7 @@ public class LearnToReadController : MonoBehaviour
     private const int Levels = 4;
     private const float RetryInterval = 0.5f;
 
+    [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
     private GameObject _canvasRoot;
     private RectTransform _contentRoot;
     private GameObject _loadingLabel;
@@ -71,7 +72,7 @@ public class LearnToReadController : MonoBehaviour
         var bg = new GameObject("Background", typeof(RectTransform), typeof(Image));
         bg.transform.SetParent(_canvasRoot.transform, false);
         Stretch(bg.GetComponent<RectTransform>());
-        bg.GetComponent<Image>().color = new Color(0.10f, 0.11f, 0.16f, 1f);
+        bg.GetComponent<Image>().color = UiTheme.Bg;
 
         var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup));
         content.transform.SetParent(_canvasRoot.transform, false);
@@ -126,13 +127,14 @@ public class LearnToReadController : MonoBehaviour
         ble.preferredWidth = 150f; ble.preferredHeight = 76f;
         var bimg = backGO.GetComponent<Image>();
         bimg.sprite = RoundedSprite(); bimg.type = Image.Type.Sliced;
-        bimg.color = new Color(1f, 1f, 1f, 0.10f);
+        bimg.color = UiTheme.Surface;
         var bt = MakeText(backGO.transform, "Label", "< Home", 30, TextAlignmentOptions.Center);
-        bt.color = Color.white; Stretch(bt.rectTransform);
+        bt.color = UiTheme.TextPrimary; Stretch(bt.rectTransform);
         backGO.GetComponent<Button>().onClick.AddListener(() => Navigation.GoToHome());
 
         var title = MakeText(rowGO.transform, "Title", "Learn to Read", 56, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
+        title.color = UiTheme.Primary;
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
     }
 
@@ -159,6 +161,7 @@ public class LearnToReadController : MonoBehaviour
         int pct = Mathf.Min(100, Mathf.RoundToInt(100f * done / target));
         bool mastered = done >= target;
         string theme = (level >= 1 && level <= RungLabels.Length) ? RungLabels[level - 1] : ("Level " + level);
+        var palette = UiTheme.Card(level - 1);
 
         var card = new GameObject("Rung_" + level,
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
@@ -166,7 +169,7 @@ public class LearnToReadController : MonoBehaviour
         card.GetComponent<LayoutElement>().preferredHeight = 150f;
         var cimg = card.GetComponent<Image>();
         cimg.sprite = RoundedSprite(); cimg.type = Image.Type.Sliced;
-        cimg.color = new Color(1f, 1f, 1f, 0.06f);
+        cimg.color = palette.fill;
         var chl = card.GetComponent<HorizontalLayoutGroup>();
         chl.padding = new RectOffset(20, 24, 16, 16);
         chl.spacing = 18;
@@ -175,15 +178,20 @@ public class LearnToReadController : MonoBehaviour
         chl.childAlignment = TextAnchor.MiddleLeft;
 
         // Circular badge: level number (green when the whole level is done).
-        var badge = new GameObject("Badge", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        var badge = new GameObject("Badge", typeof(RectTransform), typeof(LayoutElement));
         badge.transform.SetParent(card.transform, false);
-        var badgeLe = badge.GetComponent<LayoutElement>();
-        badgeLe.preferredWidth = 96f; badgeLe.preferredHeight = 96f;
-        var badgeImg = badge.GetComponent<Image>();
+        badge.GetComponent<LayoutElement>().preferredWidth = 100f;
+        // Fixed-size circle centered in the height-stretched slot, so the badge stays round.
+        var circleGO = new GameObject("Circle", typeof(RectTransform), typeof(Image));
+        circleGO.transform.SetParent(badge.transform, false);
+        var crt = circleGO.GetComponent<RectTransform>();
+        crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(96f, 96f);
+        var badgeImg = circleGO.GetComponent<Image>();
         badgeImg.sprite = CircleSprite();
-        badgeImg.color = mastered ? new Color(0.36f, 0.88f, 0.71f, 1f) : new Color(0.45f, 0.8f, 1f, 1f);
-        var badgeText = MakeText(badge.transform, "N", level.ToString(), 46, TextAlignmentOptions.Center);
-        badgeText.color = new Color(0.03f, 0.14f, 0.24f, 1f);
+        badgeImg.color = mastered ? UiTheme.Primary : palette.accent;
+        var badgeText = MakeText(circleGO.transform, "N", level.ToString(), 46, TextAlignmentOptions.Center);
+        badgeText.color = UiTheme.OnPrimary;
         badgeText.fontStyle = FontStyles.Bold;
         Stretch(badgeText.rectTransform);
 
@@ -199,11 +207,12 @@ public class LearnToReadController : MonoBehaviour
 
         var name = MakeText(col.transform, "Theme", "Level " + level + " - " + theme, 34, TextAlignmentOptions.Left);
         name.fontStyle = FontStyles.Bold;
+        name.color = palette.accent;
         name.gameObject.AddComponent<LayoutElement>().preferredHeight = 44f;
 
         string ageHint = ageLo <= ageHi ? ("ages " + ageLo + "-" + ageHi) : "";
         var sub = MakeText(col.transform, "Age", ageHint, 24, TextAlignmentOptions.Left);
-        sub.color = new Color(1f, 1f, 1f, 0.6f);
+        sub.color = UiTheme.TextSecondary;
         sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 28f;
 
         // Progress bar filled to pct. Plain rects (no 9-slice) to avoid corner distortion on a thin bar.
@@ -211,7 +220,7 @@ public class LearnToReadController : MonoBehaviour
         track.transform.SetParent(col.transform, false);
         track.GetComponent<LayoutElement>().preferredHeight = 16f;
         var trackImg = track.GetComponent<Image>();
-        trackImg.color = new Color(1f, 1f, 1f, 0.12f);
+        trackImg.color = UiTheme.Track;
         trackImg.raycastTarget = false;
         var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
         fill.transform.SetParent(track.transform, false);
@@ -220,12 +229,12 @@ public class LearnToReadController : MonoBehaviour
         fr.anchorMax = new Vector2(Mathf.Clamp01(pct / 100f), 1f);
         fr.offsetMin = Vector2.zero; fr.offsetMax = Vector2.zero;
         var fillImg = fill.GetComponent<Image>();
-        fillImg.color = mastered ? new Color(0.36f, 0.88f, 0.71f, 1f) : new Color(0.45f, 0.8f, 1f, 1f);
+        fillImg.color = mastered ? UiTheme.Primary : palette.accent;
         fillImg.raycastTarget = false;
 
         // Status on the right: "Mastered" or "<read> / <target>".
         var prog = MakeText(card.transform, "Status", mastered ? "Mastered" : (done + " / " + target), 28, TextAlignmentOptions.Right);
-        prog.color = mastered ? new Color(0.36f, 0.88f, 0.71f, 1f) : new Color(0.45f, 0.8f, 1f, 1f);
+        prog.color = mastered ? UiTheme.Primary : palette.accent;
         prog.gameObject.AddComponent<LayoutElement>().preferredWidth = 130f;
 
         int captured = level;
@@ -291,15 +300,14 @@ public class LearnToReadController : MonoBehaviour
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        var font = TMP_Settings.defaultFontAsset;
-        if (font != null) tmp.font = font;
+        tmp.font = uiFont != null ? uiFont : TMP_Settings.defaultFontAsset;
         tmp.text = text;
         tmp.fontSize = size;
         tmp.enableAutoSizing = true;
         tmp.fontSizeMin = size * 0.6f;
         tmp.fontSizeMax = size;
         tmp.alignment = align;
-        tmp.color = Color.white;
+        tmp.color = UiTheme.TextPrimary;
         tmp.raycastTarget = false;
         return tmp;
     }

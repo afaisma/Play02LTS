@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/_Story/_StartScene.unity
     guid: 35d5e01ec49fb4df4aafbed45ae37e5b
   - enabled: 1
+    path: Assets/_Story/Home/_Welcome.unity
+    guid: d8a4d605d4c154db49e2fd61d30246bc
+  - enabled: 1
     path: Assets/_Story/LIbrary/_Library.unity
     guid: da6a020733c364eaf90a8525a734bfec
   - enabled: 1
@@ -32,6 +35,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Story/Home/_Home.unity
     guid: aae86c8c7d9eb4b40b351f5507cc15c6
+  - enabled: 1
+    path: Assets/_Story/Home/_LearnToRead.unity
+    guid: 03fd5b60b10c5421a9639023468e493d
   m_configObjects:
     com.unity.adaptivePerformance.basic.provider_settings: {fileID: 11400000, guid: dde0d45293c474b168d5afd46c39a552, type: 2}
     com.unity.adaptiveperformance.loader_settings: {fileID: 11400000, guid: 65def3139cb434a44bfe574e21cebf0b, type: 2}

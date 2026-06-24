@@ -240,6 +240,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a459bd297c455406a8059a541c4825c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LearnToReadController
+  uiFont: {fileID: 11400000, guid: 89fe3183a6d8146bda736016ea0f9c3b, type: 2}
 --- !u!4 &1967532535
 Transform:
   m_ObjectHideFlags: 0
