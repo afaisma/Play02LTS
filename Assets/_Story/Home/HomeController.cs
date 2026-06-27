@@ -32,16 +32,21 @@ public class HomeController : MonoBehaviour
     {
         public string label;
         public string filter;
-        public SectionTile(string label, string filter) { this.label = label; this.filter = filter; }
+        public string iconKey; // optional Resources/Icons/Rooms key; empty -> derived from the filter
+        public SectionTile(string label, string filter) { this.label = label; this.filter = filter; this.iconKey = null; }
     }
 
     [SerializeField]
     private SectionTile[] sectionTiles =
     {
         new SectionTile("Learn to Read", "learn to read"),
-        new SectionTile("Stories",       "fairytales"),
-        new SectionTile("First Words",   "rhymebooks"),
-        new SectionTile("Discover",      "science"),
+        new SectionTile("Rhymebooks",    "rhymebooks"),
+        new SectionTile("Fairytales",    "fairytales"),
+        new SectionTile("Adventure",     "adventure"),
+        new SectionTile("Nature",        "nature"),
+        new SectionTile("Manners",       "manners"),
+        new SectionTile("Science",       "science"),
+        new SectionTile("Art",           "art"),
         new SectionTile("All Books",     "everything"),
     };
 
@@ -99,17 +104,31 @@ public class HomeController : MonoBehaviour
         Stretch(bg.GetComponent<RectTransform>());
         bg.GetComponent<Image>().color = UiTheme.Bg;
 
-        // Vertical content stack with screen padding.
-        var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup));
-        content.transform.SetParent(_canvasRoot.transform, false);
+        // Scrollable vertical content (the reading-rooms list can exceed one screen).
+        var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D));
+        scrollGO.transform.SetParent(_canvasRoot.transform, false);
+        Stretch(scrollGO.GetComponent<RectTransform>());
+        var scroll = scrollGO.GetComponent<ScrollRect>();
+        scroll.horizontal = false; scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 28f;
+
+        var content = new GameObject("Content",
+            typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        content.transform.SetParent(scrollGO.transform, false);
         _contentRoot = content.GetComponent<RectTransform>();
-        Stretch(_contentRoot);
+        _contentRoot.anchorMin = new Vector2(0f, 1f); _contentRoot.anchorMax = new Vector2(1f, 1f);
+        _contentRoot.pivot = new Vector2(0.5f, 1f);
+        _contentRoot.offsetMin = Vector2.zero; _contentRoot.offsetMax = Vector2.zero;
         var vlg = content.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(48, 48, 90, 48);
+        vlg.padding = new RectOffset(48, 48, 90, 60);
         vlg.spacing = 40;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         vlg.childAlignment = TextAnchor.UpperCenter;
+        content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        scroll.viewport = scrollGO.GetComponent<RectTransform>();
+        scroll.content = _contentRoot;
     }
 
     private void ShowLoading(bool show)
@@ -135,6 +154,7 @@ public class HomeController : MonoBehaviour
         BuildAgeRow(_contentRoot);
         BuildContinueRail(_contentRoot);
         BuildSectionGrid(_contentRoot);
+        BuildGrownupsFooter(_contentRoot);
     }
 
     // Age filter chips: All 2 3 4 5 6 7 8+. Two-tap RANGE selection:
@@ -214,17 +234,25 @@ public class HomeController : MonoBehaviour
         BuildContent();
     }
 
-    // (a) Title / logo row.
+    // (a) Title / logo row: shared round home button + title.
     private void BuildTitleRow(Transform parent)
     {
-        var rowGO = new GameObject("TitleRow", typeof(RectTransform), typeof(LayoutElement));
+        var rowGO = new GameObject("TitleRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         rowGO.transform.SetParent(parent, false);
         rowGO.GetComponent<LayoutElement>().preferredHeight = 110f;
+        var hlg = rowGO.GetComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 16;
+        hlg.childControlWidth = true; hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+        hlg.childAlignment = TextAnchor.MiddleLeft;
+
+        // Same round home button used on the ladder and the in-book reader toolbar.
+        HomeButton.Create(rowGO.transform, 76f, () => Navigation.GoToHome());
 
         var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
         title.color = UiTheme.Primary;
-        Stretch(title.rectTransform);
+        title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
     }
 
     // (b) "Continue reading" horizontal rail. In progress = page > 0 (past the first 0-based step)
@@ -336,20 +364,181 @@ public class HomeController : MonoBehaviour
                 live.Add(tile);
         if (live.Count == 0) return;
 
+        // Hero: Learn to Read (full width) leads, then the rooms grid. Pulled out so it's the focus.
+        int heroIdx = -1;
+        for (int i = 0; i < live.Count; i++)
+            if (live[i].filter.Trim().ToLowerInvariant() == "learn to read") { heroIdx = i; break; }
+        if (heroIdx >= 0) { var hero = live[heroIdx]; live.RemoveAt(heroIdx); BuildHeroTile(parent, hero); }
+        if (live.Count == 0) return;
+
+        var heading = MakeText(parent, "RoomsHeading", "Reading rooms", 36, TextAlignmentOptions.Left);
+        heading.color = UiTheme.TextSecondary;
+        heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 50f;
+
         var gridGO = new GameObject("Sections", typeof(RectTransform), typeof(GridLayoutGroup), typeof(LayoutElement));
         gridGO.transform.SetParent(parent, false);
         var grid = gridGO.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(472f, 220f);
+        grid.cellSize = new Vector2(472f, 200f);
         grid.spacing = new Vector2(40f, 40f);
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 2;
         grid.childAlignment = TextAnchor.UpperCenter;
-        // Two columns: ceil(n/2) rows of 220 + spacing.
         int rows = (live.Count + 1) / 2;
-        gridGO.GetComponent<LayoutElement>().preferredHeight = rows * 220f + (rows - 1) * 40f;
+        gridGO.GetComponent<LayoutElement>().preferredHeight = rows * 200f + (rows - 1) * 40f;
 
         for (int i = 0; i < live.Count; i++)
-            BuildSectionTile(gridGO.transform, live[i], i);
+            BuildSectionTile(gridGO.transform, live[i], i + 1); // +1: hero takes card colour 0
+    }
+
+    // Full-width hero tile for the Learn-to-Read path (the app's backbone), opening the ladder.
+    private void BuildHeroTile(Transform parent, SectionTile tile)
+    {
+        var go = new GameObject("HeroLearnToRead",
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        go.transform.SetParent(parent, false);
+        go.GetComponent<LayoutElement>().preferredHeight = 200f;
+        var img = go.GetComponent<Image>();
+        img.sprite = RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = UiTheme.Primary;                       // sage — stands apart from the room tiles
+        var vlg = go.GetComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(28, 28, 22, 22);
+        vlg.spacing = 6; vlg.childAlignment = TextAnchor.MiddleCenter;
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        AddTileIcon(go.transform, tile, UiTheme.OnPrimary, 80f); // matches the hero's white label
+        var label = MakeText(go.transform, "Label", tile.label, 52, TextAlignmentOptions.Center);
+        label.fontStyle = FontStyles.Bold; label.color = UiTheme.OnPrimary;
+        var sub = MakeText(go.transform, "Sub", "A step-by-step path from first sounds up", 28, TextAlignmentOptions.Center);
+        sub.color = new Color(1f, 1f, 1f, 0.85f);
+        go.GetComponent<Button>().onClick.AddListener(() => Navigation.GoToLearnToRead());
+    }
+
+    // ---------------------------------------------------------------- "For grown-ups" door
+    // One low-key footer on Home opens a chooser for Settings + the Parents letter — replacing the
+    // two ambiguous toolbar icons with a single adult entry point.
+    private GameObject _grownups;
+
+    private void BuildGrownupsFooter(Transform parent)
+    {
+        var go = new GameObject("GrownupsFooter",
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        go.transform.SetParent(parent, false);
+        go.GetComponent<LayoutElement>().preferredHeight = 96f;
+        var img = go.GetComponent<Image>();
+        img.sprite = RoundedSprite(); img.type = Image.Type.Sliced; img.color = UiTheme.Track;
+        var vlg = go.GetComponent<VerticalLayoutGroup>();
+        vlg.childAlignment = TextAnchor.MiddleCenter;
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = true;
+        var label = MakeText(go.transform, "Label", "For grown-ups", 32, TextAlignmentOptions.Center);
+        label.color = UiTheme.TextSecondary;
+        go.GetComponent<Button>().onClick.AddListener(() => ShowGrownups(true));
+    }
+
+    private void ShowGrownups(bool show)
+    {
+        if (_grownups == null) BuildGrownupsPanel();
+        _grownups.SetActive(show);
+        if (show) _grownups.transform.SetAsLastSibling();
+    }
+
+    private void BuildGrownupsPanel()
+    {
+        _grownups = new GameObject("GrownupsPanel", typeof(RectTransform), typeof(Image), typeof(Button));
+        _grownups.transform.SetParent(_canvasRoot.transform, false);
+        Stretch(_grownups.GetComponent<RectTransform>());
+        _grownups.GetComponent<Image>().color = new Color(0.29f, 0.27f, 0.24f, 0.55f); // dim backdrop
+        _grownups.GetComponent<Button>().onClick.AddListener(() => ShowGrownups(false)); // tap outside closes
+
+        var card = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+        card.transform.SetParent(_grownups.transform, false);
+        var crt = card.GetComponent<RectTransform>();
+        crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(840f, 780f);
+        var cimg = card.GetComponent<Image>(); cimg.sprite = RoundedSprite(); cimg.type = Image.Type.Sliced; cimg.color = UiTheme.Surface;
+        var cvl = card.GetComponent<VerticalLayoutGroup>();
+        cvl.padding = new RectOffset(48, 48, 48, 48); cvl.spacing = 26; cvl.childAlignment = TextAnchor.UpperCenter;
+        cvl.childControlWidth = true; cvl.childControlHeight = true;
+        cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
+
+        var title = MakeText(card.transform, "Title", "For grown-ups", 48, TextAlignmentOptions.Center);
+        title.fontStyle = FontStyles.Bold; title.color = UiTheme.TextPrimary;
+        title.gameObject.AddComponent<LayoutElement>().preferredHeight = 72f;
+        var sub = MakeText(card.transform, "Sub", "Settings, our science, and printed books", 28, TextAlignmentOptions.Center);
+        sub.color = UiTheme.TextSecondary;
+        sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 40f;
+
+        BuildGrownupsButton(card.transform, "Settings", 0, () => { ShowGrownups(false); Navigation.GoToSettings(); });
+        BuildGrownupsButton(card.transform, "Our Science", 2, () => { ShowGrownups(false); Navigation.GoToParents(); });
+        // Commerce path (leads to Amazon) → gated behind a quick grown-up check, per store policy.
+        BuildGrownupsButton(card.transform, "Our printed books", 3, () => { ShowGrownups(false); ShowGate(() => Navigation.GoToBookstore()); });
+        BuildGrownupsButton(card.transform, "Back to books", -1, () => ShowGrownups(false));
+
+        _grownups.SetActive(false);
+    }
+
+    // A simple "ask a grown-up" multiple-choice math gate. On the correct answer it runs onPass.
+    // Used in front of the Bookstore (external/purchase links must sit behind a parental gate).
+    private GameObject _gate;
+    private void ShowGate(System.Action onPass)
+    {
+        if (_gate != null) Destroy(_gate);
+        int a = UnityEngine.Random.Range(2, 10), b = UnityEngine.Random.Range(2, 10);
+        int correct = a * b;
+        var opts = new List<int> { correct };
+        while (opts.Count < 3) { int w = correct + UnityEngine.Random.Range(-9, 10); if (w > 0 && !opts.Contains(w)) opts.Add(w); }
+        for (int i = opts.Count - 1; i > 0; i--) { int j = UnityEngine.Random.Range(0, i + 1); (opts[i], opts[j]) = (opts[j], opts[i]); }
+
+        _gate = new GameObject("Gate", typeof(RectTransform), typeof(Image), typeof(Button));
+        _gate.transform.SetParent(_canvasRoot.transform, false);
+        Stretch(_gate.GetComponent<RectTransform>());
+        _gate.GetComponent<Image>().color = new Color(0.29f, 0.27f, 0.24f, 0.6f);
+        var gate = _gate;
+        _gate.GetComponent<Button>().onClick.AddListener(() => Destroy(gate)); // tap outside cancels
+
+        var card = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+        card.transform.SetParent(_gate.transform, false);
+        var crt = card.GetComponent<RectTransform>();
+        crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(840f, 720f);
+        var cimg = card.GetComponent<Image>(); cimg.sprite = RoundedSprite(); cimg.type = Image.Type.Sliced; cimg.color = UiTheme.Surface;
+        var cvl = card.GetComponent<VerticalLayoutGroup>();
+        cvl.padding = new RectOffset(48, 48, 44, 44); cvl.spacing = 22; cvl.childAlignment = TextAnchor.UpperCenter;
+        cvl.childControlWidth = true; cvl.childControlHeight = true; cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
+
+        var title = MakeText(card.transform, "Title", "Grown-ups only", 46, TextAlignmentOptions.Center);
+        title.fontStyle = FontStyles.Bold; title.color = UiTheme.TextPrimary;
+        title.gameObject.AddComponent<LayoutElement>().preferredHeight = 64f;
+        var q = MakeText(card.transform, "Q", "What is " + a + " x " + b + " ?", 40, TextAlignmentOptions.Center);
+        q.color = UiTheme.TextSecondary; q.gameObject.AddComponent<LayoutElement>().preferredHeight = 58f;
+
+        for (int i = 0; i < opts.Count; i++)
+        {
+            int val = opts[i];
+            BuildGrownupsButton(card.transform, val.ToString(), i,
+                () => { if (val == correct) { Destroy(gate); onPass(); } else { ShowGate(onPass); } });
+        }
+        BuildGrownupsButton(card.transform, "Cancel", -1, () => Destroy(gate));
+        _gate.transform.SetAsLastSibling();
+    }
+
+    private void BuildGrownupsButton(Transform parent, string text, int colorIdx, UnityEngine.Events.UnityAction onClick)
+    {
+        var go = new GameObject("GBtn_" + text,
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        go.transform.SetParent(parent, false);
+        go.GetComponent<LayoutElement>().preferredHeight = 108f;
+        var img = go.GetComponent<Image>();
+        img.sprite = RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = colorIdx >= 0 ? UiTheme.Card(colorIdx).fill : UiTheme.Track;
+        var vlg = go.GetComponent<VerticalLayoutGroup>();
+        vlg.childAlignment = TextAnchor.MiddleCenter;
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = true;
+        var label = MakeText(go.transform, "Label", text, 38, TextAlignmentOptions.Center);
+        label.fontStyle = FontStyles.Bold;
+        label.color = colorIdx >= 0 ? UiTheme.Card(colorIdx).accent : UiTheme.TextSecondary;
+        go.GetComponent<Button>().onClick.AddListener(onClick);
     }
 
     private void BuildSectionTile(Transform parent, SectionTile tile, int idx)
@@ -363,10 +552,12 @@ public class HomeController : MonoBehaviour
         tImg.color = palette.fill;
         var vlg = tileGO.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(24, 24, 24, 24);
+        vlg.spacing = 10;
         vlg.childAlignment = TextAnchor.MiddleCenter;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
 
+        AddTileIcon(tileGO.transform, tile, palette.accent, 64f);
         var label = MakeText(tileGO.transform, "Label", tile.label, 44, TextAlignmentOptions.Center);
         label.fontStyle = FontStyles.Bold;
         label.color = palette.accent;
@@ -381,6 +572,43 @@ public class HomeController : MonoBehaviour
             if (isLearnToRead) Navigation.GoToLearnToRead();
             else Nav.GoToLibrary(captured);
         });
+    }
+
+    // Optional room icon above the label: a single-colour rounded glyph from Resources/Icons/Rooms,
+    // tinted to match the card. Resolves by the tile's explicit iconKey, falling back to the filter
+    // token; a no-op when no matching sprite ships, so iconless tiles keep their label-only look.
+    private void AddTileIcon(Transform parent, SectionTile tile, Color tint, float size)
+    {
+        var sprite = ResolveTileIcon(tile);
+        if (sprite == null) return;
+
+        var go = new GameObject("Icon", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        go.transform.SetParent(parent, false);
+        var le = go.GetComponent<LayoutElement>();
+        le.preferredWidth = size; le.preferredHeight = size;
+        le.flexibleWidth = 0f; le.flexibleHeight = 0f;
+        var img = go.GetComponent<Image>();
+        img.sprite = sprite;
+        img.color = tint;
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+    }
+
+    private Sprite ResolveTileIcon(SectionTile tile)
+    {
+        string key = !string.IsNullOrEmpty(tile.iconKey) ? tile.iconKey : IconKeyFromFilter(tile.filter);
+        return string.IsNullOrEmpty(key) ? null : Resources.Load<Sprite>("Icons/Rooms/" + key);
+    }
+
+    // Filter tokens map to icon file names by keeping only letters/digits (e.g. "learn to read" ->
+    // "learntoread", "sound & speech" -> "soundspeech", "everything" -> "everything").
+    private static string IconKeyFromFilter(string filter)
+    {
+        if (string.IsNullOrEmpty(filter)) return "";
+        var sb = new System.Text.StringBuilder(filter.Length);
+        foreach (char c in filter.ToLowerInvariant())
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+        return sb.ToString();
     }
 
     // ---------------------------------------------------------------- helpers

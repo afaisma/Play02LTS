@@ -738,10 +738,10 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private static string TileLabel(Mode m) => m switch
     {
-        Mode.Storyteller => "Storyteller",
-        Mode.AppVoice => "App voice",
-        Mode.IRead => "I read it myself",
-        Mode.Pictures => "Just pictures",
+        Mode.Storyteller => "Storyteller Reads",
+        Mode.AppVoice => "App Reads",
+        Mode.IRead => "App Follows the Child's Reading",
+        Mode.Pictures => "App Is Silent",
         _ => "?"
     };
 

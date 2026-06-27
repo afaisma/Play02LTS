@@ -285,8 +285,9 @@ MonoBehaviour:
   titlePanel: {fileID: 1018813066}
   titlePage: {fileID: 1018813070}
   nCurrentStep: -1
-  baseURL: 
+  baseURL:
   buttonController: {fileID: 22888430}
+  btnHome: {fileID: 1730229995}
 --- !u!4 &22888424
 Transform:
   m_ObjectHideFlags: 0

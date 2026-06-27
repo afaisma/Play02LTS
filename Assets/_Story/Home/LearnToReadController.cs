@@ -121,16 +121,8 @@ public class LearnToReadController : MonoBehaviour
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
         hlg.childAlignment = TextAnchor.MiddleLeft;
 
-        var backGO = new GameObject("BackHome", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-        backGO.transform.SetParent(rowGO.transform, false);
-        var ble = backGO.GetComponent<LayoutElement>();
-        ble.preferredWidth = 150f; ble.preferredHeight = 76f;
-        var bimg = backGO.GetComponent<Image>();
-        bimg.sprite = RoundedSprite(); bimg.type = Image.Type.Sliced;
-        bimg.color = UiTheme.Surface;
-        var bt = MakeText(backGO.transform, "Label", "< Home", 30, TextAlignmentOptions.Center);
-        bt.color = UiTheme.TextPrimary; Stretch(bt.rectTransform);
-        backGO.GetComponent<Button>().onClick.AddListener(() => Navigation.GoToHome());
+        // Shared round home button (house glyph in sage), identical to Home and the reader toolbar.
+        HomeButton.Create(rowGO.transform, 76f, () => Navigation.GoToHome());
 
         var title = MakeText(rowGO.transform, "Title", "Learn to Read", 56, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;

@@ -151,12 +151,26 @@ MonoBehaviour:
   sectionTiles:
   - label: Learn to Read
     filter: learn to read
-  - label: Stories
-    filter: fairytales
-  - label: First Words
+  - label: Rhymebooks
     filter: rhymebooks
-  - label: Discover
+  - label: Fairytales
+    filter: fairytales
+  - label: Adventure
+    filter: adventure
+  - label: Nature
+    filter: nature
+  - label: Manners
+    filter: manners
+  - label: Science
     filter: science
+  - label: Art
+    filter: art
+  - label: Classic
+    filter: classic
+  - label: Sound & Speech
+    filter: sound & speech
+  - label: Math
+    filter: math
   - label: All Books
     filter: everything
   uiFont: {fileID: 11400000, guid: 89fe3183a6d8146bda736016ea0f9c3b, type: 2}

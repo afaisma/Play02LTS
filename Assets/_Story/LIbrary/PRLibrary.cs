@@ -54,16 +54,16 @@ public class PRLibrary : MonoBehaviour
         //     Screen.orientation = Portrait;
         // }
         Debug.Log("PRLibrary Start, currentCategory: " + currentCategory);
-        
+
+        // Hide toolbar buttons that moved/were removed (reversible via AppConfig). Search → removed;
+        // Settings + Parents → consolidated into Home's "For grown-ups" door.
+        HideToolbarButtons();
+
         LoadBooks(this);
-        // Only re-apply the remembered category when entering with no explicit
-        // filter. An incoming non-"everything" filter (e.g. a "levelN" token from
-        // Nav) is applied by LoadBooksWithRetry's SetFilter(g_libraryFilter); calling
-        // GotoCategory() here would clobber it back to the stale currentCategory
-        // (which only tracks bookCategories entries, not level tokens) — that's the
-        // "shows All Books" bug.
-        if (Globals.g_libraryFilter == "everything")
-            GotoCategory();
+        // The incoming Globals.g_libraryFilter is authoritative: LoadBooksWithRetry's
+        // SetFilter(g_libraryFilter) applies it directly (including "everything", which
+        // resets to the full "All Books" catalog). The stale static currentCategory is
+        // no longer consulted on entry — only swipe-between-rooms updates it.
         booksScrollView.ResetScrollPosition();
     }
 
@@ -112,10 +112,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
             PlayerPrefs.SetInt("g_askedToBeRated", askedToBeRated + 1);
         }
         
-        if (Globals.g_libraryFilter != "everything")
-        {
-            SetFilter(Globals.g_libraryFilter);
-        }
+        SetFilter(Globals.g_libraryFilter);
     }
 
     public static List<PRBook> FilterByName(string name)
@@ -151,6 +148,18 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Map()       => Navigation.GoToMap();
     public void Bookstore() => Navigation.GoToBookstore();
     public void Parents()   => Navigation.GoToParents();
+
+    // Reversibly hide toolbar buttons (search + grown-up icons) per AppConfig. Covers name variants.
+    private void HideToolbarButtons()
+    {
+        var hide = new System.Collections.Generic.HashSet<string>();
+        if (!AppConfig.ShowSearch) hide.Add("btnFilter");
+        if (!AppConfig.ShowGrownupToolbarIcons)
+        { hide.Add("btnParents"); hide.Add("btnParents1"); hide.Add("btnSettings"); hide.Add("btnSettings1"); }
+        if (hide.Count == 0) return;
+        foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (hide.Contains(t.name)) t.gameObject.SetActive(false);
+    }
     public void Home()      => Navigation.GoToHome();
 
     public void SetFilter(string filter)

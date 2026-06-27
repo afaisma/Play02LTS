@@ -105,6 +105,7 @@ public class PRScript : MonoBehaviour
 
     public string baseURL = "";
     public ButtonController buttonController;
+    [SerializeField] private UnityEngine.UI.Button btnHome; // reader toolbar home button; restyled to the shared HomeButton look
 
     string currentVoice = "";
     string getCurrentVoicePostfix()
@@ -192,6 +193,14 @@ public class PRScript : MonoBehaviour
     void Start()
     {
         storyStepsUI.prScript = this;
+
+        // Standard round home button, shared with Home and the Learn-to-Read ladder.
+        HomeButton.Apply(btnHome);
+
+        // Commerce consolidated to Home's gated door — keep the in-reader buy button hidden by
+        // default (reversible via AppConfig.ShowInReaderShopping).
+        if (!AppConfig.ShowInReaderShopping && buttonParentalGate != null)
+            buttonParentalGate.gameObject.SetActive(false);
 
         // Route Gallery's overlay-event hooks (currently onTap, eventually
         // onMediaEnd / onDragEnd / etc.) through DispatchEvent so the
@@ -378,11 +387,13 @@ public class PRScript : MonoBehaviour
         {
             string url = NormalizeUrl(context.GetVar("url").ToString());
             parentalGate.url = url;
-            if (url != "")
+            // Commerce is consolidated into Home's gated "Our printed books"; hide the in-reader buy
+            // button unless re-enabled (AppConfig.ShowInReaderShopping). Reversible.
+            if (url != "" && AppConfig.ShowInReaderShopping)
                 buttonParentalGate.gameObject.SetActive(true);
             else
                 buttonParentalGate.gameObject.SetActive(false);
-            
+
             return new Intrinsic.Result(ValNumber.one);
         };
         f = Intrinsic.Create("AddVideo");
