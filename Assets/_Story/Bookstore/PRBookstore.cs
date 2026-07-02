@@ -41,7 +41,11 @@ public class PRBookstore : MonoBehaviour
         //     Screen.orientation = Portrait;
         // }
         Debug.Log("PRBookstore Start, currentCategory: " + currentCategory);
-        
+
+        // Hide toolbar buttons that moved/were removed (reversible via AppConfig). Search → removed;
+        // Settings + Parents → consolidated into Home's "For grown-ups" door.
+        HideToolbarButtons();
+
         LoadBooks(this);
         GotoCategory();
         bookstoreScrollView.ResetScrollPosition();
@@ -130,6 +134,18 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Settings() => Navigation.GoToSettings();
     public void Map()      => Navigation.GoToMap();
     public void Parents()  => Navigation.GoToParents();
+
+    // Reversibly hide toolbar buttons (search + grown-up icons) per AppConfig. Covers name variants.
+    private void HideToolbarButtons()
+    {
+        var hide = new System.Collections.Generic.HashSet<string>();
+        if (!AppConfig.ShowSearch) hide.Add("btnFilter");
+        if (!AppConfig.ShowGrownupToolbarIcons)
+        { hide.Add("btnParents"); hide.Add("btnParents1"); hide.Add("btnSettings"); hide.Add("btnSettings1"); }
+        if (hide.Count == 0) return;
+        foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (hide.Contains(t.name)) t.gameObject.SetActive(false);
+    }
 
     public void SetFilter(string filter)
     {
