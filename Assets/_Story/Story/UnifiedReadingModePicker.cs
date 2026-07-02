@@ -29,7 +29,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private enum Mode { Storyteller, AppVoice, IRead, Pictures }
 
     // ---- PlayerPrefs keys (mirror the existing {bookUrl}_page / _done pattern) ----
-    private const string PerBookSuffix = "_mode";
+    // GlobalDefaultKey is the single remembered voice preference: ModeStr(Storyteller)/ModeStr(AppVoice).
     private const string GlobalDefaultKey = "reading_mode_default";
     private const string AutopageKey = "reading_autopage";        // global, 0/1
     private const string PickerSeenKey = "reading_picker_seen";   // first-run flag
@@ -179,6 +179,20 @@ public class UnifiedReadingModePicker : MonoBehaviour
         var book = Globals.g_prbook;
         BuildAvailable(book);
         _currentMode = Resolve(book);
+        MaybeShowStorytellerFallbackHint();
+    }
+
+    // One-time-per-session note for users who prefer the Storyteller but opened a book without a human
+    // recording (so it resolved to App Reads). Non-blocking; brand-new users (no stored preference,
+    // and users whose preference is App Reads) never see it.
+    private static bool _storytellerFallbackHintShown;
+    private void MaybeShowStorytellerFallbackHint()
+    {
+        if (_storytellerFallbackHintShown) return;
+        if (_currentMode != Mode.AppVoice || _available.Contains(Mode.Storyteller)) return; // not a fallback
+        if (PlayerPrefs.GetString(GlobalDefaultKey, "") != ModeStr(Mode.Storyteller)) return; // no explicit Storyteller pref
+        _storytellerFallbackHintShown = true;
+        ShowToast("This book doesn't have a storyteller recording, so the app will read it.");
     }
 
     private void BuildAvailable(PRBook book)
@@ -210,33 +224,15 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private Mode Resolve(PRBook book)
     {
-        // 1) Per-book remembered choice (if still available) — an explicit choice always wins.
-        if (book != null
-            && TryParse(PlayerPrefs.GetString(book.bookUrl + PerBookSuffix, ""), out var perBook)
-            && _available.Contains(perBook))
-            return perBook;
-
-        // 2) Narratives prefer the real voice: a human-recorded book defaults to Storyteller unless
-        // the child explicitly chose otherwise for THIS book (handled above). Ahead of the global
-        // default so an App-voice pick on one book never silences the real voice everywhere.
-        if (_available.Contains(Mode.Storyteller))
-            return Mode.Storyteller;
-
-        // 3) Global default (if available).
-        if (TryParse(PlayerPrefs.GetString(GlobalDefaultKey, ""), out var global)
-            && _available.Contains(global))
-            return global;
-
-        // 4) Smart per-book default.
-        return SmartDefault(book);
-    }
-
-    private Mode SmartDefault(PRBook book)
-    {
-        bool hasHuman = book != null && book.voices != null && book.voices.Contains("human");
-        if (hasHuman && _available.Contains(Mode.Storyteller)) return Mode.Storyteller;
-        if (_available.Contains(Mode.AppVoice)) return Mode.AppVoice;
-        return _available[0]; // never iread (it is never in a default path)
+        // The ONLY remembered thing is a voice preference (Storyteller vs App Reads), stored in
+        // GlobalDefaultKey as ModeStr(Storyteller)/ModeStr(AppVoice). Follow-along and Silent are
+        // per-session actions — never remembered, never auto-resolved. So Resolve only ever returns
+        // a voice mode (or, in the pictures-only edge, whatever single mode the book offers).
+        string pref = PlayerPrefs.GetString(GlobalDefaultKey, "");           // "" = brand-new user
+        if (pref == ModeStr(Mode.AppVoice) && _available.Contains(Mode.AppVoice)) return Mode.AppVoice;
+        if (_available.Contains(Mode.Storyteller)) return Mode.Storyteller;  // prefer real voice (also the default)
+        if (_available.Contains(Mode.AppVoice))    return Mode.AppVoice;     // automatic fallback
+        return _available[0];                                               // pictures-only edge
     }
 
     // ---------------------------------------------------------------- apply (spec §5,§8)
@@ -285,14 +281,14 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private void OnTileSelected(Mode mode)
     {
-        // Persist the choice, then apply + replay immediately. Per-book stores ANY mode, but the
-        // GLOBAL default is only written for narration modes — iread/pictures as a global default
-        // would make unrelated books open silent (and iread force the auto-open mic modal).
-        var book = Globals.g_prbook;
-        if (book != null) PlayerPrefs.SetString(book.bookUrl + PerBookSuffix, ModeStr(mode));
+        // Only the voice preference is remembered. Picking Storyteller/App Reads updates the global
+        // preference (applies to every book). Follow-along and Silent are session-only — write nothing,
+        // so a book never reopens on its own as silent or demanding the mic.
         if (mode == Mode.Storyteller || mode == Mode.AppVoice)
+        {
             PlayerPrefs.SetString(GlobalDefaultKey, ModeStr(mode));
-        PlayerPrefs.Save();
+            PlayerPrefs.Save();
+        }
 
         ApplyMode(mode, replay: true, allowMicEnable: true);
         ClosePicker(); // selecting is the action; the slide-down is the "done" feedback (spec §7)
@@ -309,7 +305,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         if (_open) ClosePicker();
     }
 
-    private bool AutopagePref() => PlayerPrefs.GetInt(AutopageKey, 1) == 1;
+    private bool AutopagePref() => PlayerPrefs.GetInt(AutopageKey, 0) == 1;
 
     private void OnAutopageChanged(bool on)
     {
@@ -323,18 +319,19 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private void MaybeAutoOpen()
     {
-        bool firstRun = PlayerPrefs.GetInt(PickerSeenKey, 0) == 0;
+        // Only auto-open when there's a real decision to surface; otherwise just start reading in the
+        // resolved mode and leave changes to the mode button. Storyteller/App Reads/Silent never pop
+        // the modal on their own.
+        bool firstRun = !PlayerPrefs.HasKey(PickerSeenKey);
 
-        // First time a book unlocks a mode the child has never seen (esp. iread on their first
-        // read_to_me book) — surface it once as discovery.
-        bool unlocksNewMode = false;
-        foreach (var m in _available)
-            if (PlayerPrefs.GetInt(ModeSeenPrefix + ModeStr(m), 0) == 0) { unlocksNewMode = true; break; }
+        // Discovery of the read-yourself (Follow-along) mode — surface once when a book first offers it.
+        bool firstFollowAlong = _available.Contains(Mode.IRead)
+            && PlayerPrefs.GetInt(ModeSeenPrefix + ModeStr(Mode.IRead), 0) == 0;
 
-        // Remembered iread can't apply silently (no surprise mic) — surface so the pick is explicit.
-        bool rememberedIRead = _currentMode == Mode.IRead;
+        // A silently-resolved iread can't apply (no surprise mic) — surface so the pick is explicit.
+        bool rememberedIReadUnarmed = _currentMode == Mode.IRead && !_ireadArmed;
 
-        if (firstRun || unlocksNewMode || rememberedIRead)
+        if (firstRun || firstFollowAlong || rememberedIReadUnarmed)
             OpenPicker();
     }
 
@@ -639,6 +636,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private void OpenPicker()
     {
         if (_modalRoot == null) return;
+        _player?.StopAudio(); // silence any in-flight narration; nothing plays while the picker is open
         MarkSeen();
         SyncTileSelection();
         SyncAutopageRow();
@@ -669,6 +667,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
         _open = false;
         IsOpen = false;
+        // Now that the gate is lifted, start/continue the book in the current mode (the page didn't
+        // narrate while the picker was up). Safe: the story is loaded by the time the picker can close.
+        _prScript?.ReplayCurrenStep();
         _modalGroup.blocksRaycasts = false;
         _modalGroup.interactable = false;
         _modalGroup.DOKill();
@@ -682,7 +683,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private void UpdateEntryLabel()
     {
-        if (_entryLabel != null) _entryLabel.text = ShortLabel(_currentMode);
+        if (_entryLabel != null) _entryLabel.text = TileLabel(_currentMode);
     }
 
     private static Vector2 SafeAreaInset()
@@ -695,6 +696,44 @@ public class UnifiedReadingModePicker : MonoBehaviour
     }
 
     [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
+
+    // Minimal code-built toast: a rounded UiTheme.Surface pill that fades in, holds, fades out, then
+    // self-destroys. Non-blocking (no raycasts). Built on the picker's own canvas so it floats above
+    // the story UI, consistent with the rest of this component's code-built UI.
+    private void ShowToast(string message)
+    {
+        if (_canvasRoot == null) return;
+
+        var go = new GameObject("Toast",
+            typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+        go.transform.SetParent(_canvasRoot.transform, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = new Vector2(0f, 180f); // slightly above middle, over the lower image / upper text
+        var img = go.GetComponent<Image>();
+        img.sprite = RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = UiTheme.Surface;
+        var hlg = go.GetComponent<HorizontalLayoutGroup>();
+        hlg.padding = new RectOffset(28, 28, 18, 18);
+        hlg.childControlWidth = true; hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+        var fitter = go.GetComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        var label = MakeText(go.transform, "Label", message, 36, TextAlignmentOptions.Center);
+        label.enableWordWrapping = true;
+        label.gameObject.AddComponent<LayoutElement>().preferredWidth = 780f;
+
+        var cg = go.GetComponent<CanvasGroup>();
+        cg.alpha = 0f; cg.blocksRaycasts = false; cg.interactable = false;
+        DOTween.Sequence().SetUpdate(true)
+            .Append(cg.DOFade(1f, 0.25f))
+            .AppendInterval(4f)
+            .Append(cg.DOFade(0f, 0.5f))
+            .OnComplete(() => { if (go != null) Destroy(go); });
+    }
 
     // Procedural rounded-rect (9-sliced) sprite for panel/tiles, matching the other scenes.
     private static Sprite _roundedSprite;
@@ -740,7 +779,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
     {
         Mode.Storyteller => "Storyteller Reads",
         Mode.AppVoice => "App Reads",
-        Mode.IRead => "App Follows the Child's Reading",
+        Mode.IRead => "I read it myself",
         Mode.Pictures => "App Is Silent",
         _ => "?"
     };
@@ -754,15 +793,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _ => ""
     };
 
-    private static string ShortLabel(Mode m) => m switch
-    {
-        Mode.Storyteller => "Story",
-        Mode.AppVoice => "Voice",
-        Mode.IRead => "I Read",
-        Mode.Pictures => "Pics",
-        _ => "Read"
-    };
-
     private static string ModeStr(Mode m) => m switch
     {
         Mode.Storyteller => "storyteller",
@@ -771,16 +801,4 @@ public class UnifiedReadingModePicker : MonoBehaviour
         Mode.Pictures => "pictures",
         _ => ""
     };
-
-    private static bool TryParse(string s, out Mode m)
-    {
-        switch (s)
-        {
-            case "storyteller": m = Mode.Storyteller; return true;
-            case "appvoice": m = Mode.AppVoice; return true;
-            case "iread": m = Mode.IRead; return true;
-            case "pictures": m = Mode.Pictures; return true;
-            default: m = Mode.AppVoice; return false;
-        }
-    }
 }

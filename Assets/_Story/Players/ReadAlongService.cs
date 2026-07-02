@@ -32,6 +32,10 @@ public class ReadAlongService : MonoBehaviour
              "even if no recognized word landed in the last region (avoids a hang).")]
     [SerializeField] private float hardCompletionSilenceSec = 2.5f;
 
+    [Header("Stall hint")]
+    [Tooltip("Seconds with no cursor advance (page not complete) before nudging the reader toward Next.")]
+    [SerializeField] private float stallHintSec = 5f;
+
     [Header("Sentence-tail flush")]
     [Tooltip("Pause (s) with no new recognition before flushing a sentence's late-committed tail.")]
     [SerializeField] private float sentenceFlushDelay = 0.35f;
@@ -42,6 +46,13 @@ public class ReadAlongService : MonoBehaviour
     [SerializeField] private int stallK = 3;    // stuck-count that arms the wide re-sync
     [SerializeField] private int wideLook = 6;  // re-sync scans look = 3..wideLook
     private int _stuck;                          // consecutive recognized words with no advance
+
+    // ---- voice-activity gate: only accept recognized words while the mic actually hears voice ----
+    // (the page-restricted grammar otherwise maps silence/breath/noise onto page words and advances).
+    [SerializeField] private float voiceRmsThreshold = 0.012f;  // mic RMS above this = real voice
+    [SerializeField] private float voiceHoldSec      = 0.35f;   // treat voice as active this long after energy
+    private float _lastVoiceTime = -999f;
+    private bool VoiceActive => (Time.realtimeSinceStartup - _lastVoiceTime) <= voiceHoldSec;
     private static readonly HashSet<string> STOPWORDS = new()
     {
         "the", "a", "an", "is", "are", "was", "were", "and", "or", "of", "to", "in", "on", "it",
@@ -61,6 +72,8 @@ public class ReadAlongService : MonoBehaviour
     private List<string> _expected = new();
     private int _cursor;
     private bool _reachedLastRegion;
+    private bool _recognizedThisPage; // true once a genuine word recognition advanced the cursor on this page
+    private bool _stallHintRaised;    // one-shot: StallHint fired for the current stall (cleared on advance/page change)
     private float _lastAdvanceTime;
     private bool _completed;
     private readonly List<int> _sentenceEndIdx = new(); // ascending word indices that end a sentence
@@ -76,6 +89,12 @@ public class ReadAlongService : MonoBehaviour
     // Raised when the recognizer can't run (mic init/permission failure) AFTER read-along was
     // active, so a listener (the picker) can fall back to narration instead of a silent page.
     public event System.Action Unavailable;
+
+    // Stall hint: raised once when an active page hasn't advanced for stallHintSec (and isn't complete)
+    // so the reader can gently nudge toward the Next arrow; StallHintCleared fires on the next advance,
+    // page change, completion, or when read-along turns off.
+    public event System.Action StallHint;
+    public event System.Action StallHintCleared;
 
     // Spawn one persistent service automatically; it stays inert until a story scene wires it.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -119,6 +138,7 @@ public class ReadAlongService : MonoBehaviour
         {
             int end = NextSentenceEnd(_cursor);
             if (end >= 0
+                && _recognizedThisPage // never flush before the child has actually read a word
                 && end - _cursor <= sentenceTailWords
                 && (Time.realtimeSinceStartup - _lastAdvanceTime) >= sentenceFlushDelay
                 && _lastPartialText.Length <= _partialLenAtAdvance)
@@ -128,6 +148,7 @@ public class ReadAlongService : MonoBehaviour
                 Debug.Log($"[ReadAlong][SENT-FLUSH] cursor {before}->{_cursor}");
                 if (_page != null) _page.SetReadProgress(_cursor);
                 _lastAdvanceTime = Time.realtimeSinceStartup;
+                ResetStallHint(); // a flush is an advance — drop any nudge
 
                 // The flush can reach the last region with no recognized word landing there; mark it
                 // so lenient completion (which needs _reachedLastRegion) can still fire. Same
@@ -145,12 +166,32 @@ public class ReadAlongService : MonoBehaviour
         {
             int threshold = Mathf.CeilToInt(_expected.Count * completionFraction);
             float silence = Time.realtimeSinceStartup - _lastAdvanceTime;
-            if ((_cursor >= threshold && _reachedLastRegion && silence >= trailingSilenceSec) ||
-                (_cursor >= threshold && silence >= hardCompletionSilenceSec))
+            if (_recognizedThisPage && // a page with no recognized words can never auto-complete
+                ((_cursor >= threshold && _reachedLastRegion && silence >= trailingSilenceSec) ||
+                 (_cursor >= threshold && silence >= hardCompletionSilenceSec)))
             {
                 Complete();
             }
         }
+
+        // Stall hint (one-shot): an active page that hasn't advanced for stallHintSec and hasn't
+        // completed — nudge the reader toward the Next arrow. Completion fires well before stallHintSec,
+        // so a normally-read page never reaches here; cleared on the next advance / page change.
+        if (_active && _recognizing && !_completed && _expected.Count > 0 && !_stallHintRaised
+            && (Time.realtimeSinceStartup - _lastAdvanceTime) >= stallHintSec)
+        {
+            _stallHintRaised = true;
+            StallHint?.Invoke();
+        }
+    }
+
+    // Clear a raised stall hint (cursor advanced / page changed / completed / read-along off) so the
+    // reader stops nudging. No-op when no hint is currently up.
+    private void ResetStallHint()
+    {
+        if (!_stallHintRaised) return;
+        _stallHintRaised = false;
+        StallHintCleared?.Invoke();
     }
 
     // Smallest sentence-end word index >= cursor, or -1 if none remain. (_sentenceEndIdx is ascending.)
@@ -191,6 +232,7 @@ public class ReadAlongService : MonoBehaviour
         }
         else
         {
+            ResetStallHint(); // read-along off — drop any nudge
             Stop();
         }
     }
@@ -217,7 +259,9 @@ public class ReadAlongService : MonoBehaviour
         _cursor = 0;
         _stuck = 0;
         _reachedLastRegion = false;
+        _recognizedThisPage = false;
         _completed = false;
+        ResetStallHint(); // new page — drop any nudge carried over from the previous page
         _lastAdvanceTime = Time.realtimeSinceStartup;
         _lastPartialText = "";
         _partialLenAtAdvance = 0;
@@ -305,6 +349,7 @@ public class ReadAlongService : MonoBehaviour
 
         _micSource = sttGO.AddComponent<MicrophoneSpeechSource>();
         _micSource.DeviceName = null; // default microphone
+        _micSource.SamplesReady += OnMicSamples; // drive the voice-activity gate from the existing mic stream
 
         var provider = sttGO.AddComponent<StreamingAssetsLanguageModelProvider>();
         provider.language = SystemLanguage.English;
@@ -347,8 +392,21 @@ public class ReadAlongService : MonoBehaviour
     // feeding the full string each call re-walks already-consumed words — they fail at the cursor,
     // bump _stuck, and eventually arm the wide re-sync, which then teleports on a re-processed common
     // word. Instead, only the NEWLY-APPENDED words past the common prefix are matched.
+    // Mic energy meter: stamp _lastVoiceTime whenever the live mic buffer's RMS clears the threshold.
+    // Reuses the recognizer's existing MicrophoneSpeechSource stream (no second Microphone started).
+    private void OnMicSamples(object sender, Recognissimo.SamplesReadyEventArgs e)
+    {
+        double sum = 0; int n = e.Length;
+        for (int i = 0; i < n; i++) { float s = e.Samples[i]; sum += s * s; }
+        float rms = n > 0 ? Mathf.Sqrt((float)(sum / n)) : 0f;
+        if (rms >= voiceRmsThreshold) _lastVoiceTime = Time.realtimeSinceStartup;
+    }
+
     private void Feed(string recognized, bool isFinal)
     {
+        if (!isFinal && !VoiceActive) return; // gate only partials on mic energy; finals are the recognizer's
+                                              // considered decision (its committed last word lands here), and a
+                                              // true-silence final is empty so it can't advance anyway
         if (_expected.Count == 0) return;
 
         // Normalized recognized words (drop empties + [unk]/unk), in order.
@@ -426,6 +484,8 @@ public class ReadAlongService : MonoBehaviour
     private void OnAdvance(int matchedOrdinal)
     {
         _lastAdvanceTime = Time.realtimeSinceStartup;
+        _recognizedThisPage = true; // a genuine recognized word advanced the cursor (never set by the flush)
+        ResetStallHint(); // a recognized advance clears any active nudge
         _partialLenAtAdvance = _lastPartialText.Length; // for the sentence-tail flush's "not grown" guard
 
         int lastRegionStart = Mathf.FloorToInt(_expected.Count * (1f - lastRegionFraction));
@@ -437,6 +497,7 @@ public class ReadAlongService : MonoBehaviour
     private void Complete()
     {
         _completed = true;
+        ResetStallHint(); // page finished — drop any nudge
         Stop();
         Debug.Log("[ReadAlong] lenient completion → OnPageReadComplete");
         // Either runs the page's [event OnPageRead] reveal (and stays) or auto-advances by default.

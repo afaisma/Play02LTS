@@ -151,6 +151,7 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     public void PlayExt(string audioURL, float fromS, float toS, string textContentURL, int pageNum)
     {
+        if (UnifiedReadingModePicker.IsOpen) return; // nothing narrates while the reading-mode picker is open
         PreparePlayVoiceSettings();
         currentWordIndex = 0;
         StopAllCoroutines();
@@ -167,6 +168,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     public void Play(string chunkname, string currentVoicePostfix, string content, float startTime = -1,
         float endTime = -1)
     {
+        if (UnifiedReadingModePicker.IsOpen) return; // nothing narrates while the reading-mode picker is open
         PreparePlayVoiceSettings();
 
         // Computer/TTS names + the ?v={content_rev} cache-bust come from the shared TtsUrls
@@ -1247,6 +1249,14 @@ public class AudioAndTextPlayer : MonoBehaviour
     public void StopPageAudioForReadAlong()
     {
         if (!ReadAlongActive) return;
+        StopAllCoroutines();
+        if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+    }
+
+    // Hard-stop page audio + highlight coroutines regardless of mode. Used to silence any in-flight
+    // narration the instant the reading-mode picker opens (companion to the Play/PlayExt IsOpen gate).
+    public void StopAudio()
+    {
         StopAllCoroutines();
         if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
     }
