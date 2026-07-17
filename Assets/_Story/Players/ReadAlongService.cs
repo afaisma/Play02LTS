@@ -295,6 +295,9 @@ public class ReadAlongService : MonoBehaviour
     {
         // Cancel any pending deferred restart so a Stop (incl. SetActive(false)) can't be resurrected.
         if (_restartCo != null) { StopCoroutine(_restartCo); _restartCo = null; }
+        _pendingKind = PendingKind.None;   // <-- add: StopProcessing() is async, so a straggler
+                                           // partial can still arrive and commit a stale pending
+                                           // advance (Complete() -> Stop() is the live path).
         if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
     }
 
