@@ -79,7 +79,14 @@ public class ReadAlongService : MonoBehaviour
     private readonly List<int> _sentenceEndIdx = new(); // ascending word indices that end a sentence
     private string _lastPartialText = "";                // last partial seen in OnPartial
     private int _partialLenAtAdvance;                    // partial length captured at the last advance
-    private List<string> _utteranceWords = new();        // normalized words already matched this utterance
+    private List<string> _utteranceWords = new();        // positional utterance tokens (incl. "unk" holders)
+
+    // Tentative advance held until the next word (or the utterance's final) confirms it — see MatchWord.
+    // Dup: an advance onto a word identical to the just-consumed one (partial jitter / a re-read).
+    // Skip: a wide stall re-sync jump, committed only when the following word matches _expected[idx+1].
+    private enum PendingKind { None, Dup, Skip }
+    private PendingKind _pendingKind = PendingKind.None;
+    private int _pendingIdx;
 
     // ---- activation / wiring ----
     private bool _active;
@@ -254,6 +261,10 @@ public class ReadAlongService : MonoBehaviour
 
         _page = page;
         _expected = page.ExpectedWords != null ? new List<string>(page.ExpectedWords) : new List<string>();
+        // Read-along-local normalization IN PLACE: strip edge quotes the shared NormalizeWord keeps
+        // (see ReadAlongNormalize). Length/order are preserved — _sentenceEndIdx and SetReadProgress
+        // are index-aligned with the page's words — so a token may become "" and simply never match.
+        for (int i = 0; i < _expected.Count; i++) _expected[i] = ReadAlongNormalize(_expected[i]);
         _sentenceEndIdx.Clear();
         if (page.ExpectedSentenceEndIndices != null) _sentenceEndIdx.AddRange(page.ExpectedSentenceEndIndices);
         _cursor = 0;
@@ -266,10 +277,11 @@ public class ReadAlongService : MonoBehaviour
         _lastPartialText = "";
         _partialLenAtAdvance = 0;
         _utteranceWords.Clear();
+        _pendingKind = PendingKind.None; // new page — drop any tentative advance from the previous page
 
         EnsureStack();
 
-        var vocab = _expected.Distinct().ToList();
+        var vocab = _expected.Where(w => w.Length > 0).Distinct().ToList(); // empties (stripped tokens) never match
         vocab.Add("[unk]"); // page-restricted grammar, but unknown speech is allowed through
         _recognizer.Vocabulary = vocab;
 
@@ -388,10 +400,33 @@ public class ReadAlongService : MonoBehaviour
         _utteranceWords.Clear(); // utterance boundary → next utterance's partials start fresh
     }
 
-    // Incremental driver: Vosk partials are CUMULATIVE (the whole growing utterance hypothesis), so
-    // feeding the full string each call re-walks already-consumed words — they fail at the cursor,
-    // bump _stuck, and eventually arm the wide re-sync, which then teleports on a re-processed common
-    // word. Instead, only the NEWLY-APPENDED words past the common prefix are matched.
+    // Read-along-local normalization: the shared NormalizeWord keeps apostrophes at word EDGES, so
+    // quoted dialogue ("'Row, toads, row!'") yields expected words like 'row / row!' that are
+    // out-of-vocabulary in the Vosk grammar (discarded) and can never match — the highlight stalls at
+    // every quoted line. Strip edge quotes and re-trim exposed punctuation until stable ('row → row,
+    // row!' → row). Read-along only: the shared NormalizeWord (and the wordbank keys that depend on it)
+    // is deliberately left untouched.
+    private static string ReadAlongNormalize(string s)
+    {
+        string w = AudioAndTextPlayer.NormalizeWord(s);
+        while (true)
+        {
+            string w2 = w.Trim('\'');
+            int a = 0, b = w2.Length - 1;
+            while (a <= b && !IsReadAlongWordChar(w2[a])) a++;
+            while (b >= a && !IsReadAlongWordChar(w2[b])) b--;
+            w2 = a <= b ? w2.Substring(a, b - a + 1) : "";
+            if (w2 == w) break;
+            w = w2;
+        }
+        return w;
+    }
+
+    private static bool IsReadAlongWordChar(char c)
+    {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '\'';
+    }
+
     // Mic energy meter: stamp _lastVoiceTime whenever the live mic buffer's RMS clears the threshold.
     // Reuses the recognizer's existing MicrophoneSpeechSource stream (no second Microphone started).
     private void OnMicSamples(object sender, Recognissimo.SamplesReadyEventArgs e)
@@ -409,27 +444,51 @@ public class ReadAlongService : MonoBehaviour
                                               // true-silence final is empty so it can't advance anyway
         if (_expected.Count == 0) return;
 
-        // Normalized recognized words (drop empties + [unk]/unk), in order.
-        var words = new List<string>();
+        // Positional token list for THIS utterance. Vosk partials REWRITE in place (not just append —
+        // "the ball" → "[unk] spins", "hot" → "hot hot" → "hot"), so position, not append order,
+        // identifies an already-fed word. Keep "unk" as a position holder; drop only empties.
+        var raw = new List<string>();
         if (!string.IsNullOrEmpty(recognized))
         {
-            foreach (string raw in recognized.Split((char[])null, StringSplitOptions.RemoveEmptyEntries))
+            foreach (string tok in recognized.Split((char[])null, StringSplitOptions.RemoveEmptyEntries))
             {
-                string nw = AudioAndTextPlayer.NormalizeWord(raw);
-                if (nw.Length == 0 || nw == "unk") continue; // [unk]/unk ignored
-                words.Add(nw);
+                string nw = ReadAlongNormalize(tok);
+                if (nw.Length == 0) continue; // keep "unk" (a real position); drop only empties
+                raw.Add(nw);
             }
         }
 
-        // Common-prefix length with the words already processed for this utterance.
-        int l = 0;
-        while (l < words.Count && l < _utteranceWords.Count && words[l] == _utteranceWords[l]) l++;
+        // Content-aware dedupe: feed a token only when the SAME word wasn't already fed at the SAME
+        // position this utterance (handles both shrink-regrow jitter and [unk] rewrites).
+        for (int i = 0; i < raw.Count; i++)
+        {
+            string w = raw[i];
+            string seen = i < _utteranceWords.Count ? _utteranceWords[i] : null;
+            if (w == seen) continue;             // already fed at this position
+            if (w != "unk") MatchWord(w, isFinal);
+        }
 
-        // Match only the newly-appended tail.
-        for (int i = l; i < words.Count; i++)
-            MatchWord(words[i], isFinal);
+        // Merge: latest words win, but keep the longer old tail as shrink protection.
+        if (raw.Count < _utteranceWords.Count)
+            raw.AddRange(_utteranceWords.GetRange(raw.Count, _utteranceWords.Count - raw.Count));
+        _utteranceWords = raw;
 
-        _utteranceWords = words;
+        if (isFinal) UtteranceEnd(); // commit any pending advance, then clear the utterance buffer
+    }
+
+    // Utterance boundary (a final result): the recognizer has committed its words, so flush any
+    // still-pending tentative advance (both dup and skip commit as cursor = idx + 1), then clear the
+    // positional buffer so the next utterance's partials start fresh.
+    private void UtteranceEnd()
+    {
+        if (_pendingKind != PendingKind.None)
+        {
+            int pidx = _pendingIdx;
+            _pendingKind = PendingKind.None;
+            _cursor = pidx + 1;
+            OnAdvance(pidx);
+        }
+        _utteranceWords.Clear();
     }
 
     // Smart matcher for ONE already-normalized word (validated on real recorded audio + the app's Vosk
@@ -441,6 +500,32 @@ public class ReadAlongService : MonoBehaviour
     {
         int cursorBefore = _cursor;
         bool advanced = false;
+
+        // 0) Resolve a tentative advance held from the PREVIOUS word before matching this one.
+        if (_pendingKind != PendingKind.None)
+        {
+            PendingKind kind = _pendingKind; int pidx = _pendingIdx;
+            _pendingKind = PendingKind.None;
+            if (kind == PendingKind.Dup)
+            {
+                // Any next word confirms a duplicate advance — commit it, then match nw from here.
+                _cursor = pidx + 1;
+                Debug.Log($"[ReadAlong][DUP-COMMIT] exp[{pidx}] cursor {cursorBefore}→{_cursor}");
+                OnAdvance(pidx);
+            }
+            else // Skip: a wide re-sync commits only if THIS word is the one after the skipped word.
+            {
+                if (pidx + 1 < _expected.Count && _expected[pidx + 1] == nw)
+                {
+                    _cursor = pidx + 2; // confirmed: consume the skipped word + this one
+                    _stuck = 0;
+                    Debug.Log($"[ReadAlong][SKIP-CONFIRM] '{nw}' exp[{pidx + 1}] cursor {cursorBefore}→{_cursor}");
+                    OnAdvance(pidx + 1);
+                    return;
+                }
+                // Unconfirmed: drop the tentative skip; match nw normally from the old cursor.
+            }
+        }
 
         // 1) Normal window, lookahead 2 (stopword-safe on skips).
         for (int look = 0; look <= 2; look++)
@@ -454,6 +539,19 @@ public class ReadAlongService : MonoBehaviour
                 Debug.Log($"[ReadAlong][SKIP-SUPPRESSED] '{nw}' look{look} exp[{idx}]");
                 continue; // don't leapfrog onto a later common word; keep scanning
             }
+
+            // Duplicate-word guard: advancing onto a word identical to the one just consumed is likely
+            // partial jitter / a re-read — hold it as a tentative 'dup' until the next word (or final)
+            // confirms. Only the normal window is guarded; the look-1/2 skips still commit directly
+            // (adding confirmation there stalls noisy pages — validated in the lab).
+            if (_cursor > 0 && _expected[_cursor - 1] == nw)
+            {
+                _pendingKind = PendingKind.Dup; _pendingIdx = idx;
+                Debug.Log($"[ReadAlong][DUP-PENDING] '{nw}' look{look} exp[{idx}]");
+                advanced = true;
+                break;
+            }
+
             _cursor = idx + 1;
             Debug.Log($"[ReadAlong][ADV {(isFinal ? "fin" : "par")}] '{nw}' look{look} cursor {cursorBefore}→{_cursor}");
             OnAdvance(idx);
@@ -462,7 +560,8 @@ public class ReadAlongService : MonoBehaviour
         }
 
         // 2) Stall re-sync: after stallK stuck words, scan a wider window and take the first
-        // match — ignore stopword suppression here, it's a stall recovery.
+        // match — ignore stopword suppression here, it's a stall recovery. Tentative: don't commit
+        // now; hold as 'skip' and confirm only when the next word matches _expected[idx+1].
         if (!advanced && _stuck >= stallK)
         {
             for (int look = 3; look <= wideLook; look++)
@@ -470,9 +569,8 @@ public class ReadAlongService : MonoBehaviour
                 int idx = _cursor + look;
                 if (idx >= _expected.Count) break;
                 if (_expected[idx] != nw) continue;
-                _cursor = idx + 1;
-                Debug.Log($"[ReadAlong][STALL-RESYNC] '{nw}' look{look} exp[{idx}] cursor {cursorBefore}→{_cursor}");
-                OnAdvance(idx);
+                _pendingKind = PendingKind.Skip; _pendingIdx = idx;
+                Debug.Log($"[ReadAlong][STALL-RESYNC-PENDING] '{nw}' look{look} exp[{idx}]");
                 advanced = true;
                 break;
             }
