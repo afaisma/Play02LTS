@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
@@ -84,9 +85,11 @@ public class PRUtils
             }
 
             // Parse each part, and divide by 255 to get a value between 0 and 1
-            float r = int.Parse(parts[0]) / 255f;
-            float g = int.Parse(parts[1]) / 255f;
-            float b = int.Parse(parts[2]) / 255f;
+            // (InvariantCulture: these are machine-format values from story scripts, never
+            // localized input — same reason as RateUs below.)
+            float r = int.Parse(parts[0], CultureInfo.InvariantCulture) / 255f;
+            float g = int.Parse(parts[1], CultureInfo.InvariantCulture) / 255f;
+            float b = int.Parse(parts[2], CultureInfo.InvariantCulture) / 255f;
 
             // Create and return the color
             return new Color(r, g, b);
@@ -469,8 +472,12 @@ public class PRUtils
         string systemVersion = UnityEngine.iOS.Device.systemVersion;
         if (!string.IsNullOrEmpty(systemVersion))
         {
+            // InvariantCulture: the string we build here always uses '.' as the decimal
+            // separator, so parsing it under a comma-decimal locale (de-DE, ru-RU, ...)
+            // throws FormatException and takes the app down.
             float version = float.Parse(systemVersion.Split('.')[0] + "." +
-                                        UnityEngine.iOS.Device.systemVersion.Split('.')[1]);
+                                        UnityEngine.iOS.Device.systemVersion.Split('.')[1],
+                                        CultureInfo.InvariantCulture);
             if (version >= 10.3f)
             {
                 UnityEngine.iOS.Device.RequestStoreReview();

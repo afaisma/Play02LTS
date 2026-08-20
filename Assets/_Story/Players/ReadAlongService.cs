@@ -144,8 +144,22 @@ public class ReadAlongService : MonoBehaviour
         if (_active && _recognizing && !_completed && _expected.Count > 0)
         {
             int end = NextSentenceEnd(_cursor);
+            // NextSentenceEnd scans FORWARD across sentence boundaries, so a cursor parked at (or
+            // near) a sentence start matches that whole sentence's end — flushing words the child
+            // never read, and on consecutive short sentences cascading one per sentenceFlushDelay.
+            // The flush exists only to bridge Vosk's late commit of a sentence's trailing 1-2
+            // words, so it must fire only once the child has demonstrably read MOST of the
+            // sentence: consumed words must outnumber remaining ones. Behavior:
+            //   "The dog ran fast." cursor=3 -> 3>1  flush (the intended late-commit bridge)
+            //   "The cat sat."      cursor=1 -> 1>2  no flush (would have flushed 2 unread words)
+            //   "The cat sat."      cursor=2 -> 2>1  flush
+            //   "Sam ran."          cursor=1 -> 1>1  no flush (the utterance-end final commit
+            //                                        still completes the page once both words are
+            //                                        read — just without the early flush)
+            int sentenceStart = end >= 0 ? SentenceStart(end) : 0;
             if (end >= 0
                 && _recognizedThisPage // never flush before the child has actually read a word
+                && (_cursor - sentenceStart) > (end - _cursor) // most of the sentence already read
                 && end - _cursor <= sentenceTailWords
                 && (Time.realtimeSinceStartup - _lastAdvanceTime) >= sentenceFlushDelay
                 && _lastPartialText.Length <= _partialLenAtAdvance)
@@ -160,8 +174,12 @@ public class ReadAlongService : MonoBehaviour
                 // The flush can reach the last region with no recognized word landing there; mark it
                 // so lenient completion (which needs _reachedLastRegion) can still fire. Same
                 // lastRegionStart as the recognized-word path; the flushed sentence-end word is _cursor-1.
+                // Invariant: a flush that did NOT begin with most of the sentence already read must
+                // never set this (it would complete a sentence the child barely entered). The
+                // majority guard above makes that case unreachable; the check is kept explicit.
                 int lastRegionStart = Mathf.FloorToInt(_expected.Count * (1f - lastRegionFraction));
-                if (_cursor - 1 >= lastRegionStart) _reachedLastRegion = true;
+                if ((before - sentenceStart) > (end - before) && _cursor - 1 >= lastRegionStart)
+                    _reachedLastRegion = true;
             }
         }
 
@@ -207,6 +225,19 @@ public class ReadAlongService : MonoBehaviour
         foreach (int e in _sentenceEndIdx)
             if (e >= cursor) return e;
         return -1;
+    }
+
+    // First word index of the sentence terminated by sentence-end index `end`: the word after the
+    // previous sentence end, or 0 for the first sentence. (_sentenceEndIdx is ascending.)
+    private int SentenceStart(int end)
+    {
+        int start = 0;
+        foreach (int e in _sentenceEndIdx)
+        {
+            if (e >= end) break;
+            start = e + 1;
+        }
+        return start;
     }
 
     private void WireTo(PRScript prScript)

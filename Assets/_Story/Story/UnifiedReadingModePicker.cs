@@ -290,7 +290,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
             PlayerPrefs.Save();
         }
 
-        ApplyMode(mode, replay: true, allowMicEnable: true);
+        // replay:false — ClosePicker() replays once below; replaying here too would run the page's
+        // scriptlet twice (duplicate Schedule events, duplicate CreateButton appends).
+        ApplyMode(mode, replay: false, allowMicEnable: true);
         ClosePicker(); // selecting is the action; the slide-down is the "done" feedback (spec §7)
     }
 
@@ -301,7 +303,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
     {
         if (_currentMode != Mode.IRead) return; // already moved on
         var fallback = _available.Contains(Mode.Storyteller) ? Mode.Storyteller : Mode.AppVoice;
-        ApplyMode(fallback, replay: true, allowMicEnable: false);
+        // replay only when the picker is closed: if it's open, ClosePicker() below does the single
+        // replay (an early-returning ClosePicker would otherwise leave this path with none).
+        ApplyMode(fallback, replay: !_open, allowMicEnable: false);
         if (_open) ClosePicker();
     }
 
@@ -662,14 +666,16 @@ public class UnifiedReadingModePicker : MonoBehaviour
         if (_currentMode == Mode.IRead && !_ireadArmed)
         {
             var fallback = _available.Contains(Mode.Storyteller) ? Mode.Storyteller : Mode.AppVoice;
-            ApplyMode(fallback, replay: true, allowMicEnable: false);
+            // replay:false — the single replay below covers this path too (no double execution).
+            ApplyMode(fallback, replay: false, allowMicEnable: false);
         }
 
         _open = false;
         IsOpen = false;
-        // Now that the gate is lifted, start/continue the book in the current mode (the page didn't
-        // narrate while the picker was up). Safe: the story is loaded by the time the picker can close.
-        _prScript?.ReplayCurrenStep();
+        // Tear the modal down FIRST: the replay below can throw (e.g. the picker auto-opened while
+        // the story was still downloading), and a throw after _open=false but before these lines
+        // would strand an invisible fullscreen raycast blocker forever — every later ClosePicker
+        // early-returns on !_open.
         _modalGroup.blocksRaycasts = false;
         _modalGroup.interactable = false;
         _modalGroup.DOKill();
@@ -677,6 +683,10 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _panel.DOKill();
         _panel.DOAnchorPosY(-Offscreen, 0.25f).SetEase(Ease.InCubic).SetUpdate(true)
             .OnComplete(() => { if (_modalRoot != null) _modalRoot.SetActive(false); });
+
+        // Now that the gate is lifted, start/continue the book in the current mode (the page didn't
+        // narrate while the picker was up). ReplayCurrenStep no-ops before the script has parsed.
+        _prScript?.ReplayCurrenStep();
     }
 
     // ---------------------------------------------------------------- helpers

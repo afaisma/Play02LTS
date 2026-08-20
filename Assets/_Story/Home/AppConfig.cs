@@ -15,4 +15,9 @@ public static class AppConfig
     // Hidden so all commerce goes through the gated "Our printed books" door on Home.
     // To RESTORE the per-book buy shortcut inside the reader, set this to true and recompile.
     public const bool ShowInReaderShopping = false;
+
+    // Open a book at the page the child last reached ({bookUrl}_page, written on every page turn
+    // by PRScript.SetCurrentStep) instead of always at page 1.
+    // For a QA A/B against the old always-start-at-page-1 behavior, set this to false and recompile.
+    public const bool ResumeAtSavedPage = true;
 }

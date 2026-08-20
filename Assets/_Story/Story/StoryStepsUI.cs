@@ -210,7 +210,10 @@ public class StoryStepsUI : MonoBehaviour
     public Button CreateButton(Canvas canvas, float x, float y, float width, float height,  string buttonText, string imageUrl, string customString)
     {
         GameObject buttonObj = new GameObject("Button");
-        buttonObj.transform.SetParent(canvas.transform);
+        // worldPositionStays:false — without it the button keeps its pre-parenting world
+        // transform, so the Canvas Scaler's scale gets baked into localScale as its inverse
+        // and the button renders at the wrong size.
+        buttonObj.transform.SetParent(canvas.transform, false);
 
         RectTransform rectTransform = buttonObj.AddComponent<RectTransform>();
         rectTransform.anchorMin = new Vector2(0, 0);
@@ -230,7 +233,7 @@ public class StoryStepsUI : MonoBehaviour
 
         // Create a child GameObject for the TextMeshProUGUI component
         GameObject textObj = new GameObject("ButtonText");
-        textObj.transform.SetParent(buttonObj.transform);
+        textObj.transform.SetParent(buttonObj.transform, false);
 
         // Set RectTransform of the TextMeshProUGUI component
         RectTransform textRectTransform = textObj.AddComponent<RectTransform>();

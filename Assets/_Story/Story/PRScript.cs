@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Miniscript;
 using QFSW.QC;
+using TMPro;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -92,6 +93,9 @@ public class PRScript : MonoBehaviour
     // cancel it; cancelled on each page turn if still pending.
     private int _prefetchRoutineId = 0;
     private const float PrefetchDelaySec = 1.5f;
+    // The kid-safe "this book had a hiccup" panel, built on first script error (see
+    // ShowKidSafeScriptError). Non-null = already showing.
+    private GameObject _scriptErrorPanel;
     // Keyed by (eventName, target). target is "" for global events (e.g. OnExecuteStep);
     // for per-overlay events the target is the overlay's name (e.g. ("onTap", "octopus")).
     // Populated by parse() from `////////[event NAME [TARGET]]` block headers.
@@ -186,8 +190,42 @@ public class PRScript : MonoBehaviour
             storyStepsUI.AddStoryStep(_scriptlets[i].Content, i);
         }
 
+        // Resume where the child left off. Every book's preamble ends with GoTo("Next"),
+        // which turns the page from nCurrentStep to nCurrentStep + 1 — so seeding
+        // nCurrentStep here makes that first page turn land on the saved page, executed
+        // exactly once through the normal NextStep -> SetCurrentStep -> ExecuteStep path
+        // (audio, overlays and the Prev/Next button state all initialize as usual).
+        // ResumeStepSeed() returns -1 = the scene's serialized value = open at page 1.
+        nCurrentStep = ResumeStepSeed();
+
         //AlertDialogManager.Instance.ShowAlertDialog("executing: " + _settings.Content);
         ExecuteScriptlet(_settings.Content);
+    }
+
+    /// <summary>
+    /// The value to seed nCurrentStep with before the preamble runs: one page BEFORE the page
+    /// to open on, because the preamble's GoTo("Next") does the actual turn. Returns -1 (open
+    /// at page 1) unless the book has usable saved progress. Silent by design — no dialog.
+    /// </summary>
+    private int ResumeStepSeed()
+    {
+        // Progress keys are derived from bookUrl (the catalog's relative script value) — the
+        // exact same key PRBook.SetAndSaveCurrentPage writes.
+        string bookUrl = Globals.g_prbook?.bookUrl;
+        if (!AppConfig.ResumeAtSavedPage || string.IsNullOrEmpty(bookUrl))
+            return -1;
+
+        // A finished book starts over from the beginning.
+        if (Globals.Prefs_Get_Book_Done(bookUrl) != 0)
+            return -1;
+
+        // Out-of-range saved pages (book re-rendered with fewer chunks) fall back to page 1.
+        int savedPage = Globals.Prefs_Get_Book_Page(bookUrl);
+        if (savedPage <= 0 || savedPage >= _scriptlets.Count)
+            return -1;
+
+        Debug.Log($"PRScript: resuming '{bookUrl}' at saved page {savedPage} of {_scriptlets.Count}");
+        return savedPage - 1;
     }
 
     void Start()
@@ -1035,14 +1073,68 @@ public class PRScript : MonoBehaviour
             "<color=#66bb66>" + s + "</color>");
         _interpreter.errorOutput = (s, addLineBreak) =>
         {
-            AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s + 
-                                                        "\n The script content:\n <color=#bb00bb>" + 
+            // The full technical detail always goes to the log (Editor console / logcat),
+            // never to the child's screen.
+            Debug.LogError("Script error: " + s + "\nScript source:\n" + _interpreter.source);
+#if UNITY_EDITOR
+            // In the Editor keep the old developer-facing dialog with the source dump.
+            AlertDialogManager.Instance.ShowAlertDialog("error in script: " + s +
+                                                        "\n The script content:\n <color=#bb00bb>" +
                                                         _interpreter.source +"</color>");
-            Debug.LogWarning(s);
-            Debug.Log("<color=red>" + s + "</color>");
+#else
+            ShowKidSafeScriptError();
+#endif
             // ...and in case of error, we'll also stop the interpreter.
             _interpreter.Stop();
         };
+    }
+
+    /// <summary>
+    /// The child-facing face of a script failure: a short friendly line and one way out
+    /// (Home). No error text, no script source, no "quit the app". Built in code on the
+    /// reader canvas, in the shared UiTheme palette, the same way the Home title row and the
+    /// Learn-to-Read header are built. Shown at most once per reader session.
+    /// </summary>
+    private void ShowKidSafeScriptError()
+    {
+        if (_scriptErrorPanel != null)
+            return;                                     // one hiccup panel is enough
+        if (storyStepsUI == null || storyStepsUI.canvasMain == null)
+            return;                                     // no canvas to show it on — log only
+
+        _scriptErrorPanel = new GameObject("ScriptErrorPanel",
+            typeof(RectTransform), typeof(Image));
+        _scriptErrorPanel.transform.SetParent(storyStepsUI.canvasMain.transform, false);
+        var panelRect = (RectTransform)_scriptErrorPanel.transform;
+        panelRect.anchorMin = Vector2.zero;             // cover the reader
+        panelRect.anchorMax = Vector2.one;
+        panelRect.offsetMin = Vector2.zero;
+        panelRect.offsetMax = Vector2.zero;
+        _scriptErrorPanel.GetComponent<Image>().color = UiTheme.Bg;
+
+        var messageGO = new GameObject("Message", typeof(RectTransform));
+        messageGO.transform.SetParent(_scriptErrorPanel.transform, false);
+        var messageRect = (RectTransform)messageGO.transform;
+        messageRect.anchorMin = new Vector2(0.1f, 0.45f);
+        messageRect.anchorMax = new Vector2(0.9f, 0.75f);
+        messageRect.offsetMin = Vector2.zero;
+        messageRect.offsetMax = Vector2.zero;
+
+        var message = messageGO.AddComponent<TextMeshProUGUI>();
+        message.text = "This book had a hiccup — let's go back";
+        message.font = UiTheme.Font();
+        message.color = UiTheme.TextPrimary;
+        message.alignment = TextAlignmentOptions.Center;
+        message.enableAutoSizing = true;
+        message.fontSizeMin = 24;
+        message.fontSizeMax = 72;
+
+        // Same round house button as every other surface; it just goes Home.
+        var homeSlot = HomeButton.Create(_scriptErrorPanel.transform, 140f, Home);
+        var homeRect = (RectTransform)homeSlot.transform;
+        homeRect.anchorMin = homeRect.anchorMax = new Vector2(0.5f, 0.28f);
+        homeRect.pivot = new Vector2(0.5f, 0.5f);
+        homeRect.anchoredPosition = Vector2.zero;
     }
     
     PRCharacter FindCharacter(string name)
@@ -1110,6 +1202,9 @@ public class PRScript : MonoBehaviour
     
     public void ReplayCurrenStep()
     {
+        // The picker can open (and close) while the script is still downloading — _scriptlets is
+        // null until parse() runs, and SetUIAccordingToCurrentStep() would NRE on it.
+        if (_scriptlets == null) return;
         buttonController.DisableButtonsForTime(1f);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
