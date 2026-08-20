@@ -67,6 +67,16 @@ public class ReadAlongService : MonoBehaviour
     private bool _recognizing;
     private Coroutine _restartCo; // pending deferred restart (waits for the async StopProcessing)
 
+    // ---- recognition-session identity ----
+    // Recognissimo results are not tagged with the session that produced them, and both stopping and
+    // starting are async — so a partial/final from page N can legally arrive after page N+1's Begin()
+    // (or after a Stop()) and feed the wrong page's matcher. _session is bumped by Begin()/Stop();
+    // _recogSession snapshots it at the moment StartProcessing is actually called. A result is
+    // trustworthy only while the two agree, which makes the whole straggler class structurally
+    // impossible instead of something each call site has to defend against individually.
+    private int _session;
+    private int _recogSession = -1;
+
     // ---- per-page matcher + completion state ----
     private AudioAndTextPlayer _page;
     private List<string> _expected = new();
@@ -149,7 +159,8 @@ public class ReadAlongService : MonoBehaviour
             // never read, and on consecutive short sentences cascading one per sentenceFlushDelay.
             // The flush exists only to bridge Vosk's late commit of a sentence's trailing 1-2
             // words, so it must fire only once the child has demonstrably read MOST of the
-            // sentence: consumed words must outnumber remaining ones. Behavior:
+            // sentence: consumed (_cursor - sentenceStart) must outnumber what is still unread,
+            // which is words _cursor..end INCLUSIVE = (end - _cursor + 1). Ties do not flush.
             //   "The dog ran fast." cursor=3 -> 3>1  flush (the intended late-commit bridge)
             //   "The cat sat."      cursor=1 -> 1>2  no flush (would have flushed 2 unread words)
             //   "The cat sat."      cursor=2 -> 2>1  flush
@@ -159,7 +170,7 @@ public class ReadAlongService : MonoBehaviour
             int sentenceStart = end >= 0 ? SentenceStart(end) : 0;
             if (end >= 0
                 && _recognizedThisPage // never flush before the child has actually read a word
-                && (_cursor - sentenceStart) > (end - _cursor) // most of the sentence already read
+                && (_cursor - sentenceStart) > (end - _cursor + 1) // most of the sentence already read
                 && end - _cursor <= sentenceTailWords
                 && (Time.realtimeSinceStartup - _lastAdvanceTime) >= sentenceFlushDelay
                 && _lastPartialText.Length <= _partialLenAtAdvance)
@@ -167,6 +178,16 @@ public class ReadAlongService : MonoBehaviour
                 int before = _cursor;
                 _cursor = end + 1; // flush this sentence's tail; never past the sentence end
                 Debug.Log($"[ReadAlong][SENT-FLUSH] cursor {before}->{_cursor}");
+
+                // A tentative advance armed BEFORE this flush is now stale: committing it later
+                // (UtteranceEnd / dup-commit / skip-confirm) would drag the cursor and the highlight
+                // BACKWARD, which the matcher's never-backward contract forbids. Drop it as soon as
+                // the furthest cursor it could still produce no longer moves us forward.
+                if (_pendingKind != PendingKind.None && PendingCommitTarget() <= _cursor)
+                {
+                    Debug.Log($"[ReadAlong][SENT-FLUSH] dropped stale {_pendingKind} pending exp[{_pendingIdx}]");
+                    _pendingKind = PendingKind.None;
+                }
                 if (_page != null) _page.SetReadProgress(_cursor);
                 _lastAdvanceTime = Time.realtimeSinceStartup;
                 ResetStallHint(); // a flush is an advance — drop any nudge
@@ -174,12 +195,11 @@ public class ReadAlongService : MonoBehaviour
                 // The flush can reach the last region with no recognized word landing there; mark it
                 // so lenient completion (which needs _reachedLastRegion) can still fire. Same
                 // lastRegionStart as the recognized-word path; the flushed sentence-end word is _cursor-1.
-                // Invariant: a flush that did NOT begin with most of the sentence already read must
-                // never set this (it would complete a sentence the child barely entered). The
-                // majority guard above makes that case unreachable; the check is kept explicit.
+                // No majority re-test here: this code only runs when the guard above already proved
+                // the child read most of the sentence, so a duplicated copy of that arithmetic would
+                // only be a second place for it to go wrong.
                 int lastRegionStart = Mathf.FloorToInt(_expected.Count * (1f - lastRegionFraction));
-                if ((before - sentenceStart) > (end - before) && _cursor - 1 >= lastRegionStart)
-                    _reachedLastRegion = true;
+                if (_cursor - 1 >= lastRegionStart) _reachedLastRegion = true;
             }
         }
 
@@ -308,7 +328,8 @@ public class ReadAlongService : MonoBehaviour
         _lastPartialText = "";
         _partialLenAtAdvance = 0;
         _utteranceWords.Clear();
-        _pendingKind = PendingKind.None; // new page — drop any tentative advance from the previous page
+        _pendingKind = PendingKind.None; // new page — initialize the tentative-advance slot
+        _session++;                      // new session: results still in flight from the old one are stale
 
         EnsureStack();
 
@@ -326,9 +347,11 @@ public class ReadAlongService : MonoBehaviour
     {
         // Cancel any pending deferred restart so a Stop (incl. SetActive(false)) can't be resurrected.
         if (_restartCo != null) { StopCoroutine(_restartCo); _restartCo = null; }
-        _pendingKind = PendingKind.None;   // <-- add: StopProcessing() is async, so a straggler
-                                           // partial can still arrive and commit a stale pending
-                                           // advance (Complete() -> Stop() is the live path).
+        // End the session: StopProcessing() is async, so results are still in flight — they now fail
+        // the session check in OnPartial/OnResult and never reach the matcher at all. (This replaces
+        // the point-guard that used to clear _pendingKind here: with no straggler reaching Feed,
+        // there is nothing left to commit a stale pending.)
+        _session++;
         if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
     }
 
@@ -358,6 +381,7 @@ public class ReadAlongService : MonoBehaviour
         {
             // Idle → start now (Begin() has already installed this page's Vocabulary).
             _recognizer.SpeechSource = _micSource;
+            _recogSession = _session; // results from here on belong to the current session
             _recognizer.StartProcessing();
             return;
         }
@@ -380,6 +404,7 @@ public class ReadAlongService : MonoBehaviour
         if (_recognizer == null) yield break;
 
         _recognizer.SpeechSource = _micSource;
+        _recogSession = _session;      // results from here on belong to the current session
         _recognizer.StartProcessing(); // installs the Vocabulary set by Begin() for the current page
     }
 
@@ -424,14 +449,22 @@ public class ReadAlongService : MonoBehaviour
 
     private void OnPartial(PartialResult p)
     {
+        if (_recogSession != _session) return; // straggler from a stopped/previous session — drop
         _lastPartialText = p.partial ?? ""; // set before Feed so OnAdvance captures this length
         Feed(_lastPartialText, false);
     }
 
     private void OnResult(Result r)
     {
+        if (_recogSession != _session) return; // straggler from a stopped/previous session — drop
         Feed(r.text, true);
         _utteranceWords.Clear(); // utterance boundary → next utterance's partials start fresh
+        // The next utterance's partials restart from zero length, so the flush's "partial hasn't
+        // grown since the last advance" guard has to re-base here too. Left stale, it compares a
+        // fresh short partial against the previous utterance's high-water mark, the comparison is
+        // trivially true, and the guard decays into a pure 0.35s timer at every boundary.
+        _lastPartialText = "";
+        _partialLenAtAdvance = 0;
     }
 
     // Read-along-local normalization: the shared NormalizeWord keeps apostrophes at word EDGES, so
@@ -510,6 +543,12 @@ public class ReadAlongService : MonoBehaviour
         if (isFinal) UtteranceEnd(); // commit any pending advance, then clear the utterance buffer
     }
 
+    // The furthest cursor a still-armed pending could commit to: a Dup commits to idx+1, a confirmed
+    // Skip consumes both the skipped word and its confirmer (idx+2). Used to decide whether a pending
+    // still has anywhere forward to go after a flush.
+    private int PendingCommitTarget() =>
+        _pendingIdx + (_pendingKind == PendingKind.Skip ? 2 : 1);
+
     // Utterance boundary (a final result): the recognizer has committed its words, so flush any
     // still-pending tentative advance (both dup and skip commit as cursor = idx + 1), then clear the
     // positional buffer so the next utterance's partials start fresh.
@@ -519,8 +558,11 @@ public class ReadAlongService : MonoBehaviour
         {
             int pidx = _pendingIdx;
             _pendingKind = PendingKind.None;
-            _cursor = pidx + 1;
-            OnAdvance(pidx);
+            // Clamp: a flush (or any later advance) may have overtaken this pending while it waited.
+            int target = Mathf.Max(_cursor, pidx + 1);
+            bool moved = target > _cursor;
+            _cursor = target;
+            if (moved) OnAdvance(pidx); // nothing moved forward → not an advance; don't re-stamp timers
         }
         _utteranceWords.Clear();
     }
@@ -543,18 +585,32 @@ public class ReadAlongService : MonoBehaviour
             if (kind == PendingKind.Dup)
             {
                 // Any next word confirms a duplicate advance — commit it, then match nw from here.
-                _cursor = pidx + 1;
-                Debug.Log($"[ReadAlong][DUP-COMMIT] exp[{pidx}] cursor {cursorBefore}→{_cursor}");
-                OnAdvance(pidx);
+                int target = Mathf.Max(_cursor, pidx + 1); // clamp: never backward past a flush
+                bool moved = target > _cursor;
+                _cursor = target;
+                if (moved)
+                {
+                    Debug.Log($"[ReadAlong][DUP-COMMIT] exp[{pidx}] cursor {cursorBefore}→{_cursor}");
+                    OnAdvance(pidx);
+                }
+                else Debug.Log($"[ReadAlong][DUP-STALE] exp[{pidx}] behind cursor {_cursor}; dropped");
             }
             else // Skip: a wide re-sync commits only if THIS word is the one after the skipped word.
             {
                 if (pidx + 1 < _expected.Count && _expected[pidx + 1] == nw)
                 {
-                    _cursor = pidx + 2; // confirmed: consume the skipped word + this one
+                    // Confirmed: consume the skipped word + this one, clamped so a flush that already
+                    // moved past them is never undone.
+                    int target = Mathf.Max(_cursor, pidx + 2);
+                    bool moved = target > _cursor;
+                    _cursor = target;
                     _stuck = 0;
-                    Debug.Log($"[ReadAlong][SKIP-CONFIRM] '{nw}' exp[{pidx + 1}] cursor {cursorBefore}→{_cursor}");
-                    OnAdvance(pidx + 1);
+                    if (moved)
+                    {
+                        Debug.Log($"[ReadAlong][SKIP-CONFIRM] '{nw}' exp[{pidx + 1}] cursor {cursorBefore}→{_cursor}");
+                        OnAdvance(pidx + 1);
+                    }
+                    else Debug.Log($"[ReadAlong][SKIP-STALE] exp[{pidx + 1}] behind cursor {_cursor}; dropped");
                     return;
                 }
                 // Unconfirmed: drop the tentative skip; match nw normally from the old cursor.

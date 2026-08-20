@@ -16,6 +16,11 @@ public static class AppConfig
     // To RESTORE the per-book buy shortcut inside the reader, set this to true and recompile.
     public const bool ShowInReaderShopping = false;
 
+    // The end-of-book "Read next" sheet: after the LAST page finishes, a bottom sheet slides up over
+    // the text area offering the next unread book in the current shelf (see ReadNextSheet).
+    // For a QA A/B against the old silent ending, set this to false and recompile.
+    public const bool ShowReadNextSheet = true;
+
     // Open a book at the page the child last reached ({bookUrl}_page, written on every page turn
     // by PRScript.SetCurrentStep) instead of always at page 1.
     // For a QA A/B against the old always-start-at-page-1 behavior, set this to false and recompile.

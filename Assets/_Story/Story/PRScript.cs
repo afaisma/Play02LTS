@@ -96,6 +96,12 @@ public class PRScript : MonoBehaviour
     // The kid-safe "this book had a hiccup" panel, built on first script error (see
     // ShowKidSafeScriptError). Non-null = already showing.
     private GameObject _scriptErrorPanel;
+    // End-of-book "Read next" sheet (AppConfig.ShowReadNextSheet). Debounced to once per page-visit;
+    // both the flag and the sheet are cleared by SetCurrentStep on a real step change.
+    private ReadNextSheet _readNextSheet;
+    private bool _readNextFired;
+    private Coroutine _readNextCo;
+    private const float ReadNextDelaySec = 1f; // let the ending land before offering the next book
     // Keyed by (eventName, target). target is "" for global events (e.g. OnExecuteStep);
     // for per-overlay events the target is the overlay's name (e.g. ("onTap", "octopus")).
     // Populated by parse() from `////////[event NAME [TARGET]]` block headers.
@@ -266,6 +272,10 @@ public class PRScript : MonoBehaviour
 
     private void OnAudioPlaybackFinished()
     {
+        // Last page: the narration ending IS the book ending. Hand this beat to the Read-next sheet
+        // and return before the puzzle button — the two would otherwise appear at the same instant and
+        // the puzzle would sit behind the sheet. Returning here is the whole puzzle suppression.
+        if (IsOnLastStep()) { OnLastStepFinished(); return; }
         if (audioAndTextPlayer.IsAutoplaying) return;
         if (!_puzzleEnabledCurrentPage) return;
         storyStepsUI.gallery.ShowPuzzleButton(true);
@@ -973,8 +983,53 @@ public class PRScript : MonoBehaviour
     {
         if (_mapEvents != null && _mapEvents.ContainsKey(("OnPageRead", "")))
             RunStoryEvent("OnPageRead"); // reveal hook — do NOT advance
+        else if (IsOnLastStep())
+            OnLastStepFinished();        // last page: NextStep() here is a silent no-op (read-along used
+                                         // to dead-end on the final page) — offer the next BOOK instead
         else
             NextStep();                  // default read-along auto-advance
+    }
+
+    /// <summary>True when the page on screen is the book's last one.</summary>
+    private bool IsOnLastStep() =>
+        _scriptlets != null && _scriptlets.Count > 0 && nCurrentStep == _scriptlets.Count - 1;
+
+    /// <summary>
+    /// The book's last page finished. The trigger is POSITIONAL and content-blind — it never inspects
+    /// page text for "The End" or anything like it; being on the last step and having that step finish
+    /// is the whole condition. Exactly two call sites reach here: OnAudioPlaybackFinished (the
+    /// narration modes, via AudioAndTextPlayer.OnAudioFinished) and OnPageReadComplete (read-along,
+    /// where ReadAlongService has already stopped the mic in Complete()).
+    /// Fires at most once per page-visit and never while the reading-mode picker owns the screen.
+    /// </summary>
+    public void OnLastStepFinished()
+    {
+        // (Folded into one condition like ResumeStepSeed's flag check: a lone `if (!const) return;`
+        // compiles to unreachable code and warns.)
+        if (!AppConfig.ShowReadNextSheet || _readNextFired || !IsOnLastStep()) return;
+        if (UnifiedReadingModePicker.IsOpen) return;
+        _readNextFired = true;
+        if (_readNextCo != null) StopCoroutine(_readNextCo);
+        _readNextCo = StartCoroutine(ShowReadNextAfterBeat());
+    }
+
+    private IEnumerator ShowReadNextAfterBeat()
+    {
+        yield return new WaitForSecondsRealtime(ReadNextDelaySec); // unscaled, like the sheet's tweens
+        _readNextCo = null;
+        // Re-check: a page turn or the picker during that beat cancels the offer.
+        if (!IsOnLastStep() || UnifiedReadingModePicker.IsOpen || _readNextSheet != null) yield break;
+        _readNextSheet = ReadNextSheet.Create(
+            this,
+            storyStepsUI != null ? storyStepsUI.canvasMain : null,
+            Globals.NextUnreadBook(Globals.g_prbook));
+    }
+
+    // Any real page change takes the sheet with it (Prev off the last page) and re-arms the debounce.
+    private void DestroyReadNextSheet()
+    {
+        if (_readNextCo != null) { StopCoroutine(_readNextCo); _readNextCo = null; }
+        if (_readNextSheet != null) { Destroy(_readNextSheet.gameObject); _readNextSheet = null; }
     }
 
     public void ExecuteStep(int index)
@@ -1146,9 +1201,17 @@ public class PRScript : MonoBehaviour
     {
         if (index >= 0 && index < _scriptlets.Count)
         {
+            bool stepChanged = index != nCurrentStep;
             nCurrentStep = index;
             Globals.g_prbook?.
                 SetAndSaveCurrentPage(index);
+
+            if (stepChanged)
+            {
+                // New page visit: the Read-next sheet belonged to the page that ended.
+                _readNextFired = false;
+                DestroyReadNextSheet();
+            }
             
             if (index == _scriptlets.Count - 1)
             {

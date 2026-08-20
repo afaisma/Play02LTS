@@ -529,6 +529,48 @@ public class Globals : MonoBehaviour
         return done;
     }
 
+    /// <summary>
+    /// The book the end-of-book "Read next" sheet offers: the first book AFTER the current one, on the
+    /// shelf the child is actually browsing, that they haven't finished yet. Null when none remain
+    /// (the sheet then shows its "read them all" state) — there is deliberately NO wrap-around.
+    ///
+    /// Context comes from <see cref="g_libraryFilter"/>, which already carries it on every entry path:
+    /// the Library sets it when a shelf opens, and the Learn-to-Read ladder opens each rung via
+    /// Nav.GoToLibrary("levelN") — so "the child came from Learn-to-Read" is exactly the case where the
+    /// filter is a levelN token, and Filter.SetFilter turns that into the level-only predicate with no
+    /// extra state to track. In that case candidates are ordered by (level, number), the same ladder
+    /// order BooksScrollView shows; every other filter keeps catalog order, also matching the Library.
+    ///
+    /// The age chips are deliberately NOT applied: the child is already reading this shelf.
+    /// </summary>
+    public static PRBook NextUnreadBook(PRBook current)
+    {
+        if (g_listPRBooks == null || current == null) return null;
+
+        var f = new Filter();
+        f.SetFilter(0, 0, string.IsNullOrEmpty(g_libraryFilter) ? "everything" : g_libraryFilter);
+
+        var shelf = new List<PRBook>();
+        foreach (var b in g_listPRBooks)
+            if (b != null && string.IsNullOrEmpty(b.action) && f.Conforms(b)) // navigation tiles aren't books
+                shelf.Add(b);
+
+        if (f.level > 0 || f.genre == "learn to read")
+            shelf.Sort((a, b) => a.level != b.level ? a.level.CompareTo(b.level) : a.number.CompareTo(b.number));
+
+        // Not on this shelf (e.g. opened from Continue-reading while a different filter is current)
+        // → start from the top of the shelf rather than offering nothing.
+        int at = shelf.FindIndex(b => b.bookUrl == current.bookUrl);
+        for (int i = at + 1; i < shelf.Count; i++)
+        {
+            PRBook candidate = shelf[i];
+            if (candidate.bookUrl == current.bookUrl) continue;          // never offer the book just read
+            if (Prefs_Get_Book_Done(candidate.bookUrl) != 0) continue;   // already finished
+            return candidate;
+        }
+        return null;
+    }
+
     public static void GotoPrBook(PRBook prBook)
     {
         g_scriptName = prBook.bookFullUrl;

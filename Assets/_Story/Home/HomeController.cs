@@ -14,9 +14,11 @@ using UnityEngine.UI;
 //   a) Title / logo row.
 //   b) "Continue reading" horizontal rail — books in progress (page > 0 AND not done). Hidden
 //      when there are none. Each card = cover + name, tap -> Nav.GoToBook(book).
-//   c) Grid of big section tiles (label -> filter), tap -> Nav.GoToLibrary(filter). Tiles whose
-//      filter yields no books in the current catalog are dropped (verified via Filter.Conforms,
-//      the SAME predicate the Library uses).
+//   c) Grid of illustrated DOOR cards (art + label + accent bar -> filter), tap -> the same
+//      navigation the old label+glyph tiles performed. The door set is content: it comes from
+//      home_doors.json (see HomeDoors.cs) with the compiled-in SectionTile list as the floor.
+//      Doors whose filter yields no books in the current catalog are dropped (verified via
+//      Filter.Conforms, the SAME predicate the Library uses), as are doors outside the age chips.
 //
 // Covers load EXACTLY as the Library does (BooksScrollView.AddBook): baseURL + bookImageUrl,
 // cache-busted by the book's own contentRev via Globals.WithContentRev, then PRUtils.DownloadImage
@@ -60,6 +62,11 @@ public class HomeController : MonoBehaviour
     private RectTransform _contentRoot; // vertical stack: title, rail, grid
     private GameObject _loadingLabel;
 
+    // The active door set for the rooms area: home_doors.json (network) → DiskCache copy →
+    // the compiled-in SectionTile list. See HomeDoors.cs.
+    private List<HomeDoor> _doors;
+    private bool _builtOnce; // first paint done → a later door delivery re-paints in place
+
     private void Start()
     {
         BuildCanvas();
@@ -76,7 +83,25 @@ public class HomeController : MonoBehaviour
             yield return new WaitForSeconds(RetryInterval);
         }
         ShowLoading(false);
+
+        // Door set. Load() hands back a DiskCache copy synchronously (before its first yield), so a
+        // returning child paints the real doors on frame one; the network refresh re-paints only if
+        // the published set actually changed. Nothing cached yet → the compiled-in room set stands in.
+        var fallbackDoors = HomeDoorsConfig.FromSectionTiles(sectionTiles);
+        StartCoroutine(HomeDoorsConfig.Load(fallbackDoors, OnDoorsLoaded));
+        if (_doors == null) _doors = fallbackDoors;
+
+        _builtOnce = true;
         BuildContent();
+    }
+
+    // A door set arrived (cache first, then possibly a fresher download). Re-paint once the screen
+    // is up; before that the pending set is simply what the first BuildContent will use.
+    private void OnDoorsLoaded(List<HomeDoor> doors)
+    {
+        if (doors == null || doors.Count == 0) return;
+        _doors = doors;
+        if (_builtOnce) BuildContent();
     }
 
     // ---------------------------------------------------------------- canvas / chrome
@@ -153,7 +178,7 @@ public class HomeController : MonoBehaviour
         BuildTitleRow(_contentRoot);
         BuildAgeRow(_contentRoot);
         BuildContinueRail(_contentRoot);
-        BuildSectionGrid(_contentRoot);
+        BuildDoorRooms(_contentRoot);
         BuildGrownupsFooter(_contentRoot);
     }
 
@@ -354,63 +379,299 @@ public class HomeController : MonoBehaviour
         cardGO.GetComponent<Button>().onClick.AddListener(() => Nav.GoToBook(captured));
     }
 
-    // (c) Grid of big section tiles. A tile whose filter yields no books in the current catalog is
-    // dropped (verified via the SAME Filter.Conforms predicate the Library uses).
-    private void BuildSectionGrid(Transform parent)
+    // (c) Illustrated door cards. Each door carries book art, its label and an accent bar in its own
+    // colour, and opens EXACTLY what the old label+glyph tile with that filter opened. A door is
+    // dropped when its filter yields no books in the current catalog (the SAME Filter.Conforms
+    // predicate the Library uses) or when its optional min/max age misses the age chips.
+    //
+    // Layout: a GridLayoutGroup cannot span columns, so "wide" doors are emitted as full-width rows
+    // in the parent vertical stack and each run of narrow doors between them becomes its own
+    // 2-column grid block — which keeps the configured order exactly as authored.
+    private void BuildDoorRooms(Transform parent)
     {
-        var live = new List<SectionTile>();
-        foreach (var tile in sectionTiles)
-            if (!string.IsNullOrEmpty(tile.filter) && FilterHasBooks(tile.filter))
-                live.Add(tile);
-        if (live.Count == 0) return;
+        if (_doors == null) return;
 
-        // Hero: Learn to Read (full width) leads, then the rooms grid. Pulled out so it's the focus.
-        int heroIdx = -1;
-        for (int i = 0; i < live.Count; i++)
-            if (live[i].filter.Trim().ToLowerInvariant() == "learn to read") { heroIdx = i; break; }
-        if (heroIdx >= 0) { var hero = live[heroIdx]; live.RemoveAt(heroIdx); BuildHeroTile(parent, hero); }
+        int ageLo = Globals.GetAgeLo(), ageHi = Globals.GetAgeHi();
+        var live = new List<HomeDoor>();
+        foreach (var door in _doors)
+        {
+            if (door == null || string.IsNullOrEmpty(door.filter)) continue;
+            if (!door.MatchesAgeRange(ageLo, ageHi)) continue;
+            if (!IsAddress(door.filter) && !FilterHasBooks(door.filter)) continue;
+            live.Add(door);
+        }
         if (live.Count == 0) return;
 
         var heading = MakeText(parent, "RoomsHeading", "Reading rooms", 36, TextAlignmentOptions.Left);
         heading.color = UiTheme.TextSecondary;
         heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 50f;
 
-        var gridGO = new GameObject("Sections", typeof(RectTransform), typeof(GridLayoutGroup), typeof(LayoutElement));
-        gridGO.transform.SetParent(parent, false);
-        var grid = gridGO.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(472f, 200f);
-        grid.spacing = new Vector2(40f, 40f);
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = 2;
-        grid.childAlignment = TextAnchor.UpperCenter;
-        int rows = (live.Count + 1) / 2;
-        gridGO.GetComponent<LayoutElement>().preferredHeight = rows * 200f + (rows - 1) * 40f;
+        int slot = 0;
+        int i = 0;
+        while (i < live.Count)
+        {
+            if (live[i].wide)
+            {
+                BuildDoorCard(parent, live[i], slot++, true);
+                i++;
+                continue;
+            }
 
-        for (int i = 0; i < live.Count; i++)
-            BuildSectionTile(gridGO.transform, live[i], i + 1); // +1: hero takes card colour 0
+            int runStart = i;
+            while (i < live.Count && !live[i].wide) i++;
+
+            var gridGO = new GameObject("Doors", typeof(RectTransform), typeof(GridLayoutGroup), typeof(LayoutElement));
+            gridGO.transform.SetParent(parent, false);
+            var grid = gridGO.GetComponent<GridLayoutGroup>();
+            grid.cellSize = new Vector2(DoorCellW, DoorCellH);
+            grid.spacing = new Vector2(DoorGap, DoorGap);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = 2;
+            grid.childAlignment = TextAnchor.UpperCenter;
+            int rows = (i - runStart + 1) / 2;
+            gridGO.GetComponent<LayoutElement>().preferredHeight = rows * DoorCellH + (rows - 1) * DoorGap;
+
+            for (int k = runStart; k < i; k++)
+                BuildDoorCard(gridGO.transform, live[k], slot++, false);
+        }
     }
 
-    // Full-width hero tile for the Learn-to-Read path (the app's backbone), opening the ladder.
-    private void BuildHeroTile(Transform parent, SectionTile tile)
+    // ---- door card metrics (1080x1920 reference space) ----
+    private const float DoorGap     = 40f;
+    private const float DoorCellW   = 472f;                             // half the 984pt content width
+    private const float DoorPad     = 14f;
+    private const float DoorArtH    = (DoorCellW - 2f * DoorPad) / 1.5f; // 3:2 art -> 296
+    private const float DoorLabelH  = 56f;
+    // The mock's 4-6 CSS px bottom border, scaled from its 380px phone to the 1080pt reference (x2.84).
+    private const float DoorAccentH = 14f;
+    private const float DoorSpacing = 8f;
+    private const float DoorCellH   = DoorPad * 2f + DoorArtH + DoorSpacing + DoorLabelH
+                                      + DoorSpacing + DoorAccentH;      // 410 — well over the 150pt floor
+    private const float WideArtW    = 420f;                             // ~46% of the content width, as in the mock
+    private const float WideArtH    = WideArtW / 1.5f;                  // 280
+    private const float WideCellH   = DoorPad * 2f + WideArtH + DoorSpacing + DoorAccentH; // 330
+
+    // One door: Surface card, rounded book art on top (left, for a wide door), label, accent bar.
+    private void BuildDoorCard(Transform parent, HomeDoor door, int slot, bool wide)
     {
-        var go = new GameObject("HeroLearnToRead",
-            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<LayoutElement>().preferredHeight = 200f;
-        var img = go.GetComponent<Image>();
-        img.sprite = RoundedSprite(); img.type = Image.Type.Sliced;
-        img.color = UiTheme.Primary;                       // sage — stands apart from the room tiles
-        var vlg = go.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(28, 28, 22, 22);
-        vlg.spacing = 6; vlg.childAlignment = TextAnchor.MiddleCenter;
+        var palette = UiTheme.Card(slot);
+
+        var cardGO = new GameObject("Door_" + door.id,
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup));
+        cardGO.transform.SetParent(parent, false);
+        var cardImg = cardGO.GetComponent<Image>();
+        cardImg.sprite = RoundedSprite(); cardImg.type = Image.Type.Sliced;
+        cardImg.color = UiTheme.Surface;
+        var vlg = cardGO.GetComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset((int)DoorPad, (int)DoorPad, (int)DoorPad, (int)DoorPad);
+        vlg.spacing = DoorSpacing;
+        vlg.childAlignment = TextAnchor.UpperCenter;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
-        AddTileIcon(go.transform, tile, UiTheme.OnPrimary, 80f); // matches the hero's white label
-        var label = MakeText(go.transform, "Label", tile.label, 52, TextAlignmentOptions.Center);
-        label.fontStyle = FontStyles.Bold; label.color = UiTheme.OnPrimary;
-        var sub = MakeText(go.transform, "Sub", "A step-by-step path from first sounds up", 28, TextAlignmentOptions.Center);
-        sub.color = new Color(1f, 1f, 1f, 0.85f);
-        go.GetComponent<Button>().onClick.AddListener(() => Navigation.GoToLearnToRead());
+        if (wide) cardGO.AddComponent<LayoutElement>().preferredHeight = WideCellH;
+
+        // Wide doors lay art and label side by side; narrow doors stack them.
+        Transform body = cardGO.transform;
+        if (wide)
+        {
+            var row = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+            row.transform.SetParent(cardGO.transform, false);
+            var hlg = row.GetComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 24f;
+            hlg.childAlignment = TextAnchor.MiddleLeft;
+            hlg.childControlWidth = true; hlg.childControlHeight = true;
+            hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
+            row.GetComponent<LayoutElement>().preferredHeight = WideArtH;
+            body = row.transform;
+        }
+
+        GameObject artSlot;
+        Image art = BuildDoorArt(body, door, wide, out artSlot);
+
+        var label = MakeText(body, "Label", door.label, wide ? 48f : 34f,
+                             wide ? TextAlignmentOptions.Left : TextAlignmentOptions.Center);
+        label.fontStyle = FontStyles.Bold;
+        label.color = UiTheme.TextPrimary;
+        label.enableWordWrapping = true;
+        var labelLe = label.gameObject.AddComponent<LayoutElement>();
+        if (wide) labelLe.flexibleWidth = 1f;
+        else labelLe.preferredHeight = DoorLabelH;
+
+        // Accent bar hugging the card's bottom edge — the door's identity colour.
+        var bar = new GameObject("Accent", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        bar.transform.SetParent(cardGO.transform, false);
+        bar.GetComponent<LayoutElement>().preferredHeight = DoorAccentH;
+        var barImg = bar.GetComponent<Image>();
+        barImg.sprite = RoundedSprite(); barImg.type = Image.Type.Sliced;
+        barImg.color = door.Accent(slot);
+        barImg.raycastTarget = false;
+
+        string captured = door.filter;
+        cardGO.GetComponent<Button>().onClick.AddListener(() => OpenDoor(captured));
+
+        StartCoroutine(LoadDoorArt(door, art, artSlot, cardImg, label, palette, wide));
+    }
+
+    // The art block: a rounded-masked 3:2 frame plus (optionally) the rotating cover badge. The badge
+    // is a SIBLING of the masked frame so the white ring is never clipped by the rounded corners.
+    private Image BuildDoorArt(Transform parent, HomeDoor door, bool wide, out GameObject artSlot)
+    {
+        artSlot = new GameObject("Art", typeof(RectTransform), typeof(LayoutElement));
+        artSlot.transform.SetParent(parent, false);
+        var le = artSlot.GetComponent<LayoutElement>();
+        le.preferredWidth  = wide ? WideArtW : DoorCellW - 2f * DoorPad;
+        le.preferredHeight = wide ? WideArtH : DoorArtH;
+        le.flexibleWidth = 0f; le.flexibleHeight = 0f;
+
+        // Rounded corners: the frame's rounded sprite is used purely as a stencil (Mask), so the
+        // cover underneath is clipped to the same radius as the card.
+        var frame = new GameObject("Frame", typeof(RectTransform), typeof(Image), typeof(Mask));
+        frame.transform.SetParent(artSlot.transform, false);
+        Stretch(frame.GetComponent<RectTransform>());
+        var frameImg = frame.GetComponent<Image>();
+        frameImg.sprite = RoundedSprite(); frameImg.type = Image.Type.Sliced;
+        frameImg.color = UiTheme.Track;                   // drawn under the art: placeholder while it loads
+        frameImg.raycastTarget = false;
+        frame.GetComponent<Mask>().showMaskGraphic = true;
+
+        var artGO = new GameObject("Cover", typeof(RectTransform), typeof(Image));
+        artGO.transform.SetParent(frame.transform, false);
+        Stretch(artGO.GetComponent<RectTransform>());
+        var art = artGO.GetComponent<Image>();
+        art.color = Color.white;
+        art.preserveAspect = true;
+        art.raycastTarget = false;
+
+        BuildDoorBadge(artSlot.transform, door, wide ? WideArtW : DoorCellW);
+        return art;
+    }
+
+    // Art is best-effort: an empty or unreachable imageUrl degrades the card to the pre-redesign
+    // glyph tile — never a blank card or a broken-image box. PRUtils.DownloadImage plants the shared
+    // "NoImage" placeholder on failure, which is exactly what we detect here.
+    private IEnumerator LoadDoorArt(HomeDoor door, Image art, GameObject artSlot, Image cardImg,
+                                    TMP_Text label, (Color fill, Color accent) palette, bool wide)
+    {
+        string url = ResolveDoorImageUrl(door.imageUrl);
+        if (!string.IsNullOrEmpty(url))
+        {
+            yield return PRUtils.DownloadImage(url, art, true, true);
+            if (art == null) yield break;                                  // card destroyed mid-load
+            if (art.sprite != null && art.sprite != Resources.Load<Sprite>("NoImage"))
+                yield break;                                               // art is up — done
+            Debug.LogWarning("HomeController: door art unavailable (" + url + "); using the glyph tile.");
+        }
+        DegradeToGlyph(door, artSlot, cardImg, label, palette, wide);
+    }
+
+    // The no-art floor: exactly the look this screen shipped with — palette-filled card, tinted room
+    // glyph above a centred accent-coloured label.
+    private void DegradeToGlyph(HomeDoor door, GameObject artSlot, Image cardImg,
+                                TMP_Text label, (Color fill, Color accent) palette, bool wide)
+    {
+        if (artSlot != null) artSlot.SetActive(false);
+        if (cardImg != null) cardImg.color = palette.fill;
+        if (label == null) return;
+
+        label.color = palette.accent;
+        label.alignment = TextAlignmentOptions.Center;
+
+        var icon = AddTileIcon(label.transform.parent, door.iconKey, door.filter, palette.accent, wide ? 80f : 64f);
+        if (icon != null) icon.transform.SetSiblingIndex(0);               // glyph above the label
+    }
+
+    // ---- badge groundwork (OFF by default: every shipped door uses badgePolicy "none") ----
+    // A circular cover chip on the art's top-right corner — roughly a quarter of the card width, in a
+    // white ring — advertising a real book behind the door. Purely data-driven: setting
+    // "badge_policy": "rotateDaily" on a door in home_doors.json lights it up with no code change.
+    // hostWidth = the art block's width (the card's own width for a narrow door), so the badge stays
+    // ~1/4 of the picture it sits on in both card shapes.
+    private void BuildDoorBadge(Transform artSlot, HomeDoor door, float hostWidth)
+    {
+        if (!door.RotatesBadgeDaily) return;
+        PRBook book = PickDailyBook(door.filter);
+        if (book == null) return;
+
+        float size = hostWidth * 0.25f;
+        const float ring = 6f;
+
+        var badge = new GameObject("Badge", typeof(RectTransform), typeof(Image));
+        badge.transform.SetParent(artSlot, false);
+        var brt = badge.GetComponent<RectTransform>();
+        brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(1f, 1f);    // top-right of the art
+        brt.sizeDelta = new Vector2(size, size);
+        brt.anchoredPosition = new Vector2(-12f, -12f);
+        var bimg = badge.GetComponent<Image>();
+        bimg.sprite = CircleSprite();
+        bimg.color = Color.white;                                          // the ring
+        bimg.raycastTarget = false;
+
+        var inner = new GameObject("Clip", typeof(RectTransform), typeof(Image), typeof(Mask));
+        inner.transform.SetParent(badge.transform, false);
+        var irt = inner.GetComponent<RectTransform>();
+        irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
+        irt.offsetMin = new Vector2(ring, ring); irt.offsetMax = new Vector2(-ring, -ring);
+        var iimg = inner.GetComponent<Image>();
+        iimg.sprite = CircleSprite(); iimg.color = Color.white; iimg.raycastTarget = false;
+        inner.GetComponent<Mask>().showMaskGraphic = false;
+
+        // 3:2 cover sized to 1.5x the circle's width so it fills edge to edge and the circle crops
+        // the sides (the mock's object-fit:cover) instead of letterboxing.
+        float inner_ = size - ring * 2f;
+        var coverGO = new GameObject("Cover", typeof(RectTransform), typeof(Image));
+        coverGO.transform.SetParent(inner.transform, false);
+        var crt = coverGO.GetComponent<RectTransform>();
+        crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(inner_ * 1.5f, inner_);
+        var cimg = coverGO.GetComponent<Image>();
+        cimg.color = Color.white; cimg.preserveAspect = true; cimg.raycastTarget = false;
+        LoadCover(book, cimg);
+    }
+
+    // Deterministic "book of the day" for a door: every device that shares a date shows the same
+    // cover — day-of-year (UTC) indexes the door's own books in a stable ordinal order. No RNG, so
+    // nothing depends on install time or launch order.
+    private PRBook PickDailyBook(string filter)
+    {
+        if (Globals.g_listPRBooks == null || IsAddress(filter)) return null;
+
+        var f = new Filter();
+        f.SetFilter(0, 0, filter);
+        f.ageLoSel = Globals.GetAgeLo();
+        f.ageHiSel = Globals.GetAgeHi();
+
+        var matches = new List<PRBook>();
+        foreach (var b in Globals.g_listPRBooks)
+            if (b != null && string.IsNullOrEmpty(b.action) && f.Conforms(b))
+                matches.Add(b);
+        if (matches.Count == 0) return null;
+
+        matches.Sort((a, b) => string.CompareOrdinal(a.bookUrl, b.bookUrl)); // catalog-order independent
+        return matches[System.DateTime.UtcNow.DayOfYear % matches.Count];
+    }
+
+    // Where a door leads — unchanged from the tiles it replaces: the learn-to-read door opens the
+    // dedicated ladder, a full Nav address ("library?filter=level1") routes through Nav.Go, and every
+    // other token opens the filtered Library list.
+    private static void OpenDoor(string filter)
+    {
+        if (string.IsNullOrEmpty(filter)) return;
+        if (IsAddress(filter)) { Nav.Go(filter); return; }
+        if (filter.Trim().ToLowerInvariant() == "learn to read") { Navigation.GoToLearnToRead(); return; }
+        Nav.GoToLibrary(filter);
+    }
+
+    // A door target is a Nav address (scene + query) rather than a plain Library filter token.
+    private static bool IsAddress(string filter) =>
+        !string.IsNullOrEmpty(filter) && filter.Contains("?");
+
+    // Door art may be absolute or catalog-relative, resolved against the catalog's own directory
+    // exactly like book covers are.
+    private static string ResolveDoorImageUrl(string imageUrl)
+    {
+        if (string.IsNullOrEmpty(imageUrl)) return "";
+        if (imageUrl.StartsWith("http", System.StringComparison.OrdinalIgnoreCase)) return imageUrl;
+        return Globals.baseURL + imageUrl;
     }
 
     // ---------------------------------------------------------------- "For grown-ups" door
@@ -541,46 +802,13 @@ public class HomeController : MonoBehaviour
         go.GetComponent<Button>().onClick.AddListener(onClick);
     }
 
-    private void BuildSectionTile(Transform parent, SectionTile tile, int idx)
-    {
-        var palette = UiTheme.Card(idx);
-        var tileGO = new GameObject("Tile_" + tile.filter,
-            typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup));
-        tileGO.transform.SetParent(parent, false);
-        var tImg = tileGO.GetComponent<Image>();
-        tImg.sprite = RoundedSprite(); tImg.type = Image.Type.Sliced;
-        tImg.color = palette.fill;
-        var vlg = tileGO.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(24, 24, 24, 24);
-        vlg.spacing = 10;
-        vlg.childAlignment = TextAnchor.MiddleCenter;
-        vlg.childControlWidth = true; vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
-
-        AddTileIcon(tileGO.transform, tile, palette.accent, 64f);
-        var label = MakeText(tileGO.transform, "Label", tile.label, 44, TextAlignmentOptions.Center);
-        label.fontStyle = FontStyles.Bold;
-        label.color = palette.accent;
-
-        var captured = tile.filter;
-        // The "learn to read" tile opens the dedicated ladder (Stage 3) rather than a flat
-        // filtered Library list; every other tile goes to the Library as before.
-        bool isLearnToRead = !string.IsNullOrEmpty(captured) &&
-                             captured.Trim().ToLowerInvariant() == "learn to read";
-        tileGO.GetComponent<Button>().onClick.AddListener(() =>
-        {
-            if (isLearnToRead) Navigation.GoToLearnToRead();
-            else Nav.GoToLibrary(captured);
-        });
-    }
-
     // Optional room icon above the label: a single-colour rounded glyph from Resources/Icons/Rooms,
     // tinted to match the card. Resolves by the tile's explicit iconKey, falling back to the filter
     // token; a no-op when no matching sprite ships, so iconless tiles keep their label-only look.
-    private void AddTileIcon(Transform parent, SectionTile tile, Color tint, float size)
+    private GameObject AddTileIcon(Transform parent, string iconKey, string filter, Color tint, float size)
     {
-        var sprite = ResolveTileIcon(tile);
-        if (sprite == null) return;
+        var sprite = ResolveTileIcon(iconKey, filter);
+        if (sprite == null) return null;
 
         var go = new GameObject("Icon", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
         go.transform.SetParent(parent, false);
@@ -592,11 +820,12 @@ public class HomeController : MonoBehaviour
         img.color = tint;
         img.preserveAspect = true;
         img.raycastTarget = false;
+        return go;
     }
 
-    private Sprite ResolveTileIcon(SectionTile tile)
+    private Sprite ResolveTileIcon(string iconKey, string filter)
     {
-        string key = !string.IsNullOrEmpty(tile.iconKey) ? tile.iconKey : IconKeyFromFilter(tile.filter);
+        string key = !string.IsNullOrEmpty(iconKey) ? iconKey : IconKeyFromFilter(filter);
         return string.IsNullOrEmpty(key) ? null : Resources.Load<Sprite>("Icons/Rooms/" + key);
     }
 
@@ -661,6 +890,29 @@ public class HomeController : MonoBehaviour
         _chipSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
             100f, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
         return _chipSprite;
+    }
+
+    // Procedural filled circle, used for the badge's ring and its circular clip. Same anti-aliased
+    // coverage trick as RoundedSprite, without the 9-slice (a circle must never be stretched).
+    private static Sprite _circleSprite;
+    private static Sprite CircleSprite()
+    {
+        if (_circleSprite != null) return _circleSprite;
+        const int size = 128;
+        const float r = size * 0.5f;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        var px = new Color[size * size];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - r, dy = y + 0.5f - r;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - d + 0.5f));
+            }
+        tex.SetPixels(px);
+        tex.Apply();
+        _circleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+        return _circleSprite;
     }
 
     private static void Stretch(RectTransform rt)
