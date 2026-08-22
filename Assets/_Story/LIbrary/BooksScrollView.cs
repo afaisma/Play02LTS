@@ -64,6 +64,12 @@ public class Filter
         if (genre == "everything")
             return true;
 
+        // "new" is a DATE token, not a genre substring: it matches recently published books
+        // rather than books whose genre string happens to contain "new". Checked before the
+        // substring test so the two can't collide; every other token behaves exactly as before.
+        if (string.Equals(genre, "new", StringComparison.OrdinalIgnoreCase))
+            return IsNewBook(prBook);
+
         if (genre != "")
             return prBook.genre.ToLower().Contains(genre.ToLower());
 
@@ -71,6 +77,27 @@ public class Filter
             return ageFrom <= prBook.ageFrom && prBook.ageTo <= ageTo;
 
         return true;
+    }
+
+    /// <summary>
+    /// Backing test for the "new" filter token: the book's catalog `added` date (ISO
+    /// yyyy-MM-dd, InvariantCulture) is within AppConfig.NewBookWindowDays of the device's
+    /// date. A missing, blank or unparseable date means NOT new — so a catalog that carries
+    /// no dates simply yields an empty "new" shelf (and, on Home, a door that FilterHasBooks
+    /// drops) instead of an error. The one day of slack absorbs timezone skew between the
+    /// publisher's date and the device's local date, while still rejecting far-future typos.
+    /// </summary>
+    public static bool IsNewBook(PRBook prBook)
+    {
+        if (prBook == null || string.IsNullOrEmpty(prBook.added))
+            return false;
+        if (!DateTime.TryParseExact(prBook.added.Trim(), "yyyy-MM-dd",
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    System.Globalization.DateTimeStyles.None,
+                                    out DateTime addedOn))
+            return false;
+        double days = (DateTime.Now.Date - addedOn.Date).TotalDays;
+        return days >= -1d && days <= AppConfig.NewBookWindowDays;
     }
 }
 

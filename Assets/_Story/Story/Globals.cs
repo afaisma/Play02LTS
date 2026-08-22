@@ -529,6 +529,45 @@ public class Globals : MonoBehaviour
         return done;
     }
 
+    public static string Prefs_BookUrl_To_LastOpened_Key(string book_url)
+    {
+        return book_url + "_" + "lastopened";
+    }
+
+    /// <summary>
+    /// Stamp "the child opened this book just now". Unix epoch SECONDS, written as an
+    /// InvariantCulture string (PlayerPrefs has no 64-bit int, and a culture-formatted
+    /// number would round-trip differently on a comma-decimal device). Written from the
+    /// single choke point Globals.GotoPrBook, so every entry path is covered by one line.
+    /// </summary>
+    public static void Prefs_Set_Book_LastOpened(string book_url)
+    {
+        if (string.IsNullOrEmpty(book_url))
+            return;
+        long epochSeconds = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+        PlayerPrefs.SetString(Prefs_BookUrl_To_LastOpened_Key(book_url),
+                              epochSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Epoch seconds of the last open, or 0 for "never opened". Any unreadable value
+    /// (missing key, empty, garbage written by an older/newer build, a negative number)
+    /// degrades to 0 rather than throwing — the Recent-reads rail then falls back to
+    /// page progress for that book.
+    /// </summary>
+    public static long Prefs_Get_Book_LastOpened(string book_url)
+    {
+        if (string.IsNullOrEmpty(book_url))
+            return 0;
+        string raw = PlayerPrefs.GetString(Prefs_BookUrl_To_LastOpened_Key(book_url), "");
+        if (string.IsNullOrEmpty(raw))
+            return 0;
+        if (!long.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                           System.Globalization.CultureInfo.InvariantCulture, out long epochSeconds))
+            return 0;
+        return epochSeconds > 0 ? epochSeconds : 0;
+    }
+
     /// <summary>
     /// The book the end-of-book "Read next" sheet offers: the first book AFTER the current one, on the
     /// shelf the child is actually browsing, that they haven't finished yet. Null when none remain
@@ -575,6 +614,10 @@ public class Globals : MonoBehaviour
     {
         g_scriptName = prBook.bookFullUrl;
         g_prbook = prBook;
+        // The ONE place a book is opened from (library row, Home rail card, door, read-next
+        // "Let's go!", Nav.GoToBookByName/ById all funnel here), so the Recent-reads stamp
+        // needs exactly one write site.
+        Prefs_Set_Book_LastOpened(prBook.bookUrl);
         // Opening a book cancels any pending startup catalog-load navigation so
         // a late CSV download can't yank the reader back to the Library.
         if (Instance != null)
@@ -655,6 +698,9 @@ public class Globals : MonoBehaviour
                     id = values[8].Trim(),
                     bookStoreUrlPrinted = values.Length > 9 ? values[9].Trim() : "",
                     bookStoreUrlKindle = values.Length > 10 ? values[10].Trim() : "",
+                    // Optional trailing publish-date column (ISO yyyy-MM-dd), feeding the
+                    // "new" filter token. Absent in every catalog shipped so far -> "".
+                    added = values.Length > 11 ? values[11].Trim() : "",
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(values[3].Trim()),
                     book_done = Prefs_Get_Book_Done(values[3].Trim())
@@ -773,6 +819,9 @@ public class Globals : MonoBehaviour
                     // Opt-in flag: this book supports the "I read it myself" (read-along) mode.
                     // Missing → false (SimpleJSON AsBool default). Gates the picker's iread tile.
                     readToMe = b["read_to_me"].AsBool,
+                    // Publish date (ISO yyyy-MM-dd) behind the "new" filter token. Missing
+                    // -> "" (SimpleJSON default), which means "never new".
+                    added = b["added"].Value,
                     number = counter++,
                     currentPage = Prefs_Get_Book_Page(scriptUrl),
                     book_done = Prefs_Get_Book_Done(scriptUrl)

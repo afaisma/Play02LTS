@@ -21,6 +21,11 @@ public static class AppConfig
     // For a QA A/B against the old silent ending, set this to false and recompile.
     public const bool ShowReadNextSheet = true;
 
+    // How recently a book must have been published (its catalog "added" date, ISO yyyy-MM-dd)
+    // to match the "new" library filter token — see Filter.IsNewBook. Books with no "added"
+    // date are never new, so a catalog that carries no dates leaves the New Books door hidden.
+    public const int NewBookWindowDays = 45;
+
     // Open a book at the page the child last reached ({bookUrl}_page, written on every page turn
     // by PRScript.SetCurrentStep) instead of always at page 1.
     // For a QA A/B against the old always-start-at-page-1 behavior, set this to false and recompile.

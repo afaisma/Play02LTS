@@ -24,6 +24,7 @@ public class PRLibrary : MonoBehaviour
     public static List<(string SceneName, string Settings)> bookCategories = new List<(string SceneName, string Settings)>()
     {
         ("_Library", "everything"),
+        ("_Library", "new"),
         ("_Library", "rhymebooks"),
         ("_Library", "family"),
         ("_Library", "adventure"),
@@ -173,6 +174,8 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         txtTitle.text = PRUtils.CapitalizeFirstLetter(filter);
         if (filter == "everything")
             txtTitle.text = "All Books";
+        if (filter == "new")
+            txtTitle.text = "New Books";
 
         if (filter == "rhymebooks")
         {
@@ -305,6 +308,7 @@ public class PRBook
     public string phonicsFocus = "";  // "" default; CSV path never sets it, so initialize here
     public string action = "";        // non-empty = navigation tile (Nav address), not a book; CSV path never sets it
     public string contentRev = "";    // catalog content hash; folded into media URLs as ?v= to bust stale caches. CSV path never sets it
+    public string added = "";         // catalog publish date, ISO yyyy-MM-dd; "" = unknown. Drives the "new" filter token (Filter.IsNewBook)
     public int number;
     public int book_done;
     public int currentPage;

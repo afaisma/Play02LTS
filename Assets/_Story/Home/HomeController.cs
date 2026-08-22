@@ -12,8 +12,9 @@ using UnityEngine.UI;
 //
 // Layout, top to bottom:
 //   a) Title / logo row.
-//   b) "Continue reading" horizontal rail — books in progress (page > 0 AND not done). Hidden
-//      when there are none. Each card = cover + name, tap -> Nav.GoToBook(book).
+//   b) "Recent reads" horizontal rail — books the child has opened, newest first, finished ones
+//      included (with a check chip) because re-reading is the point. Hidden when there are none.
+//      Each card = cover + name, tap -> Nav.GoToBook(book).
 //   c) Grid of illustrated DOOR cards (art + label + accent bar -> filter), tap -> the same
 //      navigation the old label+glyph tiles performed. The door set is content: it comes from
 //      home_doors.json (see HomeDoors.cs) with the compiled-in SectionTile list as the floor.
@@ -280,19 +281,37 @@ public class HomeController : MonoBehaviour
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
     }
 
-    // (b) "Continue reading" horizontal rail. In progress = page > 0 (past the first 0-based step)
-    // AND not done. Hidden when empty. Nav tiles (books with an action) are never "in progress".
+    // (b) "Recent reads" horizontal rail — the one surface for "a book I've already met".
+    // It deliberately keeps FINISHED books: re-reading is core behavior at this age, and the
+    // rail's tap already lands on page 1 for a done book (PRScript's resume guard), which IS
+    // "read again". Membership: a last-opened stamp, OR page progress, OR done — the latter two
+    // keep installs that predate the stamp populated on their first run after updating.
+    // Order: most recently opened first; unstamped books sink to the end, ordered by how far
+    // through them the child got. Nav tiles (books with an action) are never listed.
+    private const int RecentRailMax = 10;
+
     private void BuildContinueRail(Transform parent)
     {
-        var inProgress = new List<PRBook>();
+        var recent = new List<(PRBook book, long opened, int page, bool done)>();
         foreach (var b in Globals.g_listPRBooks)
         {
             if (b == null || string.IsNullOrEmpty(b.bookUrl)) continue;
             if (!string.IsNullOrEmpty(b.action)) continue; // navigation tile, not a real book
-            if (Globals.Prefs_Get_Book_Page(b.bookUrl) > 0 && Globals.Prefs_Get_Book_Done(b.bookUrl) == 0)
-                inProgress.Add(b);
+            long opened = Globals.Prefs_Get_Book_LastOpened(b.bookUrl);
+            int page = Globals.Prefs_Get_Book_Page(b.bookUrl);
+            bool done = Globals.Prefs_Get_Book_Done(b.bookUrl) == 1;
+            if (opened > 0 || page > 0 || done)
+                recent.Add((b, opened, page, done));
         }
-        if (inProgress.Count == 0) return; // hide the rail entirely
+        if (recent.Count == 0) return; // hide the rail entirely
+
+        recent.Sort((x, y) =>
+        {
+            if (x.opened != y.opened) return y.opened.CompareTo(x.opened); // newest first; 0 sinks
+            if (x.page != y.page) return y.page.CompareTo(x.page);         // then furthest along
+            return string.CompareOrdinal(x.book.bookUrl, y.book.bookUrl);  // stable, catalog-order independent
+        });
+        if (recent.Count > RecentRailMax) recent.RemoveRange(RecentRailMax, recent.Count - RecentRailMax);
 
         var section = new GameObject("ContinueSection", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         section.transform.SetParent(parent, false);
@@ -302,7 +321,7 @@ public class HomeController : MonoBehaviour
         svlg.childForceExpandWidth = true; svlg.childForceExpandHeight = false;
         section.GetComponent<LayoutElement>().preferredHeight = 430f;
 
-        var heading = MakeText(section.transform, "Heading", "Continue reading", 38, TextAlignmentOptions.Left);
+        var heading = MakeText(section.transform, "Heading", "Recent reads", 38, TextAlignmentOptions.Left);
         heading.fontStyle = FontStyles.Bold;
         heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 60f;
 
@@ -340,11 +359,11 @@ public class HomeController : MonoBehaviour
         scroll.movementType = ScrollRect.MovementType.Clamped;
         scroll.scrollSensitivity = 20f;
 
-        foreach (var book in inProgress)
-            BuildBookCard(railContent.transform, book);
+        foreach (var entry in recent)
+            BuildBookCard(railContent.transform, entry.book, entry.done);
     }
 
-    private void BuildBookCard(Transform parent, PRBook book)
+    private void BuildBookCard(Transform parent, PRBook book, bool done)
     {
         var cardGO = new GameObject("Card_" + book.bookName,
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
@@ -374,6 +393,9 @@ public class HomeController : MonoBehaviour
         var name = MakeText(cardGO.transform, "Name", book.bookName, 26, TextAlignmentOptions.Center);
         name.gameObject.AddComponent<LayoutElement>().preferredHeight = 56f;
         name.enableWordWrapping = true;
+
+        // Finished books stay on the rail, so they need to read as finished at a glance.
+        if (done) BuildDoneChip(cardGO.transform);
 
         var captured = book;
         // Instant pressed state + a rendered beat before the (async) _Story load — a book tap
@@ -619,6 +641,47 @@ public class HomeController : MonoBehaviour
 
         var icon = AddTileIcon(label.transform.parent, door.iconKey, door.filter, palette.accent, wide ? 80f : 64f);
         if (icon != null) icon.transform.SetSiblingIndex(0);               // glyph above the label
+    }
+
+    // A small "you finished this" chip on a rail card's top-right corner: the door badge's circle
+    // styling in UiTheme.Primary, with a check drawn from two rotated bars rather than a glyph —
+    // no font in the project is guaranteed to carry U+2713, and a tofu box would be worse than
+    // no chip at all. ignoreLayout keeps it an overlay instead of a row in the card's stack.
+    private void BuildDoneChip(Transform card)
+    {
+        const float size = 56f;
+
+        var chip = new GameObject("DoneChip", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        chip.transform.SetParent(card, false);
+        chip.GetComponent<LayoutElement>().ignoreLayout = true;
+        var rt = chip.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 1f);   // top-right of the card
+        rt.sizeDelta = new Vector2(size, size);
+        rt.anchoredPosition = new Vector2(-10f, -10f);
+        var img = chip.GetComponent<Image>();
+        img.sprite = CircleSprite();
+        img.color = UiTheme.Primary;
+        img.raycastTarget = false;                                      // the card keeps the tap
+
+        // Both strokes start at the check's vertex and rotate away from it, so the joint is exact.
+        var vertex = new Vector2(-size * 0.09f, -size * 0.10f);
+        AddCheckStroke(chip.transform, vertex, 135f, size * 0.30f, size * 0.12f);
+        AddCheckStroke(chip.transform, vertex, 45f,  size * 0.54f, size * 0.12f);
+    }
+
+    private static void AddCheckStroke(Transform parent, Vector2 vertex, float angle, float length, float thickness)
+    {
+        var go = new GameObject("Stroke", typeof(RectTransform), typeof(Image));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0f, 0.5f);                               // rotate about the vertex end
+        rt.sizeDelta = new Vector2(length, thickness);
+        rt.anchoredPosition = vertex;
+        rt.localRotation = Quaternion.Euler(0f, 0f, angle);
+        var img = go.GetComponent<Image>();
+        img.color = UiTheme.OnPrimary;
+        img.raycastTarget = false;
     }
 
     // ---- badge groundwork (OFF by default: every shipped door uses badgePolicy "none") ----
