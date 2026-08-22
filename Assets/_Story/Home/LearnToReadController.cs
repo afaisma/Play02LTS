@@ -230,7 +230,11 @@ public class LearnToReadController : MonoBehaviour
         prog.gameObject.AddComponent<LayoutElement>().preferredWidth = 130f;
 
         int captured = level;
-        card.GetComponent<Button>().onClick.AddListener(() => Nav.GoToLibrary("level" + captured));
+        // Same press -> beat -> cover -> navigate as Home's cards, so the (async) Library load
+        // never reads as a dead tap.
+        TapFeedback.AddPressFeedback(card);
+        card.GetComponent<Button>().onClick.AddListener(
+            () => TapFeedback.TapThenGo(card.transform, () => Nav.GoToLibrary("level" + captured)));
     }
 
     // ---------------------------------------------------------------- helpers

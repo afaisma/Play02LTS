@@ -376,7 +376,11 @@ public class HomeController : MonoBehaviour
         name.enableWordWrapping = true;
 
         var captured = book;
-        cardGO.GetComponent<Button>().onClick.AddListener(() => Nav.GoToBook(captured));
+        // Instant pressed state + a rendered beat before the (async) _Story load — a book tap
+        // used to sit dead for the whole scene load.
+        TapFeedback.AddPressFeedback(cardGO);
+        cardGO.GetComponent<Button>().onClick.AddListener(
+            () => TapFeedback.TapThenGo(cardGO.transform, () => Nav.GoToBook(captured)));
     }
 
     // (c) Illustrated door cards. Each door carries book art, its label and an accent bar in its own
@@ -400,7 +404,17 @@ public class HomeController : MonoBehaviour
             if (!IsAddress(door.filter) && !FilterHasBooks(door.filter)) continue;
             live.Add(door);
         }
-        if (live.Count == 0) return;
+        if (live.Count == 0)
+        {
+            // Every door filtered out — an age band no door declares books for, or a published set
+            // whose filters find nothing in this catalog. Fall back to the compiled-in room set
+            // UNFILTERED rather than render an empty rooms section: the worst case is then exactly
+            // the pre-redesign Home, which is the floor this whole screen is allowed to degrade to.
+            Debug.LogWarning("HomeController: no door survived the age/catalog filters; " +
+                             "falling back to the compiled-in room set.");
+            live = HomeDoorsConfig.FromSectionTiles(sectionTiles);
+            if (live.Count == 0) return;
+        }
 
         var heading = MakeText(parent, "RoomsHeading", "Reading rooms", 36, TextAlignmentOptions.Left);
         heading.color = UiTheme.TextSecondary;
@@ -507,7 +521,9 @@ public class HomeController : MonoBehaviour
         barImg.raycastTarget = false;
 
         string captured = door.filter;
-        cardGO.GetComponent<Button>().onClick.AddListener(() => OpenDoor(captured));
+        TapFeedback.AddPressFeedback(cardGO);
+        cardGO.GetComponent<Button>().onClick.AddListener(
+            () => TapFeedback.TapThenGo(cardGO.transform, () => OpenDoor(captured)));
 
         StartCoroutine(LoadDoorArt(door, art, artSlot, cardImg, label, palette, wide));
     }
@@ -571,6 +587,31 @@ public class HomeController : MonoBehaviour
     {
         if (artSlot != null) artSlot.SetActive(false);
         if (cardImg != null) cardImg.color = palette.fill;
+
+        // With the art block gone the card must read as the old tile, not as a door card missing its
+        // picture: centre the glyph + label in the cell instead of leaving them huddled under the top
+        // padding, and pin the accent bar to the very bottom edge so it can't float mid-card. The cell
+        // size itself is untouched, so nothing reflows around it.
+        var cardTf = cardImg != null ? cardImg.transform : null;
+        if (cardTf != null)
+        {
+            var cardVlg = cardTf.GetComponent<VerticalLayoutGroup>();
+            if (cardVlg != null) cardVlg.childAlignment = TextAnchor.MiddleCenter;
+
+            var accent = cardTf.Find("Accent"); // built by BuildDoorCard under this exact name
+            if (accent != null)
+            {
+                var accentLe = accent.GetComponent<LayoutElement>();
+                if (accentLe != null) accentLe.ignoreLayout = true; // out of the centred stack…
+                var accentRt = (RectTransform)accent;
+                accentRt.anchorMin = new Vector2(0f, 0f);
+                accentRt.anchorMax = new Vector2(1f, 0f);
+                accentRt.pivot     = new Vector2(0.5f, 0f);
+                accentRt.offsetMin = Vector2.zero;
+                accentRt.offsetMax = new Vector2(0f, DoorAccentH);  // …flush along the bottom edge
+            }
+        }
+
         if (label == null) return;
 
         label.color = palette.accent;

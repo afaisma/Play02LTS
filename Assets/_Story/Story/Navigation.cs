@@ -1,3 +1,5 @@
+using System.Collections;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
@@ -13,6 +15,13 @@ using UnityEngine.SceneManagement;
 /// keep their public method shells so scene-side button onClick
 /// wirings don't break — those wrapper methods now just delegate
 /// here.
+///
+/// The three EXPENSIVE destinations (_Library, _LearnToRead, _Story) load
+/// asynchronously — a synchronous LoadScene froze the frame for ~0.5s in the
+/// editor and ~2s on an Android tablet, which read as a dead tap. Every caller
+/// of these already sets its state (Globals.g_libraryFilter, g_scriptName,
+/// g_prbook, ...) BEFORE navigating, so deferred activation is safe. The cheap
+/// destinations stay synchronous: Back-to-Home must feel instant.
 /// </summary>
 public static class Navigation
 {
@@ -30,9 +39,9 @@ public static class Navigation
 
     public static void GoToStart()       => SceneManager.LoadScene(StartScene);
     public static void GoToHome()        => SceneManager.LoadScene(Home);
-    public static void GoToLearnToRead() => SceneManager.LoadScene(LearnToRead);
-    public static void GoToLibrary()   => SceneManager.LoadScene(Library);
-    public static void GoToStory()     => SceneManager.LoadScene(Story);
+    public static void GoToLearnToRead() => GoToSceneAsync(LearnToRead);
+    public static void GoToLibrary()   => GoToSceneAsync(Library);
+    public static void GoToStory()     => GoToSceneAsync(Story);
     public static void GoToBookstore() => SceneManager.LoadScene(Bookstore);
     public static void GoToSettings()  => SceneManager.LoadScene(Settings);
     public static void GoToParents()   => SceneManager.LoadScene(Parents);
@@ -47,4 +56,85 @@ public static class Navigation
     /// time.
     /// </summary>
     public static void GoToScene(string sceneName) => SceneManager.LoadScene(sceneName);
+
+    /// <summary>
+    /// Async scene load. allowSceneActivation is left true, so this behaves exactly
+    /// like LoadScene from the caller's point of view (fire and forget) except the
+    /// work is spread across frames instead of stalling one. LoadSceneAsync does NOT
+    /// need a coroutine to drive it — the returned AsyncOperation is returned only for
+    /// callers that want to watch progress.
+    /// </summary>
+    public static AsyncOperation GoToSceneAsync(string sceneName)
+    {
+        BeginNavTiming(sceneName);
+        return SceneManager.LoadSceneAsync(sceneName);
+    }
+
+    /// <summary>
+    /// Stamps "the child touched the screen" for the QA timing line below. Called by
+    /// TapFeedback before it plays the press beat, so the reported number covers the
+    /// whole perceived wait (press + fade + load), not just the load. No-op outside
+    /// the editor and development builds.
+    /// </summary>
+    public static void MarkTap()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        _tapRealtime = Time.realtimeSinceStartup;
+        _tapPending = true;
+#endif
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private static float _tapRealtime;
+    private static bool _tapPending;
+    private static string _pendingScene;
+
+    private static void BeginNavTiming(string sceneName)
+    {
+        // Navigation that wasn't preceded by a tap (auto-advance, alert retry, ...)
+        // still gets timed — from the moment the load was requested.
+        if (!_tapPending) _tapRealtime = Time.realtimeSinceStartup;
+        _tapPending = false;
+        _pendingScene = sceneName;
+        SceneManager.sceneLoaded -= OnNavSceneLoaded;
+        SceneManager.sceneLoaded += OnNavSceneLoaded;
+    }
+
+    private static void OnNavSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        SceneManager.sceneLoaded -= OnNavSceneLoaded;
+        if (_pendingScene == null) return;
+
+        string sceneName = _pendingScene;
+        float tapAt = _tapRealtime;
+        _pendingScene = null;
+        // sceneLoaded fires DURING activation; one more frame lands us on the first
+        // frame the new scene actually presents, which is when the tap stops feeling dead.
+        NavTimingRunner.RunNextFrame(() =>
+        {
+            int ms = Mathf.RoundToInt((Time.realtimeSinceStartup - tapAt) * 1000f);
+            Debug.Log($"[NAV] {sceneName} interactive in {ms} ms");
+        });
+    }
+
+    // Throwaway host for the single-frame wait. Lives in the freshly loaded scene and
+    // deletes itself after logging.
+    private class NavTimingRunner : MonoBehaviour
+    {
+        public static void RunNextFrame(System.Action action)
+        {
+            var go = new GameObject("~NavTiming") { hideFlags = HideFlags.HideAndDontSave };
+            go.AddComponent<NavTimingRunner>().StartCoroutine(WaitOneFrame(go, action));
+        }
+
+        private static IEnumerator WaitOneFrame(GameObject go, System.Action action)
+        {
+            yield return null;
+            action();
+            Destroy(go);
+        }
+    }
+#else
+    private static void BeginNavTiming(string sceneName) { }
+#endif
 }
