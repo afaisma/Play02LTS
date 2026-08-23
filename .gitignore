@@ -129,3 +129,6 @@ mono_crash.*.json
 Unity-iPhone */
 _RemovedLanguageModels_backup/
 Assets/Screenshots/
+
+# Generated per-build by Editor/BuildStamp.cs (keep the .meta tracked)
+Assets/Resources/build_info.json

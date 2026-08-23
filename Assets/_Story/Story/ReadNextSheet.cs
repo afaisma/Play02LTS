@@ -70,7 +70,11 @@ public class ReadNextSheet : MonoBehaviour
         // Cover the text area only. Found by name so no scene wiring is needed; if the reader's
         // layout ever renames it, fall back to the bottom 42% — the mock's proportion.
         RectTransform textArea = FindTextArea(canvasRT);
-        Rect area = textArea != null ? NormalizedRect(textArea, canvasRT) : Rect.MinMaxRect(0f, 0f, 1f, 0.42f);
+        Rect area = textArea != null ? NormalizedRect(textArea, canvasRT) : BottomFallback;
+        // A degenerate rect (a collapsed or not-yet-laid-out text area) would otherwise produce a
+        // sliver of a sheet under a near-fullscreen invisible ArtCatcher — an input trap with nothing
+        // on screen to explain it. Treat it exactly like the find-failure path.
+        if (area.height < 0.08f || area.width < 0.2f) area = BottomFallback;
         _sheetHeight = Mathf.Max(1f, canvasRT.rect.height * area.height);
 
         // Tap the art to look at the picture; tap the text area (or just wait) to bring the sheet back.
@@ -218,7 +222,14 @@ public class ReadNextSheet : MonoBehaviour
     // placeholder on failure), drop the picture block and show the book's name large instead.
     private IEnumerator LoadCover(PRBook next, Image art, GameObject slot)
     {
-        string url = Globals.WithContentRev(Globals.baseURL + next.bookImageUrl, next.contentRev);
+        // Hand PRUtils a url that ALREADY carries a query. Its implicit cache-bust appends
+        // Globals.g_prbook's rev — the book just finished, not this one — whenever the url has none,
+        // so a next book with an empty contentRev would be fetched and cached under the wrong book's
+        // rev (a different cache key than the Library computes for the very same cover). An explicit
+        // "?v=0" for the empty case keeps this sheet's key deterministic and rev-correct.
+        string url = Globals.baseURL + next.bookImageUrl;
+        if (!url.Contains("?"))
+            url += "?v=" + (string.IsNullOrEmpty(next.contentRev) ? "0" : next.contentRev);
         yield return PRUtils.DownloadImage(url, art, true, true);
         if (art == null || slot == null) yield break;
         if (art.sprite != null && art.sprite != Resources.Load<Sprite>("NoImage")) yield break;
@@ -381,13 +392,16 @@ public class ReadNextSheet : MonoBehaviour
         return null;
     }
 
+    // Where the sheet sits when the text area can't be trusted: the bottom 42%, the mock's proportion.
+    private static readonly Rect BottomFallback = Rect.MinMaxRect(0f, 0f, 1f, 0.42f);
+
     // target's rect expressed as 0..1 anchors inside the canvas.
     private static Rect NormalizedRect(RectTransform target, RectTransform canvasRT)
     {
         var tc = new Vector3[4]; target.GetWorldCorners(tc);
         var cc = new Vector3[4]; canvasRT.GetWorldCorners(cc);
         float w = cc[2].x - cc[0].x, h = cc[2].y - cc[0].y;
-        if (w <= 0f || h <= 0f) return Rect.MinMaxRect(0f, 0f, 1f, 0.42f);
+        if (w <= 0f || h <= 0f) return BottomFallback;
         return Rect.MinMaxRect(
             Mathf.Clamp01((tc[0].x - cc[0].x) / w), Mathf.Clamp01((tc[0].y - cc[0].y) / h),
             Mathf.Clamp01((tc[2].x - cc[0].x) / w), Mathf.Clamp01((tc[2].y - cc[0].y) / h));

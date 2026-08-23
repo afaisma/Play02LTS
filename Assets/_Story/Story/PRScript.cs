@@ -274,8 +274,10 @@ public class PRScript : MonoBehaviour
     {
         // Last page: the narration ending IS the book ending. Hand this beat to the Read-next sheet
         // and return before the puzzle button — the two would otherwise appear at the same instant and
-        // the puzzle would sit behind the sheet. Returning here is the whole puzzle suppression.
-        if (IsOnLastStep()) { OnLastStepFinished(); return; }
+        // the puzzle would sit behind the sheet. Returning here is the whole puzzle suppression, so it
+        // is gated on the feature flag too: with ShowReadNextSheet off the last page ends exactly as it
+        // did before the feature, puzzle button included.
+        if (AppConfig.ShowReadNextSheet && IsOnLastStep()) { OnLastStepFinished(); return; }
         if (audioAndTextPlayer.IsAutoplaying) return;
         if (!_puzzleEnabledCurrentPage) return;
         storyStepsUI.gallery.ShowPuzzleButton(true);
@@ -1009,7 +1011,8 @@ public class PRScript : MonoBehaviour
         if (!AppConfig.ShowReadNextSheet || _readNextFired || !IsOnLastStep()) return;
         if (UnifiedReadingModePicker.IsOpen) return;
         _readNextFired = true;
-        if (_readNextCo != null) StopCoroutine(_readNextCo);
+        // No StopCoroutine here: a beat still in flight implies _readNextFired is true, and the guard
+        // above already returned on that — so this line can only ever run with no beat pending.
         _readNextCo = StartCoroutine(ShowReadNextAfterBeat());
     }
 
@@ -1017,8 +1020,20 @@ public class PRScript : MonoBehaviour
     {
         yield return new WaitForSecondsRealtime(ReadNextDelaySec); // unscaled, like the sheet's tweens
         _readNextCo = null;
-        // Re-check: a page turn or the picker during that beat cancels the offer.
-        if (!IsOnLastStep() || UnifiedReadingModePicker.IsOpen || _readNextSheet != null) yield break;
+
+        // A page turn during the beat cancels the offer outright (SetCurrentStep has already re-armed
+        // the debounce for the new page); a sheet already up means there is nothing to do.
+        if (!IsOnLastStep() || _readNextSheet != null) yield break;
+
+        // The picker owning the screen only DEFERS the offer — re-arm the debounce so the replay that
+        // follows ClosePicker can still show this page's sheet. Left set, the page-visit would swallow
+        // the sheet entirely (the replay's OnAudioFinished would early-return on the flag).
+        if (UnifiedReadingModePicker.IsOpen) { _readNextFired = false; yield break; }
+
+        // A script error already took this page: the kid-safe panel owns the ending. Re-arm too, so a
+        // later legitimate finish can still offer the next book.
+        if (_scriptErrorPanel != null) { _readNextFired = false; yield break; }
+
         _readNextSheet = ReadNextSheet.Create(
             this,
             storyStepsUI != null ? storyStepsUI.canvasMain : null,
@@ -1152,6 +1167,9 @@ public class PRScript : MonoBehaviour
     /// </summary>
     private void ShowKidSafeScriptError()
     {
+        // The hiccup panel owns the ending: take down any Read-next sheet first (the reverse order —
+        // sheet deferring to an existing panel — is handled in ShowReadNextAfterBeat).
+        DestroyReadNextSheet();
         if (_scriptErrorPanel != null)
             return;                                     // one hiccup panel is enough
         if (storyStepsUI == null || storyStepsUI.canvasMain == null)

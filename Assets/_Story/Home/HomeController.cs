@@ -70,6 +70,7 @@ public class HomeController : MonoBehaviour
 
     private void Start()
     {
+        BuildInfo.LogOnce(); // one greppable [BUILD] line per session
         BuildCanvas();
         StartCoroutine(BuildWhenCatalogReady());
     }
@@ -838,6 +839,12 @@ public class HomeController : MonoBehaviour
         // Commerce path (leads to Amazon) → gated behind a quick grown-up check, per store policy.
         BuildGrownupsButton(card.transform, "Our printed books", 3, () => { ShowGrownups(false); ShowGate(() => Navigation.GoToBookstore()); });
         BuildGrownupsButton(card.transform, "Back to books", -1, () => ShowGrownups(false));
+
+        // Tiny build stamp so "which version do you have?" is answerable at a glance
+        // (testers were re-testing stale APKs without any way to tell).
+        var stamp = MakeText(card.transform, "BuildStamp", BuildInfo.Line(), 20, TextAlignmentOptions.Center);
+        stamp.color = UiTheme.TextSecondary;
+        stamp.gameObject.AddComponent<LayoutElement>().preferredHeight = 30f;
 
         _grownups.SetActive(false);
     }
