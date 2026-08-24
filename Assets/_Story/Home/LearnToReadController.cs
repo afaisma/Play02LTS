@@ -121,7 +121,8 @@ public class LearnToReadController : MonoBehaviour
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
         hlg.childAlignment = TextAnchor.MiddleLeft;
 
-        // Shared round home button (house glyph in sage), identical to Home and the reader toolbar.
+        // Shared round home button (house glyph in sage), identical to the reader toolbar's. Create
+        // supplies the press-feedback + fade treatment around this raw navigation.
         HomeButton.Create(rowGO.transform, 76f, () => Navigation.GoToHome());
 
         var title = MakeText(rowGO.transform, "Title", "Learn to Read", 56, TextAlignmentOptions.Left);

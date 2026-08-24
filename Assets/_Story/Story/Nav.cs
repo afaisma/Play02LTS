@@ -18,13 +18,15 @@ public static class Nav
 {
     // Dispatch a string address to the matching navigation, delegating to the
     // existing methods. Unknown address / unresolvable book → logged no-op.
-    public static void Go(string address)
+    public static void Go(string address, string title = null)
     {
         var (scene, args) = Parse(address);
         switch (scene)
         {
             case "library":
-                GoToLibrary(args.GetValueOrDefault("filter", "everything"));
+                // `title` is the caption of the control that navigated here (a Home door's label);
+                // null on every other caller, which keeps the Library's derived title.
+                GoToLibrary(args.GetValueOrDefault("filter", "everything"), title);
                 break;
             case "story":
             {
@@ -66,6 +68,9 @@ public static class Nav
 
     // Thin, compile-time-safe wrappers — what most app code should call.
     public static void GoToLibrary(string filter = "everything") => Globals.GotoLibrary(filter);
+
+    /// <summary>As above, but carrying the shelf title the caller wants shown (see Globals.GotoLibrary).</summary>
+    public static void GoToLibrary(string filter, string title) => Globals.GotoLibrary(filter, title);
 
     public static void GoToBook(PRBook book) => Globals.GotoPrBook(book);
 

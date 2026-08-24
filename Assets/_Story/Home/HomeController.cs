@@ -261,7 +261,9 @@ public class HomeController : MonoBehaviour
         BuildContent();
     }
 
-    // (a) Title / logo row: shared round home button + title.
+    // (a) Title / logo row: just the title. No home button — this IS home; the control only ever
+    // navigated to the screen the child was already looking at. The Library / ladder / reader home
+    // buttons stay.
     private void BuildTitleRow(Transform parent)
     {
         var rowGO = new GameObject("TitleRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
@@ -272,9 +274,6 @@ public class HomeController : MonoBehaviour
         hlg.childControlWidth = true; hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
         hlg.childAlignment = TextAnchor.MiddleLeft;
-
-        // Same round home button used on the ladder and the in-book reader toolbar.
-        HomeButton.Create(rowGO.transform, 76f, () => Navigation.GoToHome());
 
         var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
@@ -544,9 +543,10 @@ public class HomeController : MonoBehaviour
         barImg.raycastTarget = false;
 
         string captured = door.filter;
+        string capturedLabel = door.label;
         TapFeedback.AddPressFeedback(cardGO);
         cardGO.GetComponent<Button>().onClick.AddListener(
-            () => TapFeedback.TapThenGo(cardGO.transform, () => OpenDoor(captured)));
+            () => TapFeedback.TapThenGo(cardGO.transform, () => OpenDoor(captured, capturedLabel)));
 
         StartCoroutine(LoadDoorArt(door, art, artSlot, cardImg, label, palette, wide));
     }
@@ -758,12 +758,16 @@ public class HomeController : MonoBehaviour
     // Where a door leads — unchanged from the tiles it replaces: the learn-to-read door opens the
     // dedicated ladder, a full Nav address ("library?filter=level1") routes through Nav.Go, and every
     // other token opens the filtered Library list.
-    private static void OpenDoor(string filter)
+    // `label` is the caption the child just tapped. It travels with the navigation so the shelf
+    // that opens is titled with the door's own name ("Stories", "Songs & Sounds") instead of the
+    // name derived from the filter token ("All Books", "Rhymebooks"). The Library consumes it once;
+    // filter chips inside the Library keep their existing derived titles.
+    private static void OpenDoor(string filter, string label)
     {
         if (string.IsNullOrEmpty(filter)) return;
-        if (IsAddress(filter)) { Nav.Go(filter); return; }
+        if (IsAddress(filter)) { Nav.Go(filter, label); return; }
         if (filter.Trim().ToLowerInvariant() == "learn to read") { Navigation.GoToLearnToRead(); return; }
-        Nav.GoToLibrary(filter);
+        Nav.GoToLibrary(filter, label);
     }
 
     // A door target is a Nav address (scene + query) rather than a plain Library filter token.
@@ -789,14 +793,18 @@ public class HomeController : MonoBehaviour
         var go = new GameObject("GrownupsFooter",
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         go.transform.SetParent(parent, false);
-        go.GetComponent<LayoutElement>().preferredHeight = 96f;
+        // 140pt, not 96: this is a thumb target for a child, at the very bottom of a scrolling
+        // page. The row's own Image is the raycast target and the parent VerticalLayoutGroup
+        // force-expands width, so the whole full-width band is tappable (MakeText labels have
+        // raycastTarget off and never steal the hit).
+        go.GetComponent<LayoutElement>().preferredHeight = 140f;
         var img = go.GetComponent<Image>();
         img.sprite = RoundedSprite(); img.type = Image.Type.Sliced; img.color = UiTheme.Track;
         var vlg = go.GetComponent<VerticalLayoutGroup>();
         vlg.childAlignment = TextAnchor.MiddleCenter;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = true;
-        var label = MakeText(go.transform, "Label", "For grown-ups", 32, TextAlignmentOptions.Center);
+        var label = MakeText(go.transform, "Label", "For grown-ups", 36, TextAlignmentOptions.Center);
         label.color = UiTheme.TextSecondary;
         go.GetComponent<Button>().onClick.AddListener(() => ShowGrownups(true));
     }

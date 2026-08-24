@@ -1269,7 +1269,17 @@ public class PRScript : MonoBehaviour
         SetUIAccordingToCurrentStep();
     }
 
+    // Scene-wired: the reader toolbar's btnHome onClick points here. _Home loads async, so the tap
+    // is acknowledged first (press held + fade) before the navigation is fired. HomeButton.Apply
+    // deliberately does NOT wrap this again.
     public void Home()
+    {
+        TapFeedback.TapThenGo(btnHome != null ? btnHome.transform : null, HomeNow);
+    }
+
+    // The raw navigation, without the tap treatment. For callers that already own the feedback —
+    // ReadNextSheet's home buttons are built by HomeButton.Create, which wraps what it is given.
+    public void HomeNow()
     {
         Globals.g_scriptName = "";
         Navigation.GoToHome();

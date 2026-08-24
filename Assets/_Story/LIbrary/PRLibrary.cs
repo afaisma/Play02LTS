@@ -60,6 +60,12 @@ public class PRLibrary : MonoBehaviour
         // Settings + Parents → consolidated into Home's "For grown-ups" door.
         HideToolbarButtons();
 
+        // The toolbar's home button is scene-wired (ButtonHome.onClick -> Home()). Grab it by name so
+        // Home() can hold it pressed through the now-async _Home load, and give it the same instant
+        // pressed state the code-built hub cards have.
+        _homeButton = FindByName("ButtonHome");
+        if (_homeButton != null) TapFeedback.AddPressFeedback(_homeButton);
+
         LoadBooks(this);
         // The incoming Globals.g_libraryFilter is authoritative: LoadBooksWithRetry's
         // SetFilter(g_libraryFilter) applies it directly (including "everything", which
@@ -161,7 +167,23 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             if (hide.Contains(t.name)) t.gameObject.SetActive(false);
     }
-    public void Home()      => Navigation.GoToHome();
+    // Scene-wired (ButtonHome). _Home loads async and is not a cheap scene, so acknowledge the tap
+    // (hold the press, fade a cover in) before firing the navigation — otherwise the ~2s tablet load
+    // reads as a dead tap and the child re-taps.
+    private GameObject _homeButton;
+    public void Home()
+    {
+        TapFeedback.TapThenGo(_homeButton != null ? _homeButton.transform : null, Navigation.GoToHome);
+    }
+
+    // Toolbar objects are found by name (no new serialized fields, no scene surgery), inactive ones
+    // included — the same approach HideToolbarButtons uses.
+    private static GameObject FindByName(string name)
+    {
+        foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (t.name == name) return t.gameObject;
+        return null;
+    }
 
     public void SetFilter(string filter)
     {
@@ -171,7 +193,14 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
             currentCategory = idx;
 
         filterContainer?._SetFilter(filter);
-        txtTitle.text = PRUtils.CapitalizeFirstLetter(filter);
+
+        // The surface that navigated here may carry its own name for this shelf — a Home door's
+        // label ("Stories", "Songs & Sounds"), which is what the child actually tapped. Taken ONCE,
+        // and applied at the very END of this method so it wins over the per-filter defaults below;
+        // the filter chips inside the Library never see it and keep their derived titles.
+        string pendingTitle = Globals.ConsumePendingLibraryTitle();
+
+        txtTitle.text = TitleCase(filter);
         if (filter == "everything")
             txtTitle.text = "All Books";
         if (filter == "new")
@@ -254,7 +283,32 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
             imgBackground.sprite = Resources.Load<Sprite>("Library/Library_background");
             txtTitle.color = new Color(0.99f, 0.99f, 0.99f);
         }
-    } 
+
+        // Door label wins over every default above (backgrounds and colours stay filter-driven).
+        if (!string.IsNullOrEmpty(pendingTitle))
+            txtTitle.text = pendingTitle;
+    }
+
+    /// <summary>
+    /// Shelf title derived from a filter token. CapitalizeFirstLetter only touched the first
+    /// character, which turned "sound &amp; speech" into "Sound &amp; speech" and "special education"
+    /// into "Special education"; every word gets its initial capital here instead. Words that are
+    /// not letters ("&amp;") pass through untouched.
+    /// </summary>
+    public static string TitleCase(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+
+        var chars = input.ToCharArray();
+        bool startOfWord = true;
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (char.IsWhiteSpace(chars[i])) { startOfWord = true; continue; }
+            if (startOfWord) chars[i] = char.ToUpper(chars[i]);
+            startOfWord = false;
+        }
+        return new string(chars);
+    }
     
     public void NextCategory()
     {

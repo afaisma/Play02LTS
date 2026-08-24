@@ -323,19 +323,23 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private void MaybeAutoOpen()
     {
-        // Only auto-open when there's a real decision to surface; otherwise just start reading in the
-        // resolved mode and leave changes to the mode button. Storyteller/App Reads/Silent never pop
-        // the modal on their own.
-        bool firstRun = !PlayerPrefs.HasKey(PickerSeenKey);
-
-        // Discovery of the read-yourself (Follow-along) mode — surface once when a book first offers it.
-        bool firstFollowAlong = _available.Contains(Mode.IRead)
-            && PlayerPrefs.GetInt(ModeSeenPrefix + ModeStr(Mode.IRead), 0) == 0;
-
-        // A silently-resolved iread can't apply (no surprise mic) — surface so the pick is explicit.
-        bool rememberedIReadUnarmed = _currentMode == Mode.IRead && !_ireadArmed;
-
-        if (firstRun || firstFollowAlong || rememberedIReadUnarmed)
+        // "How shall we read?" opens on EVERY book start, not just on the old discovery moments
+        // (first run / first Follow-along / an unarmed remembered iread). Testers saw the question
+        // only sometimes, which made it feel like a glitch rather than a choice; asking every time
+        // makes the mode a deliberate, visible decision at the start of each book.
+        //
+        // The one exception is a book that offers a single mode: there is no decision to make, and a
+        // one-tile modal is just a wall between the child and the story. (BuildAvailable always
+        // reaches at least two today — the pictures-only edge inserts App voice — so this is a guard
+        // on intent, not a branch that currently fires.)
+        //
+        // Cost to a returning child is one tap: OpenPicker -> SyncTileSelection pre-selects the
+        // remembered mode, and Close / backdrop keeps it and starts reading (unchanged behaviour).
+        //
+        // MarkSeen and the first-run / per-mode discovery flags stay exactly as they were. They no
+        // longer gate this call, so they are close to dead, but they still record what the child has
+        // been shown and are what a rollback of this behaviour would read.
+        if (_available.Count >= 2)
             OpenPicker();
     }
 

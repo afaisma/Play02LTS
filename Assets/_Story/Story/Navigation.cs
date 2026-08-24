@@ -16,12 +16,19 @@ using UnityEngine.SceneManagement;
 /// wirings don't break — those wrapper methods now just delegate
 /// here.
 ///
-/// The three EXPENSIVE destinations (_Library, _LearnToRead, _Story) load
+/// The four EXPENSIVE destinations (_Library, _LearnToRead, _Story, _Home) load
 /// asynchronously — a synchronous LoadScene froze the frame for ~0.5s in the
 /// editor and ~2s on an Android tablet, which read as a dead tap. Every caller
 /// of these already sets its state (Globals.g_libraryFilter, g_scriptName,
-/// g_prbook, ...) BEFORE navigating, so deferred activation is safe. The cheap
-/// destinations stay synchronous: Back-to-Home must feel instant.
+/// g_prbook, ...) BEFORE navigating, so deferred activation is safe.
+///
+/// _Home was initially left synchronous on the theory that "back to home must
+/// feel instant" — but Home is not a cheap scene (catalog scan, door config,
+/// cover downloads), so the sync load simply froze the tap for the same ~2s on
+/// device. It now loads async like the rest, and every home-return control pairs
+/// it with TapFeedback so the tap is acknowledged before the load starts. The
+/// remaining destinations (Bookstore, Settings, Parents, Map, Message) are thin
+/// and stay synchronous.
 /// </summary>
 public static class Navigation
 {
@@ -38,7 +45,7 @@ public static class Navigation
     public const string LearnToRead = "_LearnToRead";
 
     public static void GoToStart()       => SceneManager.LoadScene(StartScene);
-    public static void GoToHome()        => SceneManager.LoadScene(Home);
+    public static void GoToHome()        => GoToSceneAsync(Home);
     public static void GoToLearnToRead() => GoToSceneAsync(LearnToRead);
     public static void GoToLibrary()   => GoToSceneAsync(Library);
     public static void GoToStory()     => GoToSceneAsync(Story);

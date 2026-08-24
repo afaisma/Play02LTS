@@ -18,7 +18,7 @@ using UnityEngine.UI;
 //
 // Nothing here navigates by itself. Every exit is a tap:
 //   next card   -> Globals.GotoPrBook(next)         (fresh _Story scene load)
-//   Home        -> PRScript.Home()
+//   Home        -> PRScript.HomeNow()               (wrapped in TapFeedback by HomeButton.Create)
 //   Read again  -> Globals.GotoPrBook(current book) (already flagged done, so it resumes at page 1)
 // ============================================================================================
 public class ReadNextSheet : MonoBehaviour
@@ -318,9 +318,14 @@ public class ReadNextSheet : MonoBehaviour
 
     // ---------------------------------------------------------------- actions
 
+    // HomeButton.Create already runs this through TapFeedback (press, beat, fade, go), so this hands
+    // it the RAW navigation. Arming that latch does not disable the sheet's other buttons: the next
+    // card, "Read again" and the art/text catchers are plain Buttons that never consult it — they
+    // simply fall behind the transition's own raycast-blocking cover once the navigation commits,
+    // which is the intended "this tap won" behaviour.
     private void GoHome()
     {
-        if (_prScript != null) _prScript.Home();
+        if (_prScript != null) _prScript.HomeNow();
     }
 
     // The book is already flagged done by SetCurrentStep on the last page, and the resume guard sends

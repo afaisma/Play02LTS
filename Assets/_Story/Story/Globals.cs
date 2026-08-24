@@ -23,6 +23,11 @@ public class Globals : MonoBehaviour
     public static int g_openedStoriesCount;
     public static PRBook g_prbook;
     public static string g_libraryFilter = "everything";
+    // The title the Library should show for the shelf it is about to open, when the surface that
+    // navigated there has a better name for it than the filter token does — a Home door's own
+    // label. Consumed ONCE (ConsumePendingLibraryTitle) by PRLibrary.SetFilter on entry, so the
+    // filter chips inside the Library keep deriving their titles from the filter exactly as before.
+    public static string g_pendingLibraryTitle;
     public static string g_bookstoreFilter = "everything";
 
     private static Globals instance;
@@ -646,10 +651,26 @@ public class Globals : MonoBehaviour
         }
     }
 
-    public static void GotoLibrary(string libraryFilter)
+    public static void GotoLibrary(string libraryFilter) => GotoLibrary(libraryFilter, null);
+
+    /// <summary>
+    /// Open the Library on <paramref name="libraryFilter"/>, titled <paramref name="title"/>.
+    /// Lets a door's own caption travel with the navigation so "Stories" never opens a shelf
+    /// headed "All Books". A null/empty title falls back to the Library's own derived title.
+    /// </summary>
+    public static void GotoLibrary(string libraryFilter, string title)
     {
         g_libraryFilter = libraryFilter;
+        g_pendingLibraryTitle = title;   // also CLEARS a stale carry on the untitled path
         Navigation.GoToLibrary();
+    }
+
+    /// <summary>Take the pending shelf title, clearing it. Consumed-once by design.</summary>
+    public static string ConsumePendingLibraryTitle()
+    {
+        string title = g_pendingLibraryTitle;
+        g_pendingLibraryTitle = null;
+        return title;
     }
 
     // Appends ?v=<rev> for cache-busting. Idempotent and safe: no-op when rev is empty,
