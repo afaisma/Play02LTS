@@ -212,7 +212,11 @@ public class BooksScrollView : MonoBehaviour
 
         ClearScrollView();
 
-        // The learn-to-read shelf reads as a ladder, so order it by (level, number).
+        // The learn-to-read shelf reads as a ladder, so order it by (level, ladder-first, number).
+        // "Ladder-first": books TAGGED "learn to read" (the phonics readers) lead their level;
+        // leveled-but-untagged books (The Tired Boy, Shapes Around Us, Peter Rabbit, Pigeon)
+        // stay on the shelf as harder "bonus reads" at the END, instead of greeting the child
+        // first just because their catalog numbers are lower.
         // Every other filter iterates the catalog list unchanged (byte-identical order).
         IEnumerable<PRBook> ordered = prBooks;
         if (filter != null && (filter.genre == "learn to read" || filter.level > 0))
@@ -221,16 +225,26 @@ public class BooksScrollView : MonoBehaviour
             sorted.Sort((a, b) =>
             {
                 int byLevel = a.level.CompareTo(b.level);
-                return byLevel != 0 ? byLevel : a.number.CompareTo(b.number);
+                if (byLevel != 0) return byLevel;
+                bool aLtr = IsLearnToReadTagged(a), bLtr = IsLearnToReadTagged(b);
+                if (aLtr != bLtr) return aLtr ? -1 : 1;
+                return a.number.CompareTo(b.number);
             });
             ordered = sorted;
         }
 
+        // Rows are POOLED (hidden/shown, never re-created), so their sibling order is frozen
+        // at first creation — iterating `ordered` alone cannot reorder a reused shelf. Track
+        // the intended order here and enforce it with SetSiblingIndex after the add loop
+        // (the same mechanism SetSortingByAge uses). No-op when the order already matches.
+        int nextSibling = 0;
         foreach (PRBook prBook in ordered)
         {
             if (this.filter != null && !filter.Conforms(prBook))
                 continue;
             AddBook(prBook);
+            if (prBook.bookViewItem != null && prBook.bookViewItem.gameObject != null)
+                prBook.bookViewItem.transform.SetSiblingIndex(nextSibling++);
         }
         
         if (storedScrollPosition != new Vector2(-1, -1) && scrollRectToStoreTheScrollPosition != null)
@@ -283,6 +297,18 @@ public class BooksScrollView : MonoBehaviour
         {
             children[i].SetSiblingIndex(i);
         }
+    }
+
+
+    /// <summary>
+    /// True when the book carries the "learn to read" genre tag — the actual phonics readers,
+    /// as opposed to books that only carry a difficulty level. Same lowercase-contains
+    /// convention Filter.Conforms uses for genre tokens.
+    /// </summary>
+    private static bool IsLearnToReadTagged(PRBook b)
+    {
+        return b != null && !string.IsNullOrEmpty(b.genre)
+            && b.genre.ToLower().Contains("learn to read");
     }
 
     public void ResetScrollPosition()
