@@ -860,10 +860,21 @@ public class HomeController : MonoBehaviour
     // A simple "ask a grown-up" multiple-choice math gate. On the correct answer it runs onPass.
     // Used in front of the Bookstore (external/purchase links must sit behind a parental gate).
     private GameObject _gate;
+
+    // The question comes from this fixed set rather than a random 2-9 x 2-9 grid, which could ask
+    // 7 x 8 or 9 x 6 — enough to make a grown-up stop and work it out with an impatient child at
+    // their elbow. These five are answerable at a glance and still far out of reach of the
+    // pre-readers the gate exists to stop.
+    private static readonly (int a, int b)[] GateQuestions =
+    {
+        (3, 4), (4, 5), (3, 5), (4, 4), (5, 5)
+    };
+
     private void ShowGate(System.Action onPass)
     {
         if (_gate != null) Destroy(_gate);
-        int a = UnityEngine.Random.Range(2, 10), b = UnityEngine.Random.Range(2, 10);
+        var question = GateQuestions[UnityEngine.Random.Range(0, GateQuestions.Length)];
+        int a = question.a, b = question.b;
         int correct = a * b;
         var opts = new List<int> { correct };
         while (opts.Count < 3) { int w = correct + UnityEngine.Random.Range(-9, 10); if (w > 0 && !opts.Contains(w)) opts.Add(w); }

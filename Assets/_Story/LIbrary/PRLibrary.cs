@@ -64,7 +64,18 @@ public class PRLibrary : MonoBehaviour
         // Home() can hold it pressed through the now-async _Home load, and give it the same instant
         // pressed state the code-built hub cards have.
         _homeButton = FindByName("ButtonHome");
-        if (_homeButton != null) TapFeedback.AddPressFeedback(_homeButton);
+        if (_homeButton != null)
+        {
+            TapFeedback.AddPressFeedback(_homeButton);
+            // Top-left is where the centred txtTitle renders, so the button sat on the shelf name.
+            // Move it into the bottom toolbar, centred between the category arrows, and give it the
+            // shared house look so "go home" reads the same here as in the reader and the grown-up
+            // screens. Both are runtime-only: no scene surgery, onClick and size untouched.
+            MoveHomeButtonIntoToolbar(_homeButton);
+            HomeButton.Apply(_homeButton.GetComponent<Button>());
+            var homeLabel = _homeButton.transform.Find("Label");
+            if (homeLabel != null) homeLabel.gameObject.SetActive(false); // the house glyph replaces the "⌂ Home" caption
+        }
 
         LoadBooks(this);
         // The incoming Globals.g_libraryFilter is authoritative: LoadBooksWithRetry's
@@ -185,12 +196,65 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         return null;
     }
 
+    // Reparent the scene's ButtonHome into the bottom Toolbar, between btnPrev and btnNext. The
+    // Toolbar is a HorizontalLayoutGroup, so once the button takes part in the layout its position
+    // is the layout's business — with the grown-up/search icons hidden the only other live children
+    // are the two arrows, which leaves Home in the middle.
+    private static void MoveHomeButtonIntoToolbar(GameObject homeButton)
+    {
+        var toolbar = FindByName("Toolbar");
+        if (toolbar == null) return;
+
+        var rt = (RectTransform)homeButton.transform;
+        Vector2 size = rt.rect.size;   // read before the reparent; the layout group does not resize it
+        rt.SetParent(toolbar.transform, false);
+
+        // The serialized LayoutElement carries ignoreLayout=true (it was a free-floating canvas
+        // child); inside the toolbar it has to be laid out like the arrows.
+        var le = homeButton.GetComponent<LayoutElement>();
+        if (le != null) le.ignoreLayout = false;
+
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = size;
+
+        int prev = IndexOfChild(toolbar.transform, "btnPrev");
+        rt.SetSiblingIndex(prev >= 0 ? prev + 1 : 0);
+    }
+
+    /// <summary>A "levelN" (N = 1..4) Learn-to-Read rung token. These are addressable shelves that
+    /// are deliberately not listed in bookCategories (see FilterContainer.OnFilterChanged).</summary>
+    private static bool IsLevelToken(string filter)
+    {
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            filter ?? "", @"^level[1-4]$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    private static int IndexOfChild(Transform parent, string name)
+    {
+        for (int i = 0; i < parent.childCount; i++)
+            if (parent.GetChild(i).name == name) return i;
+        return -1;
+    }
+
     public void SetFilter(string filter)
     {
         Debug.Log("SetFilter: " + filter);
         int idx = bookCategories.FindIndex(c => c.Settings == filter);
         if (idx >= 0)
             currentCategory = idx;
+
+        // The shelf the child is NOW on. g_libraryFilter is documented (Globals.NextUnreadBook) as
+        // "the shelf the child is actually browsing" and BookViewItem reads it to decide whether a
+        // row is on the Learn-to-Read ladder — but only the ENTRY paths wrote it, so arrowing from
+        // one category to the next left it naming the room they came from. Set before the rows are
+        // rebuilt below, which is what reads it.
+        //
+        // Only a real shelf token is written, for the same reason currentCategory is guarded above:
+        // the (currently hidden) search panel also routes age chips like "2-3 years" through here,
+        // and those are a narrowing of the shelf, not a shelf.
+        if (idx >= 0 || IsLevelToken(filter))
+            Globals.g_libraryFilter = filter;
 
         filterContainer?._SetFilter(filter);
 
@@ -200,11 +264,7 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         // the filter chips inside the Library never see it and keep their derived titles.
         string pendingTitle = Globals.ConsumePendingLibraryTitle();
 
-        txtTitle.text = TitleCase(filter);
-        if (filter == "everything")
-            txtTitle.text = "All Books";
-        if (filter == "new")
-            txtTitle.text = "New Books";
+        txtTitle.text = DisplayName(filter);
 
         if (filter == "rhymebooks")
         {
@@ -270,7 +330,6 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         }
         else if (filter == "learn to read")
         {
-            txtTitle.text = "Learn to Read";
             // Use the dedicated background if the art has shipped, else fall back to the
             // default Library background (asset can come later; do not block on art).
             Sprite bg = Resources.Load<Sprite>("Library/learn_to_read_background");
@@ -287,6 +346,29 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         // Door label wins over every default above (backgrounds and colours stay filter-driven).
         if (!string.IsNullOrEmpty(pendingTitle))
             txtTitle.text = pendingTitle;
+    }
+
+    /// <summary>
+    /// The name a shelf is known by, per filter token. The Home doors and the in-library category
+    /// arrows both land in SetFilter, but only the doors carry a label of their own — the arrows
+    /// derive the title from the token, which is how the same room came to be "Fairytales" behind
+    /// one and "Fairy Tales" behind the other. This map is the single place a token's display name
+    /// is spelled; anything not listed falls back to TitleCase, which is what it always did.
+    /// </summary>
+    private static readonly Dictionary<string, string> DisplayNames = new Dictionary<string, string>
+    {
+        { "everything",   "Stories"       },
+        { "fairytales",   "Fairy Tales"   },
+        { "manners",      "Good Habits"   },
+        { "new",          "New Books"     },
+        { "learn to read", "Learn to Read" },
+    };
+
+    /// <summary>Display name for a filter token: the mapped name, else TitleCase(token).</summary>
+    public static string DisplayName(string filter)
+    {
+        if (string.IsNullOrEmpty(filter)) return string.Empty;
+        return DisplayNames.TryGetValue(filter, out string name) ? name : TitleCase(filter);
     }
 
     /// <summary>
@@ -370,6 +452,8 @@ public class PRBook
     public string bookStoreUrlKindle; 
     public System.Collections.Generic.List<string> voices = new() { "tts" };   // e.g. ["human","tts"]; defaults to ["tts"] (every shipped book has TTS). CSV path keeps this default; JSON path overwrites from the "voices" array.
     public bool readToMe = false;     // catalog "read_to_me": book supports the "I read it myself" mode. CSV path leaves false; JSON path sets it.
+                                      // No longer gates anything: UnifiedReadingModePicker offers "I read it myself" for every book (2026-08-24).
+                                      // Still parsed so the catalog stays unchanged and the flag can return as an opt-OUT if a book must hide the mode.
 
     public BookViewItem bookViewItem;
     public BookstoreViewItem bookstoreViewItem;

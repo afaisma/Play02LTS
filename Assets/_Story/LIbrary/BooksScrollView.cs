@@ -137,6 +137,10 @@ public class BooksScrollView : MonoBehaviour
     {
         if (prBook.bookViewItem != null)
         {
+            // Rows are pooled, not rebuilt, and the category arrows swap shelves in place — so a
+            // reused row can be carrying the previous shelf's labels (BookViewItem's age/level line
+            // depends on which shelf is showing). Re-stamp them; the cover is already loaded.
+            prBook.bookViewItem.SetBookProperties(prBook);
             prBook.bookViewItem.gameObject.SetActive(true);
             return;
         }

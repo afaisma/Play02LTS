@@ -215,7 +215,12 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
         if (hasHuman) _available.Add(Mode.Storyteller);
         if (hasTts) _available.Add(Mode.AppVoice);
-        if (book != null && book.readToMe) _available.Add(Mode.IRead);
+        // "I read it myself" is offered for EVERY book. It used to be gated on book.readToMe, but
+        // the flag is opt-in and only a third of the catalog carries it, so most books silently
+        // lost the mode the app is named for. The flag is still parsed into PRBook (no catalog
+        // change) and is free to come back as an opt-OUT ("this book is not suitable to read
+        // aloud") if a book ever needs to hide the mode.
+        _available.Add(Mode.IRead);
         _available.Add(Mode.Pictures); // always
 
         if (_available.Count == 1) // pictures-only guard: always offer app voice too

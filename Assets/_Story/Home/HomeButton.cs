@@ -57,7 +57,11 @@ public static class HomeButton
         if (bg != null) StyleBackground(bg);
 
         var existing = button.transform.Find("HouseGlyph");
-        float size = ((RectTransform)button.transform).rect.width;
+        // Scene-built buttons are not all square (the Library pill is 190x96, the grown-up
+        // toolbars' are 204x114), so size the glyph off the SHORT side — off the width it would
+        // overflow the button vertically.
+        var rect = ((RectTransform)button.transform).rect;
+        float size = Mathf.Min(rect.width, rect.height);
         if (existing == null)
             AddGlyph(button.transform, size * GlyphScale);
     }

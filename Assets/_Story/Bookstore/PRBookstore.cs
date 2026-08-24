@@ -46,6 +46,11 @@ public class PRBookstore : MonoBehaviour
         // Settings + Parents → consolidated into Home's "For grown-ups" door.
         HideToolbarButtons();
 
+        // The toolbar's home button (scene-wired btnHome -> Home()) still wore the old menu icon.
+        // Restyle it at runtime to the shared house so "go home" is one icon everywhere.
+        var home = GameObject.Find("btnHome");
+        if (home != null) HomeButton.Apply(home.GetComponent<Button>());
+
         LoadBooks(this);
         GotoCategory();
         bookstoreScrollView.ResetScrollPosition();

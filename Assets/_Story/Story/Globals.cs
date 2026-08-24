@@ -838,7 +838,8 @@ public class Globals : MonoBehaviour
                     // ["tts"], preserving today's behavior. Consumed by UnifiedReadingModePicker.
                     voices = ParseVoices(b["voices"]),
                     // Opt-in flag: this book supports the "I read it myself" (read-along) mode.
-                    // Missing → false (SimpleJSON AsBool default). Gates the picker's iread tile.
+                    // Missing → false (SimpleJSON AsBool default). No longer gates the picker's
+                    // iread tile (every book offers it) — kept for a possible future opt-out.
                     readToMe = b["read_to_me"].AsBool,
                     // Publish date (ISO yyyy-MM-dd) behind the "new" filter token. Missing
                     // -> "" (SimpleJSON default), which means "never new".
