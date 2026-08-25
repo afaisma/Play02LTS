@@ -10,7 +10,9 @@ using UnityEngine.UI;
 // book is read, replacing the three scattered controls (the "I Read" pill, the voice panel,
 // and the Autopage toggle).
 //
-// One mutually-exclusive reading mode (radio) + a dependent Autopage row. Visible tiles are
+// One mutually-exclusive reading mode (radio), presented as full-width rows (icon left, name +
+// sub-label right). The Autopage row it used to carry now lives in the Settings scene
+// (AutopageSettingRow) against the same preference. Visible rows are
 // gated per book off Globals.g_prbook (voices / readToMe). On selection the picker drives the
 // two playback engines directly:
 //   storyteller -> ReadAlong off + voice "human"
@@ -31,7 +33,11 @@ public class UnifiedReadingModePicker : MonoBehaviour
     // ---- PlayerPrefs keys (mirror the existing {bookUrl}_page / _done pattern) ----
     // GlobalDefaultKey is the single remembered voice preference: ModeStr(Storyteller)/ModeStr(AppVoice).
     private const string GlobalDefaultKey = "reading_mode_default";
-    private const string AutopageKey = "reading_autopage";        // global, 0/1
+    // Global 0/1, DEFAULT ON. The preference moved out of this modal and into the Settings scene
+    // (AutopageSettingRow), which reads and writes it through the two static members below.
+    // GetInt's default only applies when the key was never written, so a user who explicitly
+    // turned page-turning off keeps it off across this change.
+    public const string AutopageKey = "reading_autopage";
     private const string PickerSeenKey = "reading_picker_seen";   // first-run flag
     private const string ModeSeenPrefix = "reading_seen_";        // per-mode discovery flag
 
@@ -54,8 +60,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private CanvasGroup _modalGroup;
     private RectTransform _panel;
     private RectTransform _tilesGrid;
-    private Toggle _autopageToggle;
-    private GameObject _autopageRow;
     private Button _entryButton;   // existing reading-bar button ("btnVoiceSelection"), reused
     private TMP_Text _entryLabel;  // optional current-mode label inside that button
     private readonly List<(Mode mode, Image bg, Outline outline)> _tileVisuals = new();
@@ -156,8 +160,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _modalGroup = null;
         _panel = null;
         _tilesGrid = null;
-        _autopageToggle = null;
-        _autopageRow = null;
         _entryButton = null; // lives in the story scene; destroyed on unload, just drop the ref
         _entryLabel = null;
         _tileVisuals.Clear();
@@ -278,7 +280,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
         // resolve stays un-armed so a dismiss can fall back to narration (see ClosePicker).
         _ireadArmed = (mode == Mode.IRead && allowMicEnable);
         UpdateEntryLabel();
-        SyncAutopageRow();
         SyncTileSelection();
 
         if (replay) _prScript?.ReplayCurrenStep();
@@ -314,15 +315,17 @@ public class UnifiedReadingModePicker : MonoBehaviour
         if (_open) ClosePicker();
     }
 
-    private bool AutopagePref() => PlayerPrefs.GetInt(AutopageKey, 0) == 1;
+    /// <summary>Is "turn pages automatically" on? Defaults to ON for a user who never chose.</summary>
+    public static bool AutopageEnabled() => PlayerPrefs.GetInt(AutopageKey, 1) == 1;
 
-    private void OnAutopageChanged(bool on)
+    /// <summary>Store the preference. Written by the Settings scene's toggle row.</summary>
+    public static void SetAutopageEnabled(bool on)
     {
         PlayerPrefs.SetInt(AutopageKey, on ? 1 : 0);
         PlayerPrefs.Save();
-        bool autopageCapable = _currentMode == Mode.AppVoice || _currentMode == Mode.Storyteller;
-        if (autopageCapable) _player?.SetAutopage(on);
     }
+
+    private bool AutopagePref() => AutopageEnabled();
 
     // ---------------------------------------------------------------- auto-open (spec §4)
 
@@ -439,20 +442,18 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
         BuildTitleRow(panelGO.transform);
 
-        // Tiles grid.
-        var gridGO = new GameObject("Tiles", typeof(RectTransform), typeof(GridLayoutGroup));
-        gridGO.transform.SetParent(panelGO.transform, false);
-        _tilesGrid = gridGO.GetComponent<RectTransform>();
-        var grid = gridGO.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(330f, 200f);
-        grid.spacing = new Vector2(20f, 20f);
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = 2;
-        grid.childAlignment = TextAnchor.UpperCenter;
-        var gridFit = gridGO.AddComponent<ContentSizeFitter>();
-        gridFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        BuildAutopageRow(panelGO.transform);
+        // Mode rows, stacked full width. Was a 2-up grid of square tiles; a single column reads
+        // top to bottom like a list of choices and leaves room for a glyph beside each name.
+        var listGO = new GameObject("Tiles", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        listGO.transform.SetParent(panelGO.transform, false);
+        _tilesGrid = listGO.GetComponent<RectTransform>();
+        var list = listGO.GetComponent<VerticalLayoutGroup>();
+        list.spacing = 18f;
+        list.childControlWidth = true; list.childControlHeight = true;
+        list.childForceExpandWidth = true; list.childForceExpandHeight = false;
+        list.childAlignment = TextAnchor.UpperCenter;
+        var listFit = listGO.AddComponent<ContentSizeFitter>();
+        listFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         // Start hidden below the screen.
         _panel.anchoredPosition = new Vector2(0f, -Offscreen);
@@ -516,52 +517,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
         return _circleSprite;
     }
 
-    private void BuildAutopageRow(Transform parent)
-    {
-        _autopageRow = new GameObject("AutopageRow",
-            typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
-        _autopageRow.transform.SetParent(parent, false);
-        var hlg = _autopageRow.GetComponent<HorizontalLayoutGroup>();
-        hlg.childControlWidth = true; hlg.childControlHeight = true;
-        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-        hlg.childAlignment = TextAnchor.MiddleLeft;
-        hlg.spacing = 18;
-        _autopageRow.GetComponent<LayoutElement>().preferredHeight = 70f;
-
-        // Minimal code-built toggle: a box whose checkmark child reflects state.
-        var tglGO = new GameObject("Toggle", typeof(RectTransform), typeof(Toggle), typeof(LayoutElement));
-        tglGO.transform.SetParent(_autopageRow.transform, false);
-        var tle = tglGO.GetComponent<LayoutElement>();
-        tle.preferredWidth = 64f; tle.preferredHeight = 64f;
-
-        var boxGO = new GameObject("Box", typeof(RectTransform), typeof(Image));
-        boxGO.transform.SetParent(tglGO.transform, false);
-        var boxRt = boxGO.GetComponent<RectTransform>();
-        boxRt.anchorMin = Vector2.zero; boxRt.anchorMax = Vector2.one;
-        boxRt.offsetMin = Vector2.zero; boxRt.offsetMax = Vector2.zero;
-        var boxImg = boxGO.GetComponent<Image>();
-        boxImg.sprite = RoundedSprite(); boxImg.type = Image.Type.Sliced;
-        boxImg.color = UiTheme.Track;
-
-        var checkGO = new GameObject("Check", typeof(RectTransform), typeof(Image));
-        checkGO.transform.SetParent(boxGO.transform, false);
-        var checkRt = checkGO.GetComponent<RectTransform>();
-        checkRt.anchorMin = new Vector2(0.15f, 0.15f);
-        checkRt.anchorMax = new Vector2(0.85f, 0.85f);
-        checkRt.offsetMin = Vector2.zero; checkRt.offsetMax = Vector2.zero;
-        checkGO.GetComponent<Image>().color = UiTheme.Primary;
-
-        _autopageToggle = tglGO.GetComponent<Toggle>();
-        _autopageToggle.targetGraphic = boxGO.GetComponent<Image>();
-        _autopageToggle.graphic = checkGO.GetComponent<Image>();
-        _autopageToggle.isOn = AutopagePref();
-        _autopageToggle.onValueChanged.AddListener(OnAutopageChanged);
-
-        var label = MakeText(_autopageRow.transform, "Label", "Turn the page for me", 30, TextAlignmentOptions.Left);
-        var lle = label.gameObject.AddComponent<LayoutElement>();
-        lle.flexibleWidth = 1f;
-    }
-
     // Build tiles once for the current book's available modes (gating is fixed per book, so the
     // grid is stable for the whole story scene — no per-open rebuild flicker).
     private void BuildTilesForBook()
@@ -587,30 +542,56 @@ public class UnifiedReadingModePicker : MonoBehaviour
         PlayerPrefs.Save();
     }
 
+    // ---- mode row metrics ----
+    private const float RowHeight = 152f;
+    private const float IconBox   = 96f;
+
+    // One mode = one full-width row: glyph on the left, name + sub-label on the right, the whole
+    // row outlined like a Home card. The row IS the button (the label/glyph never take the tap).
     private void BuildTile(Mode mode)
     {
         var tileGO = new GameObject("Tile_" + ModeStr(mode),
-            typeof(RectTransform), typeof(Image), typeof(Button), typeof(Outline), typeof(VerticalLayoutGroup));
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(Outline),
+            typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         tileGO.transform.SetParent(_tilesGrid, false);
         var bg = tileGO.GetComponent<Image>();
         bg.sprite = RoundedSprite(); bg.type = Image.Type.Sliced;
         bg.color = UiTheme.Surface;
+        // The contour is always drawn — SyncTileSelection only changes its colour (and the fill),
+        // so an unselected row still reads as a card rather than as flat text on the panel.
         var outline = tileGO.GetComponent<Outline>();
-        outline.effectColor = UiTheme.Primary;
+        outline.effectColor = UiTheme.Track;
         outline.effectDistance = new Vector2(3f, 3f);
-        outline.enabled = false;
+        outline.enabled = true;
 
-        var vlg = tileGO.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(18, 18, 22, 22);
-        vlg.spacing = 8;
-        vlg.childAlignment = TextAnchor.MiddleCenter;
-        vlg.childControlWidth = true; vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        var le = tileGO.GetComponent<LayoutElement>();
+        le.preferredHeight = RowHeight;
+        le.minHeight = RowHeight;
 
-        var title = MakeText(tileGO.transform, "title", TileLabel(mode), 36, TextAlignmentOptions.Center);
+        var hlg = tileGO.GetComponent<HorizontalLayoutGroup>();
+        hlg.padding = new RectOffset(28, 28, 18, 18);
+        hlg.spacing = 24;
+        hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = true; hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+
+        BuildModeIcon(tileGO.transform, mode);
+
+        var col = new GameObject("Text", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        col.transform.SetParent(tileGO.transform, false);
+        col.GetComponent<LayoutElement>().flexibleWidth = 1f;
+        var cvl = col.GetComponent<VerticalLayoutGroup>();
+        cvl.spacing = 4;
+        cvl.childAlignment = TextAnchor.MiddleLeft;
+        cvl.childControlWidth = true; cvl.childControlHeight = true;
+        cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
+
+        var title = MakeText(col.transform, "title", TileLabel(mode), 34, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
-        var subL = MakeText(tileGO.transform, "sub", SubLabel(mode), 24, TextAlignmentOptions.Center);
+        title.gameObject.AddComponent<LayoutElement>().preferredHeight = 48f;
+        var subL = MakeText(col.transform, "sub", SubLabel(mode), 24, TextAlignmentOptions.Left);
         subL.color = UiTheme.TextSecondary;
+        subL.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
 
         var captured = mode;
         tileGO.GetComponent<Button>().onClick.AddListener(() => OnTileSelected(captured));
@@ -618,24 +599,159 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _tileVisuals.Add((mode, bg, outline));
     }
 
+    // ---------------------------------------------------------------- mode glyphs
+    // Drawn in code from primitive shapes (the same technique as the Home rail's check chip):
+    // plain rects, ellipses, triangles and masked rings, tinted with UiTheme colours. Deliberately
+    // NOT emoji or font glyphs — the project's UI font ships a static atlas, so any character it
+    // wasn't built with renders as tofu; and NOT image assets, so nothing new has to ship.
+    // Every part is laid out in a centred 96x96 box, in that box's local coordinates.
+    private static void BuildModeIcon(Transform parent, Mode mode)
+    {
+        var box = new GameObject("Icon", typeof(RectTransform), typeof(LayoutElement));
+        box.transform.SetParent(parent, false);
+        var le = box.GetComponent<LayoutElement>();
+        le.preferredWidth = IconBox; le.preferredHeight = IconBox;
+        le.flexibleWidth = 0f; le.flexibleHeight = 0f;
+        Color ink = UiTheme.Primary;
+
+        switch (mode)
+        {
+            case Mode.AppVoice:    BuildSpeakerGlyph(box.transform, ink, waves: true, muted: false); break;
+            // "App Is Silent" is Mode.Pictures' label, so its glyph is the crossed-out speaker
+            // that matches what the row SAYS, not a picture frame.
+            case Mode.Pictures:    BuildSpeakerGlyph(box.transform, ink, waves: false, muted: true); break;
+            case Mode.IRead:       BuildMicrophoneGlyph(box.transform, ink); break;
+            case Mode.Storyteller: BuildOpenBookGlyph(box.transform, ink); break;
+        }
+    }
+
+    // Speaker: driver rect + cone triangle, then either sound arcs (App Reads) or a slash (silent).
+    private static void BuildSpeakerGlyph(Transform box, Color ink, bool waves, bool muted)
+    {
+        AddShape(box, "Driver",  null,             -30f, 0f, 20f, 30f, 0f, ink);
+        AddShape(box, "Cone",    TriangleSprite(),  -8f, 0f, 28f, 56f, 0f, ink);
+        if (waves)
+        {
+            // Two concentric rings whose LEFT halves are clipped away, leaving open arcs.
+            var clip = AddClip(box, "Waves", 26f, 0f, 34f, 76f);
+            AddShape(clip, "Arc1", RingSprite(), -17f, 0f, 44f, 44f, 0f, ink);
+            AddShape(clip, "Arc2", RingSprite(), -31f, 0f, 72f, 72f, 0f, ink);
+        }
+        if (muted)
+            AddShape(box, "Slash", null, 8f, 0f, 78f, 8f, -45f, ink);
+    }
+
+    // Microphone: capsule head, a bracket arc under it, a stand and a base bar.
+    private static void BuildMicrophoneGlyph(Transform box, Color ink)
+    {
+        AddShape(box, "Capsule", CircleSprite(), 0f, 20f, 30f, 48f, 0f, ink);
+        // Ring with its TOP half clipped away = the bracket that cradles the capsule.
+        var clip = AddClip(box, "Bracket", 0f, -4f, 60f, 26f);
+        AddShape(clip, "Arc", RingSprite(), 0f, 13f, 56f, 56f, 0f, ink);
+        AddShape(box, "Stand", null, 0f, -26f, 8f, 20f, 0f, ink);
+        AddShape(box, "Base",  null, 0f, -38f, 38f, 8f, 0f, ink);
+    }
+
+    // Open book: two page panels tilted away from a central spine.
+    private static void BuildOpenBookGlyph(Transform box, Color ink)
+    {
+        AddShape(box, "PageL", null, -21f, 0f, 36f, 52f, 8f,  ink);
+        AddShape(box, "PageR", null,  21f, 0f, 36f, 52f, -8f, ink);
+        AddShape(box, "Spine", null,   0f, 0f, 8f,  58f, 0f,  ink);
+    }
+
+    // One primitive part. A null sprite draws a plain filled rectangle.
+    private static Transform AddShape(Transform parent, string name, Sprite sprite,
+                                      float x, float y, float w, float h, float angle, Color color)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, y);
+        if (angle != 0f) rt.localRotation = Quaternion.Euler(0f, 0f, angle);
+        var img = go.GetComponent<Image>();
+        if (sprite != null) img.sprite = sprite;
+        img.color = color;
+        img.raycastTarget = false;   // the ROW owns the tap
+        return go.transform;
+    }
+
+    // A clipping window: children are shown only where they overlap this rect. Used to cut whole
+    // rings down to the arcs the speaker and microphone glyphs need.
+    private static Transform AddClip(Transform parent, string name, float x, float y, float w, float h)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(RectMask2D));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, y);
+        return go.transform;
+    }
+
+    // Triangle pointing LEFT (apex at the left edge, base along the right edge) — the speaker cone.
+    private static Sprite _triangleSprite;
+    private static Sprite TriangleSprite()
+    {
+        if (_triangleSprite != null) return _triangleSprite;
+        const int d = 64;
+        var tex = new Texture2D(d, d, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        var px = new Color32[d * d];
+        for (int y = 0; y < d; y++)
+            for (int x = 0; x < d; x++)
+            {
+                // Half-height of the cone grows linearly from 0 at the apex to d/2 at the base.
+                float half = (x + 0.5f) * 0.5f;
+                bool inside = Mathf.Abs(y + 0.5f - d * 0.5f) <= half;
+                px[y * d + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+            }
+        tex.SetPixels32(px);
+        tex.Apply();
+        _triangleSprite = Sprite.Create(tex, new Rect(0, 0, d, d), new Vector2(0.5f, 0.5f));
+        return _triangleSprite;
+    }
+
+    // Annulus (open ring). Clipped by AddClip into the arc a glyph needs.
+    private static Sprite _ringSprite;
+    private static Sprite RingSprite()
+    {
+        if (_ringSprite != null) return _ringSprite;
+        const int d = 128;
+        const float outer = d * 0.5f;
+        const float inner = outer * 0.74f;
+        var tex = new Texture2D(d, d, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        var px = new Color[d * d];
+        for (int y = 0; y < d; y++)
+            for (int x = 0; x < d; x++)
+            {
+                float dx = x + 0.5f - outer, dy = y + 0.5f - outer;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                // Anti-aliased on both edges of the band, same coverage trick as CircleSprite.
+                float a = Mathf.Min(Mathf.Clamp01(outer - r + 0.5f), Mathf.Clamp01(r - inner + 0.5f));
+                px[y * d + x] = new Color(1f, 1f, 1f, a);
+            }
+        tex.SetPixels(px);
+        tex.Apply();
+        _ringSprite = Sprite.Create(tex, new Rect(0, 0, d, d), new Vector2(0.5f, 0.5f));
+        return _ringSprite;
+    }
+
     private void SyncTileSelection()
     {
         foreach (var (mode, bg, outline) in _tileVisuals)
         {
             bool sel = mode == _currentMode;
-            if (outline != null) outline.enabled = sel;
+            // Every row keeps its contour; selection promotes it to the accent colour and tints
+            // the fill. Same selection logic as the old outline-on/outline-off tiles.
+            if (outline != null)
+            {
+                outline.effectColor = sel ? UiTheme.Primary : UiTheme.Track;
+                outline.effectDistance = sel ? new Vector2(5f, 5f) : new Vector2(3f, 3f);
+            }
             if (bg != null) bg.color = sel ? UiTheme.Card(0).fill : UiTheme.Surface;
         }
-    }
-
-    private void SyncAutopageRow()
-    {
-        if (_autopageRow == null) return;
-        // Contextual: only the audio-narrated modes auto-advance on narration end.
-        bool show = _currentMode == Mode.AppVoice || _currentMode == Mode.Storyteller;
-        _autopageRow.SetActive(show);
-        if (show && _autopageToggle != null && _autopageToggle.isOn != AutopagePref())
-            _autopageToggle.SetIsOnWithoutNotify(AutopagePref());
     }
 
     // ---------------------------------------------------------------- open / close (spec §7)
@@ -652,7 +768,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _player?.StopAudio(); // silence any in-flight narration; nothing plays while the picker is open
         MarkSeen();
         SyncTileSelection();
-        SyncAutopageRow();
         _open = true;
         IsOpen = true;
         _modalRoot.SetActive(true);
@@ -805,7 +920,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     private string SubLabel(Mode m) => m switch
     {
-        Mode.Storyteller => "Real voice · listen",
+        Mode.Storyteller => "A real voice reads",   // no middot: Fredoka's atlas lacks U+00B7 (tofu on device)
         Mode.AppVoice => _timmy ? "Listen" : "Words light up",
         Mode.IRead => "You read, I follow",
         Mode.Pictures => "No sound",

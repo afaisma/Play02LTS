@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using QFSW.QC;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
@@ -127,6 +128,11 @@ public class BooksScrollView : MonoBehaviour
     private readonly Queue<(string url, Image image)> _pendingCovers =
         new Queue<(string, Image)>();
 
+    // Level divider rows built by ShowBooks for the ladder shelves (see BuildLevelDivider).
+    // Book rows are POOLED; these are NOT — they are created and destroyed per pass, because
+    // which levels appear (and their done-counts) changes with the filter and with progress.
+    private readonly List<GameObject> _levelDividers = new List<GameObject>();
+
     private void OnDestroy()
     {
         if (scrollRectToStoreTheScrollPosition != null)
@@ -210,6 +216,7 @@ public class BooksScrollView : MonoBehaviour
             filter.ageHiSel = Globals.GetAgeHi();
         }
 
+        ClearDividers();
         ClearScrollView();
 
         // The learn-to-read shelf reads as a ladder, so order it by (level, ladder-first, number).
@@ -218,8 +225,12 @@ public class BooksScrollView : MonoBehaviour
         // stay on the shelf as harder "bonus reads" at the END, instead of greeting the child
         // first just because their catalog numbers are lower.
         // Every other filter iterates the catalog list unchanged (byte-identical order).
+        // The ladder shelves — the Learn-to-Read room and the per-level shelves — are the only
+        // ones that sort, and the only ones that get level dividers below.
+        bool isLadderShelf = filter != null && (filter.genre == "learn to read" || filter.level > 0);
+
         IEnumerable<PRBook> ordered = prBooks;
-        if (filter != null && (filter.genre == "learn to read" || filter.level > 0))
+        if (isLadderShelf)
         {
             List<PRBook> sorted = new List<PRBook>(prBooks);
             sorted.Sort((a, b) =>
@@ -237,11 +248,31 @@ public class BooksScrollView : MonoBehaviour
         // at first creation — iterating `ordered` alone cannot reorder a reused shelf. Track
         // the intended order here and enforce it with SetSiblingIndex after the add loop
         // (the same mechanism SetSortingByAge uses). No-op when the order already matches.
+        //
+        // Level dividers get a non-interactive header row before each level group, carrying the
+        // level's theme name and its done-count — this is what carries the progression now that
+        // the Learn-to-Read ladder SCREEN is retired. They go through the SAME sibling-index
+        // stream as the pooled book rows, so they interleave correctly with the sorted order.
+        // The sort above is by level FIRST, so each level is one contiguous run and a divider is
+        // emitted exactly once per level.
+        Dictionary<int, (int total, int done)> levelCounts =
+            isLadderShelf ? CountByLevel(ordered, filter) : null;
+
         int nextSibling = 0;
+        int dividedLevel = 0; // last level a divider was emitted for
         foreach (PRBook prBook in ordered)
         {
             if (this.filter != null && !filter.Conforms(prBook))
                 continue;
+            // Books with no level (a "learn to read"-tagged title that carries no level) sort
+            // first and simply get no header — a divider is only ever emitted for a real level.
+            if (isLadderShelf && prBook.level > 0 && prBook.level != dividedLevel)
+            {
+                dividedLevel = prBook.level;
+                levelCounts.TryGetValue(dividedLevel, out var count);
+                var divider = BuildLevelDivider(dividedLevel, count);
+                divider.transform.SetSiblingIndex(nextSibling++);
+            }
             AddBook(prBook);
             if (prBook.bookViewItem != null && prBook.bookViewItem.gameObject != null)
                 prBook.bookViewItem.transform.SetSiblingIndex(nextSibling++);
@@ -249,6 +280,106 @@ public class BooksScrollView : MonoBehaviour
         
         if (storedScrollPosition != new Vector2(-1, -1) && scrollRectToStoreTheScrollPosition != null)
             scrollRectToStoreTheScrollPosition.normalizedPosition = storedScrollPosition;
+    }
+
+    // ---------------------------------------------------------------- level dividers
+
+    /// <summary>
+    /// Books-per-level tallies for the rows this pass will actually SHOW (same Conforms gate as
+    /// the add loop), so a divider's "2 of 8 read" counts the shelf in front of the child rather
+    /// than the whole catalog.
+    /// </summary>
+    private static Dictionary<int, (int total, int done)> CountByLevel(IEnumerable<PRBook> books, Filter filter)
+    {
+        var counts = new Dictionary<int, (int total, int done)>();
+        foreach (PRBook b in books)
+        {
+            if (b == null || b.level <= 0 || !filter.Conforms(b))
+                continue;
+            counts.TryGetValue(b.level, out var c);
+            bool done = !string.IsNullOrEmpty(b.bookUrl) && Globals.Prefs_Get_Book_Done(b.bookUrl) > 0;
+            counts[b.level] = (c.total + 1, c.done + (done ? 1 : 0));
+        }
+        return counts;
+    }
+
+    /// <summary>
+    /// Destroy the previous pass's dividers. SetParent(null) FIRST: Destroy is deferred to the end
+    /// of the frame, so a merely-destroyed divider would still be a child while the add loop below
+    /// hands out sibling indices, and every row would land one slot off.
+    /// </summary>
+    private void ClearDividers()
+    {
+        foreach (GameObject divider in _levelDividers)
+        {
+            if (divider == null) continue;
+            divider.transform.SetParent(null, false);
+            Destroy(divider);
+        }
+        _levelDividers.Clear();
+    }
+
+    /// <summary>
+    /// One full-width, non-interactive header row: "Level 2 - Blends and Friends" on the left,
+    /// "3 of 8 read" on the right, in that level's palette. Code-built (no prefab) and tracked in
+    /// _levelDividers so ClearDividers can drop it on the next pass.
+    /// </summary>
+    private GameObject BuildLevelDivider(int level, (int total, int done) count)
+    {
+        var palette = UiTheme.Card(level - 1);
+        TMP_FontAsset font = UiTheme.Font();
+        // Fredoka ships a STATIC atlas with no em dash, so an unchecked "—" would render as tofu.
+        string dash = (font != null && font.HasCharacter('\u2014')) ? " \u2014 " : " - ";
+
+        var row = new GameObject("LevelDivider_" + level,
+            typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        row.transform.SetParent(scrollViewContent, false);
+        var le = row.GetComponent<LayoutElement>();
+        le.preferredHeight = DividerHeight;
+        le.minHeight = DividerHeight;
+        le.flexibleHeight = 0f;
+        var bg = row.GetComponent<Image>();
+        bg.color = palette.fill;
+        bg.raycastTarget = false;          // never eats a tap, never blocks the scroll drag
+        var hlg = row.GetComponent<HorizontalLayoutGroup>();
+        hlg.padding = new RectOffset(28, 28, 8, 8);
+        hlg.spacing = 16;
+        hlg.childControlWidth = true; hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
+        hlg.childAlignment = TextAnchor.MiddleLeft;
+
+        var title = MakeDividerText(row.transform, "Title", ReadingLevels.Heading(level, dash),
+                                    40f, TextAlignmentOptions.Left, font);
+        title.fontStyle = FontStyles.Bold;
+        title.color = palette.accent;
+        title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+        var progress = MakeDividerText(row.transform, "Progress", count.done + " of " + count.total + " read",
+                                       30f, TextAlignmentOptions.Right, font);
+        progress.color = palette.accent;
+        progress.gameObject.AddComponent<LayoutElement>().preferredWidth = 240f;
+
+        _levelDividers.Add(row);
+        return row;
+    }
+
+    private const float DividerHeight = 92f;
+
+    private static TMP_Text MakeDividerText(Transform parent, string name, string text,
+                                            float size, TextAlignmentOptions align, TMP_FontAsset font)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var tmp = go.AddComponent<TextMeshProUGUI>();
+        tmp.font = font;
+        tmp.text = text;
+        tmp.fontSize = size;
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = size * 0.6f;
+        tmp.fontSizeMax = size;
+        tmp.alignment = align;
+        tmp.raycastTarget = false;
+        return tmp;
     }
 
     [Command()]

@@ -10,16 +10,19 @@ using UnityEngine.UI;
 // is NOT DontDestroyOnLoad, does no FindObjectOfType scanning, and builds its ENTIRE UI in code
 // in Start() (mirroring UnifiedReadingModePicker's code-built ScreenSpaceOverlay canvas).
 //
-// Layout, top to bottom:
-//   a) Title / logo row.
-//   b) "Recent reads" horizontal rail — books the child has opened, newest first, finished ones
+// Layout, top to bottom — two numbered steps, then a shortcut:
+//   a) Title / logo row (centred).
+//   b) "1. Filter books by the child's age:" + the full-width age chips.
+//   c) "2. Select a reading room:" + the grid of illustrated DOOR cards (art + label + accent bar
+//      -> filter), tap -> the same navigation the old label+glyph tiles performed. The door set is
+//      content: it comes from home_doors.json (see HomeDoors.cs) with the compiled-in SectionTile
+//      list as the floor. Doors whose filter yields no books in the current catalog are dropped
+//      (verified via Filter.Conforms, the SAME predicate the Library uses), as are doors outside
+//      the age chips.
+//   d) "Recent reads" horizontal rail — books the child has opened, newest first, finished ones
 //      included (with a check chip) because re-reading is the point. Hidden when there are none.
-//      Each card = cover + name, tap -> Nav.GoToBook(book).
-//   c) Grid of illustrated DOOR cards (art + label + accent bar -> filter), tap -> the same
-//      navigation the old label+glyph tiles performed. The door set is content: it comes from
-//      home_doors.json (see HomeDoors.cs) with the compiled-in SectionTile list as the floor.
-//      Doors whose filter yields no books in the current catalog are dropped (verified via
-//      Filter.Conforms, the SAME predicate the Library uses), as are doors outside the age chips.
+//      Each card = cover + name, tap -> Nav.GoToBook(book). Below the rooms: it is a shortcut back
+//      to a book already met, not a step in choosing one.
 //
 // Covers load EXACTLY as the Library does (BooksScrollView.AddBook): baseURL + bookImageUrl,
 // cache-busted by the book's own contentRev via Globals.WithContentRev, then PRUtils.DownloadImage
@@ -177,10 +180,13 @@ public class HomeController : MonoBehaviour
         for (int i = _contentRoot.childCount - 1; i >= 0; i--)
             Destroy(_contentRoot.GetChild(i).gameObject);
 
+        // Order is the child's path through the screen: pick an age (step 1), pick a room (step 2),
+        // then the Recent-reads shortcut for a book already met. The rail sits BELOW the rooms
+        // because it is a shortcut, not a step — leading with it buried the two numbered choices.
         BuildTitleRow(_contentRoot);
         BuildAgeRow(_contentRoot);
-        BuildContinueRail(_contentRoot);
         BuildDoorRooms(_contentRoot);
+        BuildContinueRail(_contentRoot);
         BuildGrownupsFooter(_contentRoot);
     }
 
@@ -194,20 +200,25 @@ public class HomeController : MonoBehaviour
     // The Continue rail is intentionally NOT age-filtered — a book already in progress
     // should never disappear because of the age band.
     private const int MaxAgeChip = 8; // "8+"
+    private const float AgeChipHeight = 88f; // taller than the original 64 — a child-sized target
 
     private void BuildAgeRow(Transform parent)
     {
         int lo = Globals.GetAgeLo();
         int hi = Globals.GetAgeHi();
 
+        BuildSectionHeader(parent, "AgeHeading", "1. Filter books by the child's age:");
+
         var rowGO = new GameObject("AgeRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         rowGO.transform.SetParent(parent, false);
         var hlg = rowGO.GetComponent<HorizontalLayoutGroup>();
         hlg.spacing = 12;
         hlg.childControlWidth = true; hlg.childControlHeight = true;
-        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-        hlg.childAlignment = TextAnchor.MiddleLeft;
-        rowGO.GetComponent<LayoutElement>().preferredHeight = 76f;
+        // Force-expand + a flexibleWidth on every chip spreads All/2..7/8+ edge to edge across the
+        // content width, so each chip is a much bigger target than the old 64pt pills.
+        hlg.childForceExpandWidth = true; hlg.childForceExpandHeight = false;
+        hlg.childAlignment = TextAnchor.MiddleCenter;
+        rowGO.GetComponent<LayoutElement>().preferredHeight = AgeChipHeight;
 
         AddAgeChip(rowGO.transform, "All", 0, lo, hi);
         for (int a = 2; a <= 7; a++)
@@ -225,8 +236,9 @@ public class HomeController : MonoBehaviour
             typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
         chip.transform.SetParent(parent, false);
         var le = chip.GetComponent<LayoutElement>();
-        le.preferredWidth = value == 0 ? 96f : 64f;
-        le.preferredHeight = 64f;
+        le.preferredWidth = value == 0 ? 96f : 64f;   // baseline width; the flex below fills the row
+        le.flexibleWidth = 1f;
+        le.preferredHeight = AgeChipHeight;
         var img = chip.GetComponent<Image>();
         img.sprite = RoundedSprite();
         img.type = Image.Type.Sliced;
@@ -261,7 +273,7 @@ public class HomeController : MonoBehaviour
         BuildContent();
     }
 
-    // (a) Title / logo row: just the title. No home button — this IS home; the control only ever
+    // (a) Title / logo row: just the title, centred. No home button — this IS home; the control only ever
     // navigated to the screen the child was already looking at. The Library / ladder / reader home
     // buttons stay.
     private void BuildTitleRow(Transform parent)
@@ -273,15 +285,17 @@ public class HomeController : MonoBehaviour
         hlg.spacing = 16;
         hlg.childControlWidth = true; hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-        hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childAlignment = TextAnchor.MiddleCenter;
 
-        var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Left);
+        // Centred: with the home icon gone from this row the left-aligned title read as if
+        // something had been cut off beside it.
+        var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Center);
         title.fontStyle = FontStyles.Bold;
         title.color = UiTheme.Primary;
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
     }
 
-    // (b) "Recent reads" horizontal rail — the one surface for "a book I've already met".
+    // (d) "Recent reads" horizontal rail — the one surface for "a book I've already met".
     // It deliberately keeps FINISHED books: re-reading is core behavior at this age, and the
     // rail's tap already lands on page 1 for a done book (PRScript's resume guard), which IS
     // "read again". Membership: a last-opened stamp, OR page progress, OR done — the latter two
@@ -321,9 +335,9 @@ public class HomeController : MonoBehaviour
         svlg.childForceExpandWidth = true; svlg.childForceExpandHeight = false;
         section.GetComponent<LayoutElement>().preferredHeight = 430f;
 
-        var heading = MakeText(section.transform, "Heading", "Recent reads", 38, TextAlignmentOptions.Left);
-        heading.fontStyle = FontStyles.Bold;
-        heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 60f;
+        // Same header size as the two numbered steps, but unnumbered: the rail is a shortcut to a
+        // book already met, not a step in the choose-a-book path.
+        BuildSectionHeader(section.transform, "Heading", "Recent reads");
 
         // Horizontal scroll rail (viewport + horizontally-fitted content).
         var scrollGO = new GameObject("Rail",
@@ -405,7 +419,7 @@ public class HomeController : MonoBehaviour
             () => TapFeedback.TapThenGo(cardGO.transform, () => Nav.GoToBook(captured)));
     }
 
-    // (c) Illustrated door cards. Each door carries book art, its label and an accent bar in its own
+    // (c) Illustrated door cards, under the "2. Select a reading room:" header. Each door carries book art, its label and an accent bar in its own
     // colour, and opens EXACTLY what the old label+glyph tile with that filter opened. A door is
     // dropped when its filter yields no books in the current catalog (the SAME Filter.Conforms
     // predicate the Library uses) or when its optional min/max age misses the age chips.
@@ -438,9 +452,7 @@ public class HomeController : MonoBehaviour
             if (live.Count == 0) return;
         }
 
-        var heading = MakeText(parent, "RoomsHeading", "Reading rooms", 36, TextAlignmentOptions.Left);
-        heading.color = UiTheme.TextSecondary;
-        heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 50f;
+        BuildSectionHeader(parent, "RoomsHeading", "2. Select a reading room:");
 
         int slot = 0;
         int i = 0;
@@ -766,7 +778,10 @@ public class HomeController : MonoBehaviour
     {
         if (string.IsNullOrEmpty(filter)) return;
         if (IsAddress(filter)) { Nav.Go(filter, label); return; }
-        if (filter.Trim().ToLowerInvariant() == "learn to read") { Navigation.GoToLearnToRead(); return; }
+        // The learn-to-read door used to detour through the ladder screen (_LearnToRead). The shelf
+        // now carries the progression itself (level dividers in BooksScrollView), so the door opens
+        // it directly like every other door. _LearnToRead / LearnToReadController stay in the
+        // project, unreferenced, as the rollback.
         Nav.GoToLibrary(filter, label);
     }
 
@@ -1043,6 +1058,21 @@ public class HomeController : MonoBehaviour
         tex.Apply();
         _circleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         return _circleSprite;
+    }
+
+    // One look for every section header on this screen ("1. Filter books by the child's age:",
+    // "2. Select a reading room:", "Recent reads"): left-aligned, bold, in the muted secondary
+    // ink the rooms heading already used — big enough to read as a step, quiet enough that the
+    // cards below stay the loudest thing on the page.
+    private const float SectionHeaderSize = 38f;
+
+    private TMP_Text BuildSectionHeader(Transform parent, string name, string text)
+    {
+        var heading = MakeText(parent, name, text, SectionHeaderSize, TextAlignmentOptions.Left);
+        heading.fontStyle = FontStyles.Bold;
+        heading.color = UiTheme.TextSecondary;
+        heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 60f;
+        return heading;
     }
 
     private static void Stretch(RectTransform rt)

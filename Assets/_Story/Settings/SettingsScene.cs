@@ -53,6 +53,10 @@ public class SettingsScene : MonoBehaviour
 
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
+
+        // "Turn pages automatically" — built in code against this scene's canvas (see
+        // AutopageSettingRow); it moved here out of the reading-mode modal.
+        AutopageSettingRow.Attach();
     }
 
     // L-R3-2: removed an empty Update() that cost a per-frame managed call for no gain.

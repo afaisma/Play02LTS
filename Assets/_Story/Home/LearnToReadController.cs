@@ -17,15 +17,10 @@ using UnityEngine.UI;
 // ============================================================================================
 public class LearnToReadController : MonoBehaviour
 {
-    // The catalog carries `level` but no theme label, so the four rung names are defined here.
-    private static readonly string[] RungLabels =
-    {
-        "First Sounds",      // level 1
-        "Blends and Friends",// level 2
-        "Long Vowels",       // level 3
-        "Confident Reader",  // level 4
-    };
-    private const int Levels = 4;
+    // The four rung names now live in ReadingLevels (shared with the Library shelf's level
+    // dividers, which took over from this screen when the Learn-to-Read door started opening
+    // the shelf directly). This scene is kept, unreferenced, as the reversible rollback.
+    private const int Levels = ReadingLevels.Count;
     private const float RetryInterval = 0.5f;
 
     [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default
@@ -153,7 +148,7 @@ public class LearnToReadController : MonoBehaviour
         int target = Mathf.Clamp(Mathf.Min(total, masteryGoal), 1, total);
         int pct = Mathf.Min(100, Mathf.RoundToInt(100f * done / target));
         bool mastered = done >= target;
-        string theme = (level >= 1 && level <= RungLabels.Length) ? RungLabels[level - 1] : ("Level " + level);
+        string theme = ReadingLevels.Name(level);
         var palette = UiTheme.Card(level - 1);
 
         var card = new GameObject("Rung_" + level,
