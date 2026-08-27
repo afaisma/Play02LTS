@@ -241,6 +241,13 @@ public class PRScript : MonoBehaviour
         // Standard round home button, shared with Home and the Learn-to-Read ladder.
         HomeButton.Apply(btnHome);
 
+        // ...and the same container for the toolbar's other small icon, so the chrome reads as one
+        // family. btnNext/btnPrev are deliberately excluded: they are the page-turn affordance, not
+        // toolbar chrome. btnReplay is scene-wired with no serialized field here, so it is found by
+        // name — the same approach UnifiedReadingModePicker uses for btnVoiceSelection (which it
+        // styles itself, with the speaker glyph).
+        StyleToolbarIcon("btnReplay");
+
         // Commerce consolidated to Home's gated door — keep the in-reader buy button hidden by
         // default (reversible via AppConfig.ShowInReaderShopping).
         if (!AppConfig.ShowInReaderShopping && buttonParentalGate != null)
@@ -1267,6 +1274,35 @@ public class PRScript : MonoBehaviour
         storyStepsUI.SetStep(nCurrentStep);
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
+    }
+
+    // Restyle a scene-built toolbar icon onto the shared ToolbarButtonStyle container, keeping its
+    // own artwork as the glyph (tinted on-palette). The sprite is read BEFORE Apply, which repaints
+    // the button's own Image with the rounded Surface backing. No-op if the button is absent or
+    // inactive, so hiding one in the Inspector stays a supported state.
+    private static void StyleToolbarIcon(string name)
+    {
+        var go = GameObject.Find(name);
+        if (go == null) return;
+        var button = go.GetComponent<Button>();
+        if (button == null) return;
+
+        var background = go.GetComponent<Image>();
+        Sprite art = background != null ? background.sprite : null;
+        ToolbarButtonStyle.Apply(button, (slot, size) =>
+        {
+            if (art == null) return;
+            var glyphGO = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+            glyphGO.transform.SetParent(slot, false);
+            var rt = glyphGO.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var glyph = glyphGO.GetComponent<Image>();
+            glyph.sprite = art;
+            glyph.color = UiTheme.Primary;
+            glyph.preserveAspect = true;
+            glyph.raycastTarget = false;
+        });
     }
 
     // Scene-wired: the reader toolbar's btnHome onClick points here. _Home loads async, so the tap

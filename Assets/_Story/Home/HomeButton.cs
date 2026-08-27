@@ -8,11 +8,11 @@ using UnityEngine.Events;
 // no longer carries one — it navigated to the screen the child was already on.) Keeping the look in
 // one place means they all render the identical round button — a house glyph tinted UiTheme.Primary (sage) on a
 // rounded UiTheme.Surface background. On-palette by construction: no colours beyond UiTheme.
+//
+// The container (rounded Surface backing, glyph slot, press feedback) lives in ToolbarButtonStyle
+// and is shared with the reader toolbar's other icon buttons; this file only owns the house glyph.
 public static class HomeButton
 {
-    // Fraction of the button's size taken up by the house glyph (the rest is the Surface ring).
-    private const float GlyphScale = 0.56f;
-
     // Build a fresh round home button under `parent`, sized `size` px, invoking `onClick` on tap.
     // The outer slot carries the LayoutElement so it sits in the header/title row; the inner button
     // keeps a fixed square size so it stays round even when the row stretches it vertically.
@@ -34,10 +34,9 @@ public static class HomeButton
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = new Vector2(size, size);
 
-        StyleBackground(btnGO.GetComponent<Image>());
-        AddGlyph(btnGO.transform, size * GlyphScale);
+        // Same shared container + press feedback the reader toolbar uses.
+        ToolbarButtonStyle.Apply(btnGO.GetComponent<Button>(), AddHouseGlyph);
 
-        TapFeedback.AddPressFeedback(btnGO);
         if (onClick != null)
             btnGO.GetComponent<Button>().onClick.AddListener(
                 () => TapFeedback.TapThenGo(btnGO.transform, () => onClick()));
@@ -46,40 +45,19 @@ public static class HomeButton
 
     // Restyle an already-wired Button (e.g. the reader toolbar's serialized btnHome) to the shared
     // look without disturbing its position or its existing onClick. Idempotent: the glyph child is
-    // reused on repeat calls. Only the PRESS half of the tap treatment is added here — the serialized
+    // reused on repeat calls. Only the PRESS half of the tap treatment is added — the serialized
     // onClick already points at a handler (PRScript.Home) that does its own TapThenGo, and wrapping
     // it a second time would deadlock on the latch.
-    public static void Apply(Button button)
-    {
-        if (button == null) return;
-        TapFeedback.AddPressFeedback(button.gameObject);
-        var bg = button.GetComponent<Image>();
-        if (bg != null) StyleBackground(bg);
+    public static void Apply(Button button) => ToolbarButtonStyle.Apply(button, AddHouseGlyph);
 
-        var existing = button.transform.Find("HouseGlyph");
-        // Scene-built buttons are not all square (the Library pill is 190x96, the grown-up
-        // toolbars' are 204x114), so size the glyph off the SHORT side — off the width it would
-        // overflow the button vertically.
-        var rect = ((RectTransform)button.transform).rect;
-        float size = Mathf.Min(rect.width, rect.height);
-        if (existing == null)
-            AddGlyph(button.transform, size * GlyphScale);
-    }
-
-    private static void StyleBackground(Image bg)
+    // The one thing this file owns: the house itself, filling the slot ToolbarButtonStyle sized.
+    private static void AddHouseGlyph(Transform slot, float size)
     {
-        bg.sprite = BackgroundSprite();
-        bg.type = Image.Type.Sliced;
-        bg.color = UiTheme.Surface;
-    }
-
-    private static void AddGlyph(Transform parent, float glyphSize)
-    {
-        var glyphGO = new GameObject("HouseGlyph", typeof(RectTransform), typeof(Image));
-        glyphGO.transform.SetParent(parent, false);
+        var glyphGO = new GameObject("House", typeof(RectTransform), typeof(Image));
+        glyphGO.transform.SetParent(slot, false);
         var rt = glyphGO.GetComponent<RectTransform>();
-        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(glyphSize, glyphSize);
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         var glyph = glyphGO.GetComponent<Image>();
         glyph.sprite = HouseSprite();
         glyph.color = UiTheme.Primary;
@@ -93,31 +71,5 @@ public static class HomeButton
     {
         if (_house == null) _house = Resources.Load<Sprite>("Icons/home");
         return _house;
-    }
-
-    // Procedural rounded-rect (9-sliced) sprite for the Surface backing, mirroring the controllers'
-    // own RoundedSprite so the button matches the code-built scenes and works in player builds.
-    private static Sprite _bg;
-    private static Sprite BackgroundSprite()
-    {
-        if (_bg != null) return _bg;
-        const int r = 24;
-        int size = r * 2 + 4;
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-        var px = new Color[size * size];
-        for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float fx = x + 0.5f, fy = y + 0.5f;
-                float cx = Mathf.Clamp(fx, r, size - r);
-                float cy = Mathf.Clamp(fy, r, size - r);
-                float dx = fx - cx, dy = fy - cy;
-                px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f));
-            }
-        tex.SetPixels(px);
-        tex.Apply();
-        _bg = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
-            100f, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
-        return _bg;
     }
 }
