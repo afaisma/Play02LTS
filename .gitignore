@@ -132,3 +132,10 @@ Assets/Screenshots/
 
 # Generated per-build by Editor/BuildStamp.cs (keep the .meta tracked)
 Assets/Resources/build_info.json
+
+# Build outputs & scratch (never commit)
+/Android/
+/Build_Android/
+/_old_builds/
+/_to_delete/
+mono_crash.*.json

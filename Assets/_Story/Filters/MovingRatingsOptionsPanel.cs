@@ -11,6 +11,9 @@ public class MovingRatingsOptionsPanel : MonoBehaviour
     public RateTheApp rateTheApp;
     private Vector2 initialRectTransformFilterPosition;
     private bool bIn;
+    // Full-screen dim created by RateAppPanelStyle next to (not inside) the sliding panel, so it
+    // stays put while the card moves. Tapping it closes down the same RateLater path as the X.
+    private GameObject backdrop;
     
     void Start()
     {
@@ -29,6 +32,8 @@ public class MovingRatingsOptionsPanel : MonoBehaviour
     public void MoveIn()
     {
         Debug.Log("MoveIn");
+        backdrop = RateAppPanelStyle.Apply(rectTransformFilter, rateTheApp);
+        if (backdrop != null) backdrop.SetActive(true);
         rateTheApp.RateApplication(0);
         rectTransformFilter.DOAnchorPos(Vector2.zero, 0.35f);
         bIn = true;
@@ -37,6 +42,9 @@ public class MovingRatingsOptionsPanel : MonoBehaviour
     public void MoveOut()
     {
         Debug.Log("MoveOut");
+        // Drop the dim immediately — the card takes another 0.25s + 1s to slide away, and taps
+        // must not stay blocked for that whole time.
+        if (backdrop != null) backdrop.SetActive(false);
         Invoke("_MoveOut", 0.25f); 
     }
 

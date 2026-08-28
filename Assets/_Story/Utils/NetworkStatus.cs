@@ -9,6 +9,10 @@ public class NetworkStatus : MonoBehaviour
     public float checkFrequency = 5f;  // Check every 5 seconds.
     [FormerlySerializedAs("_canvasNetworkStatus")] public GameObject _networkStatusDialog;
 
+    // Keeps the 5-second poll from re-opening a dialog the user deliberately closed. See
+    // NetworkDialogVisibility for the rule (and its tests).
+    private readonly NetworkDialogVisibility visibility = new NetworkDialogVisibility();
+
     private void Start()
     {
         lastReachability = Application.internetReachability;
@@ -64,8 +68,14 @@ public class NetworkStatus : MonoBehaviour
 
     public void ShowDialog(bool bShow)
     {
+        if (_networkStatusDialog == null) return;
         if (bShow)
+        {
             _networkStatusDialog.SetActive(true);
+            // Restyle at show time rather than in Start: that way it also lands after
+            // SceneThemer, which recolours _Settings / _Parents on its own Start.
+            NetworkStatusDialogStyle.Apply(_networkStatusDialog, DismissDialog);
+        }
         else
             _networkStatusDialog.SetActive(false);
     }
@@ -74,7 +84,15 @@ public class NetworkStatus : MonoBehaviour
     {
         //Debug.Log("onNetworkStatusChange " + isConnected);
         if (_networkStatusDialog != null)
-            ShowDialog(!isConnected);
+            ShowDialog(visibility.OnStatusChange(isConnected));
+    }
+
+    /// <summary>The dialog's X: hide it, and stay quiet until connectivity comes back and drops
+    /// again — the poll must not re-open it every 5 seconds.</summary>
+    public void DismissDialog()
+    {
+        visibility.Dismiss();
+        ShowDialog(false);
     }
 
     public void OnTryAgainClickede()

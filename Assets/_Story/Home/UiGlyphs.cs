@@ -39,6 +39,15 @@ public static class UiGlyphs
             AddShape(box, "Slash", null, 8f, 0f, 78f, 8f, -45f, ink);
     }
 
+    // Close "X": two crossed bars. Used by DialogChrome for the corner close button on every
+    // dialog card, so the reader's chrome and the dialogs' chrome are the same drawing kit.
+    public static void BuildClose(Transform parent, Color ink, float size = DesignBox)
+    {
+        var box = NewBox(parent, "Close", size);
+        AddShape(box, "Bar1", null, 0f, 0f, 78f, 12f,  45f, ink);
+        AddShape(box, "Bar2", null, 0f, 0f, 78f, 12f, -45f, ink);
+    }
+
     // A DesignBox-sized drawing surface, uniformly scaled so the parts inside can keep their
     // authored coordinates whatever the requested size is.
     public static Transform NewBox(Transform parent, string name, float size)
