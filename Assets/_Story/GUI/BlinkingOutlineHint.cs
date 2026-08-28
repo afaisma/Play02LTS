@@ -26,8 +26,6 @@ public class BlinkingOutlineHint : MonoBehaviour
         if (outline != null && hintTimes < hintTotalTimes) // If there is an Outline component, start blinking
         {
             blinkCoroutine = StartCoroutine(BlinkOutline());
-            hintTimes++;
-            PlayerPrefs.SetInt(hintId, hintTimes);
         }
         else
         {
@@ -36,9 +34,31 @@ public class BlinkingOutlineHint : MonoBehaviour
        
     }
 
+    // Should the hint actually blink? Autopage turns the pages by itself, so coaching a "tap next"
+    // tap is pure noise there. Scenes without an AudioAndTextPlayer (_Map, _Message) have no
+    // autopage to speak of and keep the old behaviour.
+    public static bool ShouldBlink(bool hasPlayer, bool autopageActive, int timesShown, int totalTimes)
+    {
+        if (timesShown >= totalTimes) return false;
+        if (hasPlayer && autopageActive) return false;
+        return true;
+    }
+
     IEnumerator BlinkOutline()
     {
         yield return new WaitForSeconds(delayBeforeStart);
+
+        // Decide at blink time, not at Start(): the autopage toggle can change during the delay.
+        var player = FindObjectOfType<AudioAndTextPlayer>();
+        if (!ShouldBlink(player != null, player != null && player.IsAutoplaying, hintTimes, hintTotalTimes))
+        {
+            blinkCoroutine = null;
+            yield break;
+        }
+
+        // Only spend one of the hint's few showings once the blink is really about to run.
+        hintTimes++;
+        PlayerPrefs.SetInt(hintId, hintTimes);
 
         float blinkEnd = Time.time + totalDuration; // Calculate when to end blinking
         bool active = false; // Is the outline currently active?

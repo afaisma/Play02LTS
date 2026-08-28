@@ -25,7 +25,7 @@ public class WelcomeController : MonoBehaviour
     private static readonly Demo[] Demos =
     {
         new Demo("welcome/demo_read_a", "welcome/demo_read_b", "Read along together",           "Words light up as it's read — tap any word to hear it"),
-        new Demo("welcome/demo_ladder", "",                    "Learn to read, level by level", "A gentle path from first sounds up"),
+        new Demo("welcome/demo_speech_a", "welcome/demo_speech_b", "Speech recognition",     "The app follows the child's reading, highlighting each word in real time"),
         new Demo("welcome/demo_age_a",  "welcome/demo_age_b",  "Just-right for their age",       "Pick an age and the library tunes itself"),
     };
 
@@ -85,18 +85,21 @@ public class WelcomeController : MonoBehaviour
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         vlg.childAlignment = TextAnchor.UpperCenter;
 
-        var brand = MakeText(content.transform, "Brand", "ReadingBuddy", 58, TextAlignmentOptions.Left);
-        brand.fontStyle = FontStyles.Bold; brand.color = UiTheme.Primary;
-        brand.gameObject.AddComponent<LayoutElement>().preferredHeight = 72f;
-
         if (firstRun)
         {
-            var hi = MakeText(content.transform, "Welcome", "Welcome!", 92, TextAlignmentOptions.Left);
+            // One centred headline instead of a brand line + greeting. The word "ReadingBuddy" stays
+            // branded via rich text; the rest is regular headline colour. Wrapping is on and the box
+            // is two lines tall, so "Welcome to" / "ReadingBuddy!" may break without clipping (and
+            // MakeText's auto-sizing shrinks it further on narrower screens).
+            var hi = MakeText(content.transform, "Welcome",
+                "Welcome to <color=#" + ColorUtility.ToHtmlStringRGB(UiTheme.Primary) + ">ReadingBuddy</color>!",
+                104, TextAlignmentOptions.Center);
             hi.fontStyle = FontStyles.Bold; hi.color = UiTheme.TextPrimary;
-            hi.gameObject.AddComponent<LayoutElement>().preferredHeight = 112f;
+            hi.enableWordWrapping = true;
+            hi.gameObject.AddComponent<LayoutElement>().preferredHeight = 260f; // room for two 104pt lines
 
             var sub = MakeText(content.transform, "Subtitle",
-                "A few things that make reading here a little magical", 32, TextAlignmentOptions.Left);
+                "A few things that make reading here a little magical", 32, TextAlignmentOptions.Center);
             sub.color = UiTheme.TextSecondary;
             sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 46f;
 
@@ -105,7 +108,11 @@ public class WelcomeController : MonoBehaviour
         }
         else
         {
-            var sub = MakeText(content.transform, "Subtitle", "Welcome back!", 40, TextAlignmentOptions.Left);
+            var brand = MakeText(content.transform, "Brand", "ReadingBuddy", 58, TextAlignmentOptions.Center);
+            brand.fontStyle = FontStyles.Bold; brand.color = UiTheme.Primary;
+            brand.gameObject.AddComponent<LayoutElement>().preferredHeight = 72f;
+
+            var sub = MakeText(content.transform, "Subtitle", "Welcome back!", 40, TextAlignmentOptions.Center);
             sub.color = UiTheme.TextSecondary;
             sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 56f;
         }
@@ -239,7 +246,7 @@ public class WelcomeController : MonoBehaviour
         img.preserveAspect = true; img.raycastTarget = false;
         var tex = Resources.Load<Texture2D>(resPath);
         if (tex != null) img.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-        else img.color = new Color(0f, 0f, 0f, 0.10f);
+        else img.enabled = false; // screenshot not in Resources (yet) — draw nothing, not a blank box
         return img;
     }
 
