@@ -31,10 +31,15 @@ public class BuildStamp : IPreprocessBuildWithReport
     public void OnPreprocessBuild(BuildReport report)
     {
         PlayerSettings.Android.bundleVersionCode += 1;
+        // iOS CFBundleVersion must also ascend (TestFlight/App Store reject reused numbers).
+        // Mirror the one counter instead of keeping a second one, so an Android build and an
+        // iOS build never share a number and the For-grown-ups footer means the same thing
+        // on both platforms.
+        PlayerSettings.iOS.buildNumber = PlayerSettings.Android.bundleVersionCode.ToString();
         AssetDatabase.SaveAssets(); // persist the bump alongside the stamp
         WriteStamp();
-        Debug.Log("[BUILD-STAMP] bundleVersionCode -> " + PlayerSettings.Android.bundleVersionCode
-                  + "; build_info.json written");
+        Debug.Log("[BUILD-STAMP] bundleVersionCode/iOS buildNumber -> "
+                  + PlayerSettings.Android.bundleVersionCode + "; build_info.json written");
     }
 
     [MenuItem("Tools/ReadingBuddy/Write Build Stamp (no bump)")]
