@@ -30,6 +30,14 @@ public class BuildStamp : IPreprocessBuildWithReport
 
     public void OnPreprocessBuild(BuildReport report)
     {
+        // iOS SIMULATOR exports (tier-2 smoke, RbSimSmoke) are throwaway test builds: stamp the
+        // json so the footer/log identify the build, but never consume a build number for them.
+        if (report.summary.platform == BuildTarget.iOS && PlayerSettings.iOS.sdkVersion == iOSSdkVersion.SimulatorSDK)
+        {
+            WriteStamp();
+            Debug.Log("[BUILD-STAMP] simulator export: counter NOT bumped (stays " + PlayerSettings.Android.bundleVersionCode + ")");
+            return;
+        }
         PlayerSettings.Android.bundleVersionCode += 1;
         // iOS CFBundleVersion must also ascend (TestFlight/App Store reject reused numbers).
         // Mirror the one counter instead of keeping a second one, so an Android build and an
