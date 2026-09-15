@@ -248,6 +248,12 @@ public class PRScript : MonoBehaviour
         // styles itself, with the speaker glyph).
         StyleToolbarIcon("btnReplay");
 
+        // The bottom bar is authored flush with the screen edge, which on a notched iPhone puts
+        // it inside the home-indicator inset. Lift the whole bar — btnNext moves with it, so
+        // ReadAlongStallHint's caption (placed off the arrow's world corners) follows for free,
+        // and StoryLayoutTuning derives the text block's bottom from the same inset.
+        LiftToolbarAboveHomeIndicator("Toolbar");
+
         // Commerce consolidated to Home's gated door — keep the in-reader buy button hidden by
         // default (reversible via AppConfig.ShowInReaderShopping).
         if (!AppConfig.ShowInReaderShopping && buttonParentalGate != null)
@@ -1303,6 +1309,16 @@ public class PRScript : MonoBehaviour
             glyph.preserveAspect = true;
             glyph.raycastTarget = false;
         });
+    }
+
+    // Move a scene-built bottom bar up by Screen.safeArea's bottom inset. Found by name, the same
+    // approach StyleToolbarIcon uses — no new serialized field, no scene surgery. SafeAreaInsets
+    // makes the lift idempotent and re-applies it on rotation.
+    private static void LiftToolbarAboveHomeIndicator(string name)
+    {
+        var go = GameObject.Find(name);
+        if (go == null) return;
+        SafeAreaInsets.ApplyBottom(go.transform as RectTransform);
     }
 
     // Scene-wired: the reader toolbar's btnHome onClick points here. _Home loads async, so the tap

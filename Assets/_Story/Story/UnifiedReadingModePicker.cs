@@ -667,7 +667,10 @@ public class UnifiedReadingModePicker : MonoBehaviour
         _modalGroup.DOFade(1f, 0.2f).SetUpdate(true);
         _panel.DOKill();
         _panel.anchoredPosition = new Vector2(0f, -Offscreen);
-        _panel.DOAnchorPosY(SafeAreaInset().y + 40f, 0.3f).SetEase(Ease.OutCubic).SetUpdate(true);
+        // Rest the panel on the home-indicator inset, not the screen edge. SafeAreaInsets reads the
+        // real bottom inset in this canvas's units (the old local helper split the total inset in
+        // half and assumed a 1080x1920 canvas, so it was only ever approximately right).
+        _panel.DOAnchorPosY(SafeAreaInsets.ForRect(_panel).Bottom + 40f, 0.3f).SetEase(Ease.OutCubic).SetUpdate(true);
     }
 
     private void ClosePicker()
@@ -712,15 +715,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private void UpdateEntryLabel()
     {
         if (_entryLabel != null) _entryLabel.text = TileLabel(_currentMode);
-    }
-
-    private static Vector2 SafeAreaInset()
-    {
-        // Bottom-left / top-right insets in reference-resolution units (canvas is 1080 wide).
-        Rect sa = Screen.safeArea;
-        float sx = Screen.width <= 0 ? 0f : (Screen.width - sa.width) * 0.5f / Screen.width * 1080f;
-        float sy = Screen.height <= 0 ? 0f : (Screen.height - sa.height) * 0.5f / Screen.height * 1920f;
-        return new Vector2(sx, sy);
     }
 
     [SerializeField] private TMP_FontAsset uiFont; // rounded kid font (Fredoka); falls back to default

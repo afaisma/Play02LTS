@@ -75,6 +75,7 @@ public class LearnToReadController : MonoBehaviour
         Stretch(_contentRoot);
         var vlg = content.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(48, 48, 90, 48);
+        SafeAreaInsets.ApplyLayoutPadding(vlg); // keep the header clear of the notch, the last rung of the home indicator
         vlg.spacing = 28;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;

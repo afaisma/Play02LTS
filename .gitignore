@@ -139,3 +139,4 @@ Assets/Resources/build_info.json
 /_old_builds/
 /_to_delete/
 mono_crash.*.json
+/Build_Windows/

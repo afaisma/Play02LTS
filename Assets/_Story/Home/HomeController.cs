@@ -152,6 +152,10 @@ public class HomeController : MonoBehaviour
         _contentRoot.offsetMin = Vector2.zero; _contentRoot.offsetMax = Vector2.zero;
         var vlg = content.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(48, 48, 90, 60);
+        // ...plus whatever the device's notch and home indicator take. The layout padding is the
+        // natural place: the headline is the first child and the grown-ups footer the last, so one
+        // call keeps both ends clear. A device with no insets (iPhone SE) is untouched.
+        SafeAreaInsets.ApplyLayoutPadding(vlg);
         vlg.spacing = 40;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;

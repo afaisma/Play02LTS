@@ -77,6 +77,15 @@ public class PRLibrary : MonoBehaviour
             if (homeLabel != null) homeLabel.gameObject.SetActive(false); // the house glyph replaces the "⌂ Home" caption
         }
 
+        // Keep the scene-built chrome out of the device insets: the bottom nav (arrows + the home
+        // button just moved into it) is authored flush with the screen edge, and the shelf title
+        // starts at the very top, where the Dynamic Island clips it. Both are runtime-only.
+        SafeAreaInsets.ApplyBottom(FindByName("Toolbar")?.transform as RectTransform);
+        if (txtTitle != null) SafeAreaInsets.ApplyTop(txtTitle.rectTransform);
+        // The shelf's top edge is authored flush against the title's band, so it has to give back
+        // exactly what the title took — otherwise the title lands on the first book row.
+        SafeAreaInsets.ApplyTopEdge(FindByName("Scroll View")?.transform as RectTransform);
+
         LoadBooks(this);
         // The incoming Globals.g_libraryFilter is authoritative: LoadBooksWithRetry's
         // SetFilter(g_libraryFilter) applies it directly (including "everything", which

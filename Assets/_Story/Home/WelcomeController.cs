@@ -80,6 +80,9 @@ public class WelcomeController : MonoBehaviour
         Stretch(content.GetComponent<RectTransform>());
         var vlg = content.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(72, 72, 120, 84);
+        // The headline is the first child and the Continue button the last, so one call keeps the
+        // headline off the island and stops the button running into the home indicator.
+        SafeAreaInsets.ApplyLayoutPadding(vlg);
         vlg.spacing = 30;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
