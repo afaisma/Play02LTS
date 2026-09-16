@@ -373,11 +373,22 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
         { "learn to read", "Learn to Read" },
     };
 
+    /// <summary>The Learn-to-Read rungs, whose tokens are generated ("level2") rather than listed.</summary>
+    private static readonly System.Text.RegularExpressions.Regex LevelTitleToken =
+        new System.Text.RegularExpressions.Regex(@"^level(\d+)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     /// <summary>Display name for a filter token: the mapped name, else TitleCase(token).</summary>
     public static string DisplayName(string filter)
     {
         if (string.IsNullOrEmpty(filter)) return string.Empty;
-        return DisplayNames.TryGetValue(filter, out string name) ? name : TitleCase(filter);
+        if (DisplayNames.TryGetValue(filter, out string name)) return name;
+        // LearnToReadController builds its shelf tokens as "level" + rung, which TitleCase renders
+        // as "Level2". The token itself stays as-is (it is what the filter matches on); only the
+        // shelf's title gets the missing space.
+        var level = LevelTitleToken.Match(filter);
+        if (level.Success) return "Level " + level.Groups[1].Value;
+        return TitleCase(filter);
     }
 
     /// <summary>

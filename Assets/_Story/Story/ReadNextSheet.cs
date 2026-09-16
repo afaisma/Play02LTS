@@ -128,10 +128,9 @@ public class ReadNextSheet : MonoBehaviour
         var vlg = cardGO.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset((int)CardPad, (int)CardPad, (int)CardPad, (int)CardPad);
         vlg.spacing = 10f;
-        vlg.childControlWidth = true; vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = true;
+        vlg.childControlWidth = true; vlg.childForceExpandWidth = true;
 
-        var row = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        var row = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         row.transform.SetParent(cardGO.transform, false);
         var hlg = row.GetComponent<HorizontalLayoutGroup>();
         hlg.spacing = 22f;
@@ -179,15 +178,37 @@ public class ReadNextSheet : MonoBehaviour
 
         var accent = new GameObject("Accent", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
         accent.transform.SetParent(cardGO.transform, false);
-        var ale = accent.GetComponent<LayoutElement>();
-        ale.preferredHeight = CardAccentH; ale.flexibleHeight = 0f;
         var aimg = accent.GetComponent<Image>();
         aimg.sprite = RoundedSprite(); aimg.type = Image.Type.Sliced;
         aimg.color = UiTheme.Primary;
         aimg.raycastTarget = false;
 
+        ApplyCardLayout(vlg, row.GetComponent<LayoutElement>(), accent.GetComponent<LayoutElement>());
+
         var captured = next;
         cardGO.GetComponent<Button>().onClick.AddListener(() => Globals.GotoPrBook(captured));
+    }
+
+    /// <summary>
+    /// The card's vertical layout, kept in one place so it can be unit-tested. childForceExpandHeight
+    /// MUST stay off: force-expand treats every child's flexible height as max(flexible, 1), so the
+    /// card's own spare height (LayoutElement.flexibleHeight = 1) was handed to the 13px accent strip
+    /// as well, which rendered as a giant green block under the card. The Row (cover + text) is the
+    /// one child that absorbs that spare height; the accent keeps its fixed strip height.
+    /// </summary>
+    public static void ApplyCardLayout(VerticalLayoutGroup cardGroup, LayoutElement rowLayout, LayoutElement accentLayout)
+    {
+        if (cardGroup != null)
+        {
+            cardGroup.childControlHeight = true;
+            cardGroup.childForceExpandHeight = false;
+        }
+        if (rowLayout != null) rowLayout.flexibleHeight = 1f;
+        if (accentLayout != null)
+        {
+            accentLayout.preferredHeight = CardAccentH;
+            accentLayout.flexibleHeight = 0f;
+        }
     }
 
     // Cover block: rounded 3:2 art, loaded exactly as the Library and Home cards load covers.

@@ -32,6 +32,22 @@ namespace ReadingBuddy.Tests
                 Assert.IsNotEmpty(PRLibrary.DisplayName(category.Settings), category.Settings);
         }
 
+        // LearnToReadController opens its rungs with Nav.GoToLibrary("level" + rung), and the shelf
+        // titled itself "Level2" because TitleCase only capitalises — it cannot insert the space.
+        [Test]
+        public void DisplayName_LevelToken_GetsTheMissingSpace()
+        {
+            Assert.AreEqual("Level 2", PRLibrary.DisplayName("level2"));
+            Assert.AreEqual("Level 10", PRLibrary.DisplayName("level10"));
+            Assert.AreEqual("Level 1", PRLibrary.DisplayName("Level1"));
+        }
+
+        [Test]
+        public void DisplayName_NonNumericLevel_FallsBackToTitleCase()
+        {
+            Assert.AreEqual("Levelx", PRLibrary.DisplayName("levelx"));
+        }
+
         [Test]
         public void DisplayName_EmptyOrNull_IsEmpty()
         {

@@ -46,6 +46,15 @@ public class PRBookstore : MonoBehaviour
         // Settings + Parents → consolidated into Home's "For grown-ups" door.
         HideToolbarButtons();
 
+        // Keep the scene-authored chrome out of the device insets, the same treatment PRLibrary
+        // gives the shelf: the title starts at the very top of the canvas, where the Dynamic Island
+        // clips it, and the toolbar is authored flush with the bottom edge.
+        if (txtTitle != null) SafeAreaInsets.ApplyTop(txtTitle.rectTransform);
+        // The list is authored flush under the title's band (anchors 0.05-0.90, same as the
+        // Library), so it must give back the room the title takes or the first card covers it.
+        SafeAreaInsets.ApplyTopEdge(FindByName("Scroll View")?.transform as RectTransform);
+        SafeAreaInsets.ApplyBottom(FindByName("Toolbar")?.transform as RectTransform);
+
         // The toolbar's home button (scene-wired btnHome -> Home()) still wore the old menu icon.
         // Restyle it at runtime to the shared house so "go home" is one icon everywhere.
         var home = GameObject.Find("btnHome");
@@ -141,6 +150,15 @@ private System.Collections.IEnumerator LoadBooksWithRetry()
     public void Parents()  => Navigation.GoToParents();
 
     // Reversibly hide toolbar buttons (search + grown-up icons) per AppConfig. Covers name variants.
+    // Toolbar objects are found by name (no new serialized fields, no scene surgery), inactive ones
+    // included — the same approach HideToolbarButtons uses.
+    private static GameObject FindByName(string name)
+    {
+        foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (t.name == name) return t.gameObject;
+        return null;
+    }
+
     private void HideToolbarButtons()
     {
         var hide = new System.Collections.Generic.HashSet<string>();

@@ -54,6 +54,11 @@ public class SettingsScene : MonoBehaviour
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
 
+        // The scene's title is authored at the very top of the canvas (anchors 0.90-0.96) with no
+        // inset of its own, so the Dynamic Island clips it — same as the Library and _Parents. The
+        // next control down sits at 0.70, so nothing below has to give room back.
+        SafeAreaInsets.ApplyTop(GameObject.Find("txtTitle")?.transform as RectTransform);
+
         // "Turn pages automatically" — built in code against this scene's canvas (see
         // AutopageSettingRow); it moved here out of the reading-mode modal.
         AutopageSettingRow.Attach();

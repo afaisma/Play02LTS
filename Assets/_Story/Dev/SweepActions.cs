@@ -131,6 +131,23 @@ public static class SweepActions
             case "stall":      { var t = T("ReadAlongStallHint"); Call(Find(t, true), t, "OnStallHint"); break; }
             case "stallclear": { var t = T("ReadAlongStallHint"); Call(Find(t, true), t, "StopHint"); break; }
 
+            // Home: age chip (value as shown: 2..8) and a reading-room door ("filter,label").
+            case "age":  { var t = T("HomeController"); Call(Find(t), t, "OnAgeChipTapped", int.Parse(arg)); break; }
+            case "door": { var kv = arg.Split(','); Call(null, T("HomeController"), "OpenDoor", kv[0], kv.Length > 1 ? kv[1] : kv[0]); break; }
+
+            // Story: jump to the book's LAST page (sets the step index to last-1, then NextStep so the
+            // page executes normally) — for end-of-book / read-next checks without paging through.
+            case "laststep":
+            {
+                var t = T("PRScript");
+                var pr = Find(t);
+                var steps = t.GetField("_scriptlets", Any).GetValue(pr) as IList;
+                if (steps == null || steps.Count < 2) throw new Exception("no scriptlets");
+                t.GetField("nCurrentStep", Any).SetValue(pr, steps.Count - 2);
+                Call(pr, t, "NextStep");
+                break;
+            }
+
             default: throw new Exception("unknown action " + a);
         }
     }

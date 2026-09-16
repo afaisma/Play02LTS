@@ -6,27 +6,33 @@ namespace ReadingBuddy.Tests
 {
     public class GlobalsMiscTests
     {
-        private static PRBook BookAged(int ageFrom)
+        private static PRBook BookAged(int ageFrom, int ageTo = 0)
         {
-            return new PRBook { ageFrom = ageFrom };
+            return new PRBook { ageFrom = ageFrom, ageTo = ageTo };
         }
 
         // ---- ageGroupLabelFromPRBook ----
 
+        // The label is the book's OWN range: "The Fox and the Box" is 2-5 and "The Snow Queen" is
+        // 3-8, and both used to be flattened onto a fixed band (2-4 / 3-6) that contradicted the
+        // Home age filter, which matches on the real range.
         [Test]
-        public void AgeGroupLabel_Age2() => Assert.AreEqual("2-4 years", Globals.ageGroupLabelFromPRBook(BookAged(2)));
+        public void AgeGroupLabel_RealRange_2to5() => Assert.AreEqual("2-5 years", Globals.ageGroupLabelFromPRBook(BookAged(2, 5)));
 
         [Test]
-        public void AgeGroupLabel_Age3() => Assert.AreEqual("3-6 years", Globals.ageGroupLabelFromPRBook(BookAged(3)));
+        public void AgeGroupLabel_RealRange_3to8() => Assert.AreEqual("3-8 years", Globals.ageGroupLabelFromPRBook(BookAged(3, 8)));
 
         [Test]
-        public void AgeGroupLabel_Age4() => Assert.AreEqual("4-8 years", Globals.ageGroupLabelFromPRBook(BookAged(4)));
+        public void AgeGroupLabel_NoUpperBound_IsOpenEnded() => Assert.AreEqual("4+ years", Globals.ageGroupLabelFromPRBook(BookAged(4, 0)));
 
         [Test]
-        public void AgeGroupLabel_Age5() => Assert.AreEqual("5-12 years", Globals.ageGroupLabelFromPRBook(BookAged(5)));
+        public void AgeGroupLabel_UpperBelowLower_IsOpenEnded() => Assert.AreEqual("4+ years", Globals.ageGroupLabelFromPRBook(BookAged(4, 3)));
 
         [Test]
-        public void AgeGroupLabel_OtherAge_AnyAge() => Assert.AreEqual("Any Age", Globals.ageGroupLabelFromPRBook(BookAged(6)));
+        public void AgeGroupLabel_SingleAge_HasNoRange() => Assert.AreEqual("5 years", Globals.ageGroupLabelFromPRBook(BookAged(5, 5)));
+
+        [Test]
+        public void AgeGroupLabel_NoAges_AnyAge() => Assert.AreEqual("Any Age", Globals.ageGroupLabelFromPRBook(BookAged(0, 0)));
 
         // ---- defaultAudioRateFromPRBook ----
 

@@ -443,26 +443,15 @@ public class Globals : MonoBehaviour
 
     public static string ageGroupLabelFromPRBook(PRBook prBook)
     {
-        // Book level - add book level 2-3 YOA, 3-5YOA, 4-7YOA, 5-10YOA
-        string ageGroup = "Any Age";
-        if (prBook.ageFrom == 2)
-        {
-            ageGroup = "2-4 years";
-        }
-        else if (prBook.ageFrom == 3)
-        {
-            ageGroup = "3-6 years";
-        }
-        else if (prBook.ageFrom == 4)
-        {
-            ageGroup = "4-8 years";
-        }
-        else if (prBook.ageFrom == 5)
-        {
-            ageGroup = "5-12 years";
-        }
-
-        return ageGroup;
+        // The book's OWN range, not a fixed band. The old table mapped ageFrom 2/3/4/5 onto
+        // "2-4/3-6/4-8/5-12 years" and ignored ageTo, so a 2-5 book read "2-4 years" and a 3-8 book
+        // read "3-6 years" — contradicting the Home age filter, which matches on the real range.
+        int from = prBook.ageFrom;
+        int to = prBook.ageTo;
+        if (from <= 0 && to <= 0) return "Any Age";
+        if (from > 0 && (to <= 0 || to < from)) return $"{from}+ years";
+        if (from == to) return $"{from} years";
+        return $"{from}-{to} years";
     }
 
     public static int defaultAudioRateFromPRBook(PRBook prBook)
