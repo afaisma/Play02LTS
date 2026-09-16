@@ -5,7 +5,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
 using UnityEngine.UI;
-using System.Collections.Specialized;
 
 
 public static class GameObjectExtensions
@@ -27,15 +26,34 @@ public static class GameObjectExtensions
 }
 public class PRUtils
 {
-    // Cap chosen above the library's typical working set (~60+ book covers
-    // visible across a session). Below that, every cover beyond the first
-    // 30 evicts a Sprite that a BookViewItem.Image is still displaying —
-    // not currently harmful (we don't Destroy on eviction) but it forces
-    // re-download from DiskCache on every library re-entry. At 100 entries
-    // × ~150 KB GPU per sprite, peak is ~15 MB, well within tablet/phone
-    // budgets.
-    public static int maxCacheImagesSize = 100;
-    private static  OrderedDictionary cacheImages = new OrderedDictionary();
+    // Bounded by BYTES, not by entry count. A count cap assumes uniform entries;
+    // ours range from a ~150 KB book cover to a ~28 MB 2700x2700 story page, so
+    // the old 100-entry cap allowed >2 GB and killed the app on iPhone
+    // (EXC_RESOURCE, limit 2098 MB) partway through a picture book. The budget
+    // below is decoded GPU bytes; eviction destroys the Sprite and its Texture,
+    // which is what actually returns the memory. The 4 most recently added
+    // entries are never evicted, so the current page's sprites and the
+    // prefetched next page's can't be destroyed under a live Image.
+    private static readonly SpriteLruCache cacheImages = MakeImageCache();
+
+    private static SpriteLruCache MakeImageCache()
+    {
+        // 3 GB is the split between the older 2 GB-class phones (iPhone 8 / SE)
+        // and everything current; the smaller budget leaves headroom on devices
+        // whose per-app limit is well under the 2098 MB seen on modern hardware.
+        long budget = (SystemInfo.systemMemorySize >= 3000 ? 160L : 96L) * 1024 * 1024;
+        var cache = new SpriteLruCache(budget, 4);
+        cache.OnEvict = s =>
+        {
+            if (s != null)
+            {
+                var t = s.texture;
+                UnityEngine.Object.Destroy(s);
+                if (t != null) UnityEngine.Object.Destroy(t);
+            }
+        };
+        return cache;
+    }
 
     public static float alpha = 0.35f;
     static public Dictionary<string, Color> pastelColors = new Dictionary<string, Color>
@@ -282,13 +300,11 @@ public class PRUtils
     {
         url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
 
-        // 1) In-memory cache.
-        if (cacheImages.Contains(url))
+        // 1) In-memory cache. TryGet moves the hit to most-recently-used, so
+        //    frequently-used items survive eviction.
+        Sprite cached;
+        if (cacheImages.TryGet(url, out cached))
         {
-            Sprite cached = cacheImages[url] as Sprite;
-            // C3: move to most-recently-used position so frequent items survive eviction.
-            cacheImages.Remove(url);
-            cacheImages[url] = cached;
             onResult(cached, null);
             yield break;
         }
@@ -298,9 +314,13 @@ public class PRUtils
         byte[] diskBytes = DiskCache.TryReadBytes(url, "images", ".png");
         if (diskBytes != null)
         {
-            var tex = new Texture2D(2, 2);
+            // No mip chain: these are UI sprites drawn at ~1:1, so the 10 extra
+            // mip levels are +33% memory for nothing.
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             // LoadImage auto-detects PNG/JPG; resizes the texture to fit.
-            if (tex.LoadImage(diskBytes))
+            // markNonReadable drops the CPU-side copy after upload (halves the
+            // cost again); nothing here reads pixels back.
+            if (tex.LoadImage(diskBytes, true))
             {
                 Sprite spr = Texture2DToSprite(tex);
                 AddToCacheImages(url, spr);
@@ -313,7 +333,8 @@ public class PRUtils
 
         // 3) Network. H3: dispose UnityWebRequest when done.
         // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on.
-        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+        // nonReadable: same reason as the disk path — no CPU copy is kept.
+        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url, true))
         {
             request.timeout = 30;  // images: tolerate slow connections for ~5 MB
             yield return request.SendWebRequest();
@@ -349,7 +370,8 @@ public class PRUtils
 
         // Same transform DownloadImage applies first, so this early-out tests the real key.
         url = Globals.WithContentRev(url, Globals.g_prbook != null ? Globals.g_prbook.contentRev : "");
-        if (cacheImages.Contains(url))
+        Sprite alreadyCached;
+        if (cacheImages.TryGet(url, out alreadyCached))
             yield break;
 
         // Result is intentionally discarded — the point is the cache-warm side effect.
@@ -358,11 +380,7 @@ public class PRUtils
 
     private static void AddToCacheImages(string url, Sprite sprite)
     {
-        if (cacheImages.Count >= maxCacheImagesSize)
-        {
-            cacheImages.RemoveAt(0);
-        }
-        cacheImages[url] = sprite;
+        cacheImages.Add(url, sprite);
     }
 
     public static Color GetOppositeColor(Color color)

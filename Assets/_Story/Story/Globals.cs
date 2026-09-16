@@ -132,10 +132,12 @@ public class Globals : MonoBehaviour
         // with `PostProcessPassRenderGraph IndexOutOfRangeException` — the
         // pooled intermediate textures URP holds via internal handles (not
         // long-lived C# refs) look orphaned to the sweep and get freed
-        // between record-time and execute-time. The cap bumps on
-        // cacheImages (100) and CacheAudioAndTimingsStructs (50) already
-        // bound the leak to ~15 MB GPU + ~50 MB CPU peak, which is
-        // acceptable on the target devices. If we ever need to reclaim
+        // between record-time and execute-time. Instead the caches bound
+        // themselves: cacheImages is a byte-budgeted LRU (160 MB on
+        // devices with >= 3 GB RAM, else 96 MB) that destroys the Sprite
+        // and Texture it evicts, and CacheAudioAndTimingsStructs holds
+        // 50 clips (~50 MB CPU peak). That is acceptable on the target
+        // devices without a sweep. If we ever need to reclaim
         // again, defer to WaitForEndOfFrame + a real yield on the
         // AsyncOperation, but test thoroughly against URP rendering — the
         // straightforward inline call is unsafe in Unity 6's Render Graph.
