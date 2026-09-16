@@ -51,7 +51,6 @@ public class UnifiedReadingModePicker : MonoBehaviour
 
     // ---- model ----
     private readonly List<Mode> _available = new();
-    private bool _timmy;          // Timmy edge case (appvoice "Listen" + pictures only)
     private Mode _currentMode = Mode.AppVoice;
 
     // ---- built UI ----
@@ -200,17 +199,9 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private void BuildAvailable(PRBook book)
     {
         _available.Clear();
-        _timmy = book != null && !string.IsNullOrEmpty(book.bookName)
-                              && book.bookName.ToLower().Contains("timmy");
-
-        if (_timmy)
-        {
-            // Single MP3 + static text, no per-word timings: only "App voice" (relabelled
-            // "Listen", no highlight promise) + "Just pictures". No iread.
-            _available.Add(Mode.AppVoice);
-            _available.Add(Mode.Pictures);
-            return;
-        }
+        // (The old "timmy" name-match edge case is gone: Timmy And His Family was converted to
+        // the standard chunk form with forced-alignment timings on 2026-09-16, so it is a plain
+        // human-voice book and the catalog's `voices` drives it like every other title.)
 
         bool hasHuman = book != null && book.voices != null && book.voices.Contains("human");
         bool hasTts = book == null || book.voices == null || book.voices.Contains("tts");
@@ -809,7 +800,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
     private string SubLabel(Mode m) => m switch
     {
         Mode.Storyteller => "A real voice reads",   // no middot: Fredoka's atlas lacks U+00B7 (tofu on device)
-        Mode.AppVoice => _timmy ? "Listen" : "Words light up",
+        Mode.AppVoice => "Words light up",
         Mode.IRead => "You read, I follow",
         Mode.Pictures => "No sound",
         _ => ""
