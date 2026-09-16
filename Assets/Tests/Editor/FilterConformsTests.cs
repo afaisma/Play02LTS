@@ -107,6 +107,95 @@ namespace ReadingBuddy.Tests
             Assert.IsFalse(filter.Conforms(Book("math")));
         }
 
+        // ---- The age chip applies to story ROOMS, never to reading LEVELS ----
+        // A reading level already says who it is for, so a ladder shelf ignores the Home age chip:
+        // a 6-year-old beginner must still see Level 1, whose books are catalogued 2-5.
+
+        private static PRBook LeveledBook(int level, string genre, int ageFrom, int ageTo)
+        {
+            return new PRBook { genre = genre, level = level, ageFrom = ageFrom, ageTo = ageTo };
+        }
+
+        [Test]
+        public void LearnToReadShelf_IgnoresAgeChip_KeepsLevel1ForASixYearOld()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "learn to read");
+            filter.ageLoSel = 6; filter.ageHiSel = 6;
+            Assert.IsTrue(filter.Conforms(LeveledBook(1, "learn to read", ageFrom: 2, ageTo: 5)));
+        }
+
+        [Test]
+        public void LevelShelf_IgnoresAgeChip_KeepsItsOwnLevel()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "level1");
+            filter.ageLoSel = 6; filter.ageHiSel = 6;
+            Assert.IsTrue(filter.Conforms(LeveledBook(1, "learn to read", ageFrom: 2, ageTo: 5)));
+        }
+
+        [Test]
+        public void LevelShelf_IgnoringTheAgeChip_StillFiltersByLevel()
+        {
+            // The exemption drops the AGE gate only — the level match itself is untouched.
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "level1");
+            filter.ageLoSel = 6; filter.ageHiSel = 6;
+            Assert.IsFalse(filter.Conforms(LeveledBook(2, "learn to read", ageFrom: 2, ageTo: 5)));
+        }
+
+        [Test]
+        public void GenreShelf_KeepsTheAgeGate()
+        {
+            // A story room is NOT a ladder: a 2-5 fairytale stays hidden at chip 6, as before.
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "fairytales");
+            filter.ageLoSel = 6; filter.ageHiSel = 6;
+            Assert.IsFalse(filter.Conforms(Book("fairytales", ageFrom: 2, ageTo: 5)));
+        }
+
+        [Test]
+        public void GenreShelf_AgeGate_StillPassesAnOverlappingBook()
+        {
+            var filter = new Filter();
+            filter.SetFilter(0, 0, "fairytales");
+            filter.ageLoSel = 6; filter.ageHiSel = 6;
+            Assert.IsTrue(filter.Conforms(Book("fairytales", ageFrom: 5, ageTo: 8)));
+        }
+
+        [Test]
+        public void AllAges_ZeroZero_PathUnchanged()
+        {
+            // (0,0) = "All": no age gate for anyone, ladder or not.
+            var ladder = new Filter();
+            ladder.SetFilter(0, 0, "learn to read");
+            ladder.ageLoSel = 0; ladder.ageHiSel = 0;
+            Assert.IsTrue(ladder.Conforms(LeveledBook(1, "learn to read", ageFrom: 2, ageTo: 5)));
+
+            var room = new Filter();
+            room.SetFilter(0, 0, "fairytales");
+            room.ageLoSel = 0; room.ageHiSel = 0;
+            Assert.IsTrue(room.Conforms(Book("fairytales", ageFrom: 2, ageTo: 5)));
+        }
+
+        [Test]
+        public void IsLadder_MatchesLevelShelvesAndTheLearnToReadRoom()
+        {
+            var ladderByGenre = new Filter();
+            ladderByGenre.SetFilter(0, 0, "learn to read");
+            Assert.IsTrue(Filter.IsLadder(ladderByGenre));
+
+            var ladderByLevel = new Filter();
+            ladderByLevel.SetFilter(0, 0, "level3");
+            Assert.IsTrue(Filter.IsLadder(ladderByLevel));
+
+            var room = new Filter();
+            room.SetFilter(0, 0, "fairytales");
+            Assert.IsFalse(Filter.IsLadder(room));
+
+            Assert.IsFalse(Filter.IsLadder(null));
+        }
+
         // ---- Navigation tiles (action set) show only on the home "All Books" view ----
 
         private static PRBook NavTile(string action)

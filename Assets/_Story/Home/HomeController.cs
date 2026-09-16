@@ -12,6 +12,8 @@ using UnityEngine.UI;
 //
 // Layout, top to bottom — two numbered steps, then a shortcut:
 //   a) Title / logo row (centred).
+//   a2) "Learn to read" — the wide ladder door in a section of its own, ABOVE the age chips,
+//      because a reading level already says who it is for and must never be age-filtered away.
 //   b) "1. Filter books by the child's age:" + the full-width age chips.
 //   c) "2. Select a reading room:" + the grid of illustrated DOOR cards (art + label + accent bar
 //      -> filter), tap -> the same navigation the old label+glyph tiles performed. The door set is
@@ -187,7 +189,12 @@ public class HomeController : MonoBehaviour
         // Order is the child's path through the screen: pick an age (step 1), pick a room (step 2),
         // then the Recent-reads shortcut for a book already met. The rail sits BELOW the rooms
         // because it is a shortcut, not a step — leading with it buried the two numbered choices.
+        //
+        // The Learn-to-read door sits ABOVE step 1, in a section of its own: a reading LEVEL already
+        // says who it is for, so that door is deliberately outside the age filter and must not read
+        // as one of the age-filtered rooms.
         BuildTitleRow(_contentRoot);
+        BuildLearnToReadSection(_contentRoot);
         BuildAgeRow(_contentRoot);
         BuildDoorRooms(_contentRoot);
         BuildContinueRail(_contentRoot);
@@ -423,6 +430,52 @@ public class HomeController : MonoBehaviour
             () => TapFeedback.TapThenGo(cardGO.transform, () => Nav.GoToBook(captured)));
     }
 
+    // ---------------------------------------------------------------- Learn-to-read section
+
+    // The Learn-to-read door in its OWN section, above the age chips. A reading LEVEL already states
+    // who it is for — chip 6 must still reach Level 1, whose books are catalogued 2-5 — so this door
+    // is outside the age filter entirely (Filter.IsLadder makes the shelf behind it agree). Rendering
+    // it inside the age-filtered rooms grid said the opposite.
+    //
+    // The card itself is the unchanged wide BuildDoorCard, so its art, label and badge are exactly
+    // what the grid used to show. No "learn to read" door in home_doors.json -> no section.
+    private void BuildLearnToReadSection(Transform parent)
+    {
+        _learnToReadShown = false;
+        if (_doors == null) return;
+
+        HomeDoor door = null;
+        foreach (var d in _doors)
+            if (IsLearnToReadDoor(d)) { door = d; break; }
+        // Same catalog check every other door gets: a door onto an empty shelf is worse than none.
+        if (door == null || !FilterHasBooks(door.filter)) return;
+
+        _learnToReadShown = true;
+
+        BuildSectionHeader(parent, "LearnToReadHeading", "Learn to read");
+        BuildDoorCard(parent, door, 0, true);
+
+        // Says out loud why this door sits above step 1 rather than inside the rooms grid.
+        var note = MakeText(parent, "LearnToReadNote", "By reading level, for any age",
+                            LearnToReadNoteSize, TextAlignmentOptions.Left);
+        note.color = UiTheme.TextSecondary;
+        note.gameObject.AddComponent<LayoutElement>().preferredHeight = LearnToReadNoteHeight;
+    }
+
+    private const float LearnToReadNoteSize   = 24f;
+    private const float LearnToReadNoteHeight = 40f;
+
+    // Did the section above actually render the door? BuildDoorRooms only withholds it from the
+    // compiled-in fallback set when it did — otherwise a published door set that omits "learn to
+    // read" would lose the door from BOTH places and the ladder would be unreachable.
+    private bool _learnToReadShown;
+
+    // The one door that is a reading LADDER rather than a story room. Same token convention
+    // HomeDoorsConfig.FromSectionTiles uses to decide which door gets the wide hero slot.
+    private static bool IsLearnToReadDoor(HomeDoor door) =>
+        door != null && !string.IsNullOrEmpty(door.filter) &&
+        door.filter.Trim().ToLowerInvariant() == "learn to read";
+
     // (c) Illustrated door cards, under the "2. Select a reading room:" header. Each door carries book art, its label and an accent bar in its own
     // colour, and opens EXACTLY what the old label+glyph tile with that filter opened. A door is
     // dropped when its filter yields no books in the current catalog (the SAME Filter.Conforms
@@ -440,6 +493,7 @@ public class HomeController : MonoBehaviour
         foreach (var door in _doors)
         {
             if (door == null || string.IsNullOrEmpty(door.filter)) continue;
+            if (IsLearnToReadDoor(door)) continue;   // has its own section above the age chips
             if (!door.MatchesAgeRange(ageLo, ageHi)) continue;
             if (!IsAddress(door.filter) && !FilterHasBooks(door.filter)) continue;
             live.Add(door);
@@ -453,6 +507,8 @@ public class HomeController : MonoBehaviour
             Debug.LogWarning("HomeController: no door survived the age/catalog filters; " +
                              "falling back to the compiled-in room set.");
             live = HomeDoorsConfig.FromSectionTiles(sectionTiles);
+            if (_learnToReadShown)
+                live.RemoveAll(IsLearnToReadDoor);   // still belongs to its own section, not the grid
             if (live.Count == 0) return;
         }
 

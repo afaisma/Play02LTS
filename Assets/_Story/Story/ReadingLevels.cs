@@ -16,6 +16,20 @@ public static class ReadingLevels
         "Confident Reader",   // level 4
     };
 
+    // What the child actually practises at each level. Shown as a one-line hint under the shelf's
+    // level heading, so a grown-up can tell Level 2 from Level 3 without opening a book.
+    private static readonly string[] Skills =
+    {
+        "short vowels and first words",   // level 1
+        "blends and sight words",         // level 2
+        "long vowels, longer sentences",  // level 3
+        "chapter-length stories",         // level 4
+    };
+
+    /// <summary>One-line skill hint for a level; "" for anything out of range.</summary>
+    public static string Skill(int level) =>
+        (level >= 1 && level <= Skills.Length) ? Skills[level - 1] : "";
+
     /// <summary>Theme name for a level ("First Sounds"); "Level N" for anything out of range.</summary>
     public static string Name(int level) =>
         (level >= 1 && level <= Names.Length) ? Names[level - 1] : ("Level " + level);

@@ -14,6 +14,7 @@
 //   mode|<Mode>      reading-mode picker tile: Storyteller | AppVoice | IRead | Pictures
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
+//   click|<name>     press any active Button by GameObject name (e.g. ShowAllAges)
 //   next | prev      page-turn arrows
 //   rate | ratelater the rate-app panel in / out
 //   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly)
@@ -118,6 +119,7 @@ public static class SweepActions
             }
             case "picker": { var pT = T("UnifiedReadingModePicker"); Call(Find(pT), pT, "TogglePicker"); break; }
 
+            case "click": ClickByName(arg); break;   // any active GameObject with a Button, by name
             case "next": ClickByName("btnNext"); break;
             case "prev": ClickByName("btnPrev"); break;
 

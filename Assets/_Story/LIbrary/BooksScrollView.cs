@@ -47,6 +47,18 @@ public class Filter
         return match.Success ? int.Parse(match.Groups[1].Value) : 0;
     }
 
+    /// <summary>
+    /// True for the LADDER shelves — the Learn-to-Read room and the per-level shelves. A reading
+    /// LEVEL already states who it is for, so these shelves ignore the Home age chip: a 6-year-old
+    /// beginner must still see Level 1 even though Level 1 books are catalogued 2-5. Shared by
+    /// Conforms (which skips the age gate) and ShowBooks (which sorts and emits level dividers) so
+    /// the two predicates can't drift apart.
+    /// </summary>
+    public static bool IsLadder(Filter filter)
+    {
+        return filter != null && (filter.level > 0 || filter.genre == "learn to read");
+    }
+
     public bool Conforms(PRBook prBook)
     {
         // Navigation tiles (entries with an action) show only on the home "All Books" view.
@@ -56,7 +68,11 @@ public class Filter
 
         // Age-range gate (ANDs with everything below). (0,0) = no age filter.
         // Pass when the book's [ageFrom, ageTo] overlaps the selected [ageLoSel, ageHiSel].
-        if (ageLoSel > 0 && ageHiSel > 0 && !(prBook.ageFrom <= ageHiSel && ageLoSel <= prBook.ageTo))
+        // LADDER shelves are exempt (see IsLadder): the age chip applies to story ROOMS, never to
+        // reading levels, so it can never drop a whole level off the Learn-to-Read shelf. Every
+        // other filter keeps the gate exactly as it was.
+        if (!IsLadder(this) &&
+            ageLoSel > 0 && ageHiSel > 0 && !(prBook.ageFrom <= ageHiSel && ageLoSel <= prBook.ageTo))
             return false;
 
         if (level > 0)
@@ -132,6 +148,11 @@ public class BooksScrollView : MonoBehaviour
     // Book rows are POOLED; these are NOT — they are created and destroyed per pass, because
     // which levels appear (and their done-counts) changes with the filter and with progress.
     private readonly List<GameObject> _levelDividers = new List<GameObject>();
+
+    // The "No books for this age yet" block, built by ShowBooks when nothing survives the filter.
+    // Same lifetime rule as the dividers above: created per pass, dropped by ClearDividers, so the
+    // next successful ShowBooks removes it.
+    private GameObject _emptyState;
 
     private void OnDestroy()
     {
@@ -227,7 +248,7 @@ public class BooksScrollView : MonoBehaviour
         // Every other filter iterates the catalog list unchanged (byte-identical order).
         // The ladder shelves — the Learn-to-Read room and the per-level shelves — are the only
         // ones that sort, and the only ones that get level dividers below.
-        bool isLadderShelf = filter != null && (filter.genre == "learn to read" || filter.level > 0);
+        bool isLadderShelf = Filter.IsLadder(filter);
 
         IEnumerable<PRBook> ordered = prBooks;
         if (isLadderShelf)
@@ -258,8 +279,13 @@ public class BooksScrollView : MonoBehaviour
         Dictionary<int, (int total, int done)> levelCounts =
             isLadderShelf ? CountByLevel(ordered, filter) : null;
 
+        // The one level the child should pick up next — the first that still has unread books.
+        // -1 (no pill) on a non-ladder shelf and once every level is complete.
+        int startHereLevel = isLadderShelf ? StartHereLevel(levelCounts) : -1;
+
         int nextSibling = 0;
         int dividedLevel = 0; // last level a divider was emitted for
+        int shownRows = 0;
         foreach (PRBook prBook in ordered)
         {
             if (this.filter != null && !filter.Conforms(prBook))
@@ -270,14 +296,21 @@ public class BooksScrollView : MonoBehaviour
             {
                 dividedLevel = prBook.level;
                 levelCounts.TryGetValue(dividedLevel, out var count);
-                var divider = BuildLevelDivider(dividedLevel, count);
+                var divider = BuildLevelDivider(dividedLevel, count, dividedLevel == startHereLevel);
                 divider.transform.SetSiblingIndex(nextSibling++);
             }
             AddBook(prBook);
+            shownRows++;
             if (prBook.bookViewItem != null && prBook.bookViewItem.gameObject != null)
                 prBook.bookViewItem.transform.SetSiblingIndex(nextSibling++);
         }
-        
+
+        // Nothing survived the filter — usually the age chip, which is the one thing the child can
+        // undo from here. Offer that instead of a blank scroll view. Dropped by ClearDividers on
+        // the next pass, so a successful ShowBooks removes it.
+        if (shownRows == 0)
+            BuildEmptyState(filter).transform.SetSiblingIndex(nextSibling++);
+
         if (storedScrollPosition != new Vector2(-1, -1) && scrollRectToStoreTheScrollPosition != null)
             scrollRectToStoreTheScrollPosition.normalizedPosition = storedScrollPosition;
     }
@@ -304,6 +337,26 @@ public class BooksScrollView : MonoBehaviour
     }
 
     /// <summary>
+    /// The level to mark "Start here": the LOWEST level that still has unread books. -1 when every
+    /// level on the shelf is complete, and -1 for an empty/absent tally. Pure — the divider row just
+    /// renders what this decides, so the choice is unit-testable without a scene.
+    /// </summary>
+    public static int StartHereLevel(IReadOnlyDictionary<int, (int total, int done)> counts)
+    {
+        if (counts == null)
+            return -1;
+        int start = -1;
+        foreach (var entry in counts)
+        {
+            if (entry.Value.done >= entry.Value.total)
+                continue;
+            if (start < 0 || entry.Key < start)   // dictionary order is not level order
+                start = entry.Key;
+        }
+        return start;
+    }
+
+    /// <summary>
     /// Destroy the previous pass's dividers. SetParent(null) FIRST: Destroy is deferred to the end
     /// of the frame, so a merely-destroyed divider would still be a child while the add loop below
     /// hands out sibling indices, and every row would land one slot off.
@@ -317,14 +370,22 @@ public class BooksScrollView : MonoBehaviour
             Destroy(divider);
         }
         _levelDividers.Clear();
+
+        if (_emptyState != null)
+        {
+            _emptyState.transform.SetParent(null, false);   // same deferred-Destroy trap as above
+            Destroy(_emptyState);
+            _emptyState = null;
+        }
     }
 
     /// <summary>
-    /// One full-width, non-interactive header row: "Level 2 - Blends and Friends" on the left,
-    /// "3 of 8 read" on the right, in that level's palette. Code-built (no prefab) and tracked in
+    /// One full-width, non-interactive header row: "Level 2 - Blends and Friends" over its one-line
+    /// skill hint on the left, "3 of 8 read" on the right — plus a "Start here" pill on the level
+    /// the child should pick up next. In that level's palette, code-built (no prefab) and tracked in
     /// _levelDividers so ClearDividers can drop it on the next pass.
     /// </summary>
-    private GameObject BuildLevelDivider(int level, (int total, int done) count)
+    private GameObject BuildLevelDivider(int level, (int total, int done) count, bool startHere)
     {
         var palette = UiTheme.Card(level - 1);
         TMP_FontAsset font = UiTheme.Font();
@@ -348,22 +409,71 @@ public class BooksScrollView : MonoBehaviour
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
         hlg.childAlignment = TextAnchor.MiddleLeft;
 
-        var title = MakeDividerText(row.transform, "Title", ReadingLevels.Heading(level, dash),
+        // Heading and skill hint stack in one flexible column, so the count (and the pill) stay
+        // pinned to the right edge however long the theme name is.
+        var textCol = new GameObject("Text",
+            typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        textCol.transform.SetParent(row.transform, false);
+        var vlg = textCol.GetComponent<VerticalLayoutGroup>();
+        vlg.spacing = 2f;
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        vlg.childAlignment = TextAnchor.MiddleLeft;
+        textCol.GetComponent<LayoutElement>().flexibleWidth = 1f;
+
+        var title = MakeDividerText(textCol.transform, "Title", ReadingLevels.Heading(level, dash),
                                     40f, TextAlignmentOptions.Left, font);
         title.fontStyle = FontStyles.Bold;
         title.color = palette.accent;
-        title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+        title.gameObject.AddComponent<LayoutElement>().preferredHeight = DividerHeadingHeight;
+
+        // What this level actually practises — the grown-up's cue for "is this the right rung?".
+        var skill = MakeDividerText(textCol.transform, "Skill", ReadingLevels.Skill(level),
+                                    SkillHintSize, TextAlignmentOptions.Left, font);
+        skill.color = UiTheme.TextSecondary;
+        skill.gameObject.AddComponent<LayoutElement>().preferredHeight = SkillHintHeight;
 
         var progress = MakeDividerText(row.transform, "Progress", count.done + " of " + count.total + " read",
                                        30f, TextAlignmentOptions.Right, font);
         progress.color = palette.accent;
         progress.gameObject.AddComponent<LayoutElement>().preferredWidth = 240f;
 
+        if (startHere)
+            BuildStartHerePill(row.transform, font);
+
         _levelDividers.Add(row);
         return row;
     }
 
-    private const float DividerHeight = 92f;
+    /// <summary>The small "Start here" pill: sits right of the count on the first unfinished level.</summary>
+    private static void BuildStartHerePill(Transform parent, TMP_FontAsset font)
+    {
+        var pill = new GameObject("StartHere", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        pill.transform.SetParent(parent, false);
+        var le = pill.GetComponent<LayoutElement>();
+        le.preferredWidth = StartHerePillW; le.flexibleWidth = 0f;
+        le.preferredHeight = StartHerePillH; le.flexibleHeight = 0f;
+        var img = pill.GetComponent<Image>();
+        img.sprite = DialogChrome.RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = UiTheme.Primary;
+        img.raycastTarget = false;          // decoration on a row that never takes a tap
+
+        var label = MakeDividerText(pill.transform, "Label", "Start here",
+                                    StartHerePillTextSize, TextAlignmentOptions.Center, font);
+        label.fontStyle = FontStyles.Bold;
+        label.color = UiTheme.OnPrimary;
+        DialogChrome.Stretch(label.rectTransform);
+    }
+
+    // The row carries two stacked lines now (heading + skill hint), so it is taller than the 92 the
+    // single-line divider used.
+    private const float DividerHeight = 116f;
+    private const float DividerHeadingHeight = 50f;
+    private const float SkillHintSize = 26f;
+    private const float SkillHintHeight = 32f;
+    private const float StartHerePillW = 190f;
+    private const float StartHerePillH = 52f;
+    private const float StartHerePillTextSize = 22f;
 
     private static TMP_Text MakeDividerText(Transform parent, string name, string text,
                                             float size, TextAlignmentOptions align, TMP_FontAsset font)
@@ -381,6 +491,73 @@ public class BooksScrollView : MonoBehaviour
         tmp.raycastTarget = false;
         return tmp;
     }
+
+    // ---------------------------------------------------------------- empty state
+
+    /// <summary>
+    /// Shown in place of the rows when a filter matches nothing. The age chip is almost always the
+    /// cause and the one thing the child can undo from here, so the block offers exactly that:
+    /// clear the age range, then re-run the SAME filter (which rebuilds this block away).
+    /// </summary>
+    private GameObject BuildEmptyState(Filter shownFilter)
+    {
+        TMP_FontAsset font = UiTheme.Font();
+
+        var block = new GameObject("EmptyState",
+            typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        block.transform.SetParent(scrollViewContent, false);
+        var le = block.GetComponent<LayoutElement>();
+        le.preferredHeight = EmptyStateHeight;
+        le.minHeight = EmptyStateHeight;
+        le.flexibleHeight = 0f;
+        var vlg = block.GetComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(48, 48, 40, 40);
+        vlg.spacing = 32f;
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        vlg.childAlignment = TextAnchor.MiddleCenter;
+
+        // Only offer "Show all ages" when an age range is actually narrowing the shelf; with the
+        // chip already on All the button would be a no-op, so the copy changes and it is left out.
+        bool ageNarrowed = Globals.GetAgeLo() > 0 && Globals.GetAgeHi() > 0;
+        var message = MakeDividerText(block.transform, "Message",
+                                      ageNarrowed ? "No books for this age yet" : "No books here yet",
+                                      34f, TextAlignmentOptions.Center, font);
+        message.color = UiTheme.TextSecondary;
+        message.gameObject.AddComponent<LayoutElement>().preferredHeight = 48f;
+        if (!ageNarrowed) { _emptyState = block; return block; }
+
+        var buttonGO = new GameObject("ShowAllAges",
+            typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+        buttonGO.transform.SetParent(block.transform, false);
+        var ble = buttonGO.GetComponent<LayoutElement>();
+        ble.preferredWidth = EmptyStateButtonW; ble.flexibleWidth = 0f;
+        ble.preferredHeight = EmptyStateButtonH; ble.flexibleHeight = 0f;
+        var img = buttonGO.GetComponent<Image>();
+        img.sprite = DialogChrome.RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = UiTheme.Primary;
+
+        var label = MakeDividerText(buttonGO.transform, "Label", "Show all ages",
+                                    36f, TextAlignmentOptions.Center, font);
+        label.fontStyle = FontStyles.Bold;
+        label.color = UiTheme.OnPrimary;
+        DialogChrome.Stretch(label.rectTransform);
+
+        Filter captured = shownFilter;
+        buttonGO.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            // The same reset the Home "All" chip performs: Globals stores the age range as (0,0).
+            Globals.ClearAgeRange();
+            ShowBooks(captured);
+        });
+
+        _emptyState = block;
+        return block;
+    }
+
+    private const float EmptyStateHeight   = 280f;
+    private const float EmptyStateButtonW  = 460f;
+    private const float EmptyStateButtonH  = 108f;
 
     [Command()]
     public void ClearScrollView()
