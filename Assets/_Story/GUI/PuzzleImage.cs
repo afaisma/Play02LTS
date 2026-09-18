@@ -540,16 +540,9 @@ namespace ReadingBuddy.UI
                 return;
             }
 
-            if (!src.texture.isReadable)
-            {
-                Debug.LogWarning(
-                    $"[PuzzleImage] Texture '{src.texture.name}' is not readable — " +
-                    "showing as normal image. Enable Read/Write in the texture import settings to use puzzle mode.", this);
-                SetBaseVisible(true);
-                _slotsRoot.gameObject.SetActive(false);
-                _piecesRoot.gameObject.SetActive(false);
-                return;
-            }
+            // No readable-texture check here: the pieces are Sprite.Create sub-rectangles of the
+            // page texture, which needs no CPU-side pixels. Page images are loaded non-readable on
+            // purpose (half the memory), and a readable gate silently killed the puzzle.
 
             SetBaseVisible(false);
 

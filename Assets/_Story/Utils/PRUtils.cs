@@ -369,6 +369,18 @@ public class PRUtils
             }
             else
             {
+                // Two loads of the same url can be in flight at once (a page with several gallery
+                // images re-requests item 0 per AddGalleryImage; a page turn while the prefetch of
+                // that page is still downloading). Whoever finishes second must NOT add a second
+                // Sprite: cacheImages.Add would replace the first entry and that texture (up to
+                // 29 MB) would never be destroyed. Hand out the one already cached instead.
+                Sprite alreadyThere;
+                if (cacheImages.TryGet(url, out alreadyThere))
+                {
+                    UnityEngine.Object.Destroy(DownloadHandlerTexture.GetContent(request));
+                    onResult(alreadyThere, null);
+                    yield break;
+                }
                 Texture2D texture = DownloadHandlerTexture.GetContent(request);
                 Sprite imageSprite = Texture2DToSprite(texture);
                 AddToCacheImages(url, imageSprite);

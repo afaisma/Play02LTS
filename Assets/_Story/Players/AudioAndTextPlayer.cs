@@ -99,6 +99,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     {
         currentWordTimings = new List<WordTiming>();
         currentWordIndex = 0;
+        if (_wordTapSource != null) _wordTapVolume = _wordTapSource.volume;
         // Add a listener to the toggle to call OnToggleValueChanged when the toggle value changes
         if (nextStepToggle != null)
         {
@@ -161,6 +162,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         PreparePlayVoiceSettings();
         currentWordIndex = 0;
         StopAllCoroutines();
+        StopWordTap();
         StartCoroutine(LoadAudioAndTimings(
             !string.IsNullOrEmpty(audioURL) ? baseURL + audioURL : "",
             !string.IsNullOrEmpty(textContentURL) ? baseURL + textContentURL : "",
@@ -197,6 +199,7 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         currentWordIndex = 0;
         StopAllCoroutines();
+        StopWordTap();
 
         // Pass the content into the coroutine in case you want to handle it for static text
         StartCoroutine(LoadAudioAndTimings(
@@ -739,6 +742,23 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     [SerializeField] private AudioSource _wordTapSource; // dedicated source, separate from audioSource
     private Coroutine _wordTapStopCo;
+    private float _wordTapVolume = 1f; // the source's authored volume, captured in Start()
+
+    // StopAllCoroutines (page turn, replay, picker, read-along) kills PlayWordTapSlice, and that
+    // coroutine was the only thing that ever stopped the source at the slice end - so the whole
+    // word bank (minutes of audio) kept playing over the next page. Stop the source and the flash
+    // here, and put the volume back in case a fade was cut short.
+    private void StopWordTap()
+    {
+        _wordTapStopCo = null;
+        _wordTapHighlightCo = null;
+        if (_wordTapSource != null)
+        {
+            _wordTapSource.Stop();
+            _wordTapSource.volume = _wordTapVolume;
+        }
+        if (_wordTapHighlight != null) _wordTapHighlight.enabled = false;
+    }
 
     // ---- tap highlight (purely visual, decoupled from UpdateHighlightedText) ----
     // A brief flash behind the tapped word on its OWN overlay Image — never the TMP text/mesh, so
@@ -1036,7 +1056,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     {
         if (_wordTapSource == null) { _wordTapStopCo = null; yield break; }
 
-        float targetVolume = _wordTapSource.volume;
+        float targetVolume = _wordTapVolume;
 
         // Fade in from silence so the exact-onset seek doesn't pop.
         _wordTapSource.volume = 0f;
@@ -1294,6 +1314,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     {
         if (!ReadAlongActive) return;
         StopAllCoroutines();
+        StopWordTap();
         if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
     }
 
@@ -1302,6 +1323,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     public void StopAudio()
     {
         StopAllCoroutines();
+        StopWordTap();
         if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
     }
 
