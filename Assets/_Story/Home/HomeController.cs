@@ -76,6 +76,8 @@ public class HomeController : MonoBehaviour
     private void Start()
     {
         BuildInfo.LogOnce(); // one greppable [BUILD] line per session
+        MemProbe.InstallLowMemoryHandler(); // one Application.lowMemory subscriber per session
+        MemProbe.Log("scene " + gameObject.scene.name);
         BuildCanvas();
         StartCoroutine(BuildWhenCatalogReady());
     }

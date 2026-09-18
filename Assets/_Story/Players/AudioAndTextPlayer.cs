@@ -114,6 +114,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         }
 
         StopAllCoroutines();
+        DestroyWordBankClip();
     }
 
     // The reading-mode picker (UnifiedReadingModePicker) stages the next playback voice
@@ -610,12 +611,27 @@ public class AudioAndTextPlayer : MonoBehaviour
     }
 
 
-    private static void AddToCache(string audioURL, AudioAndTextStruct audioAndTextStruct)
+    // Instance method (not static) because the eviction has to know which clip this player's
+    // AudioSource is holding right now.
+    private void AddToCache(string audioURL, AudioAndTextStruct audioAndTextStruct)
     {
         if (CacheAudioAndTimingsStructs.Count >= MaxAudioCacheSize)
         {
-            // Remove the oldest entry
-            CacheAudioAndTimingsStructs.RemoveAt(0);
+            // Dropping the entry alone leaked the decoded AudioClip — that is native memory
+            // Unity never reclaims on its own. Destroy it with the entry, but never the clip
+            // the AudioSource is currently playing; take the next-oldest in that case.
+            AudioClip playing = audioSource != null ? audioSource.clip : null;
+            for (int i = 0; i < CacheAudioAndTimingsStructs.Count; i++)
+            {
+                AudioAndTextStruct victim = CacheAudioAndTimingsStructs[i] as AudioAndTextStruct;
+                if (victim != null && victim.audioClip != null && victim.audioClip == playing)
+                    continue;
+
+                CacheAudioAndTimingsStructs.RemoveAt(i);
+                if (victim != null && victim.audioClip != null)
+                    Destroy(victim.audioClip);
+                break;
+            }
         }
 
         CacheAudioAndTimingsStructs[audioURL] = audioAndTextStruct;
@@ -781,6 +797,22 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     // ---- word bank load (OPTIONAL, once per book / content_rev) ----
 
+    // wordbank.mp3 is up to 7.5 minutes of narration (~80 MB decoded) and is never shared —
+    // not with another book, not with the chunk cache — so on a book change it is ours to free.
+    // Nulling the field alone leaked one bank per book visited.
+    private void DestroyWordBankClip()
+    {
+        if (_wordBankClip == null) return;
+
+        if (_wordTapSource != null && _wordTapSource.clip == _wordBankClip)
+        {
+            _wordTapSource.Stop();
+            _wordTapSource.clip = null;
+        }
+        Destroy(_wordBankClip);
+        _wordBankClip = null;
+    }
+
     // Loads the per-book word bank lazily the first time a book (baseURL) / content_rev is seen.
     // Setting _wordBankLoadedRev up-front means a missing bank is fetched at most once — a 404 is
     // NOT retried on every tap. Any failure leaves _wordBankReady=false so taps stay silent and
@@ -794,7 +826,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         // Mark this book as "attempted" before the async load so a missing file isn't re-fetched
         // on every subsequent tap, and clear any previous book's bank so it can't be reused.
         _wordBankLoadedRev = key;
-        _wordBankClip = null;
+        DestroyWordBankClip();
         _wordBankMap = null;
         _wordBankReady = false;
 

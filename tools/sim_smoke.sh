@@ -86,7 +86,7 @@ run|store)
   UDID=$(udid_of "$DEV"); [ -n "$UDID" ] || finish "no-device-named-$DEV" 1
   SLUG=$(slug_of "$DEV")
   echo "device: $DEV $UDID slug=$SLUG plan=$PLANF ($(echo "$PLAN" | tr ';' '\n' | wc -l | tr -d ' ') steps)"
-  rm -f "$CAPS"/${SLUG}_*.png "$CAPS/${SLUG}_log.txt"
+  rm -f "$CAPS"/${SLUG}_*.png "$CAPS/${SLUG}_log.txt" "$CAPS/${SLUG}_mem.txt"
   xcrun simctl boot "$UDID" 2>/dev/null || true
   xcrun simctl bootstatus "$UDID" -b >/dev/null
   xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
@@ -102,6 +102,15 @@ run|store)
       stem=${req:t:r}; ack="$DOCS/$stem.ack"; [ -f "$ack" ] && continue
       sleep 0.3
       xcrun simctl io "$UDID" screenshot --type=png "$CAPS/${SLUG}_${stem}.png" >/dev/null 2>&1
+      # Memory at this capture, from the host: the Simulator app is a Mac process, so ps gives
+      # its resident size and `footprint` the physical footprint iOS's jetsam limit is applied
+      # to. Appended to <slug>_mem.txt (rss/footprint in MB) — the tier-2 memory probe.
+      APID=$(pgrep -f "${PNAME}.app/${PNAME}" | head -1)
+      if [ -n "$APID" ]; then
+        RSS=$(( $(ps -o rss= -p "$APID" 2>/dev/null | tr -d ' ') / 1024 ))
+        FP=$(footprint -p "$APID" 2>/dev/null | grep -iE "phys_footprint|^ *[0-9.]+ *[MG]B" | head -1 | tr -s ' ')
+        echo "$stem rss=${RSS}MB footprint=${FP:-n/a} (+$(( $(date +%s) - T0 )) s)" >> "$CAPS/${SLUG}_mem.txt"
+      fi
       touch "$ack"; echo "shot $stem  (+$(( $(date +%s) - T0 )) s)"
     done
     if grep -q "^done" "$DOCS/_log.txt" 2>/dev/null; then RESULT=ok; break; fi
@@ -112,6 +121,7 @@ run|store)
     sleep 0.5
   done
   [ -f "$DOCS/_log.txt" ] && cp "$DOCS/_log.txt" "$CAPS/${SLUG}_log.txt" && cat "$CAPS/${SLUG}_log.txt"
+  [ -f "$CAPS/${SLUG}_mem.txt" ] && { echo "-- memory per capture:"; cat "$CAPS/${SLUG}_mem.txt"; }
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
   echo "captures: $(ls "$CAPS" | grep -c "^${SLUG}_.*png")  elapsed $(( $(date +%s) - T0 )) s"
   [ "$RESULT" = ok ] && finish ok 0 || finish "$RESULT" 1 ;;
@@ -120,7 +130,7 @@ applog)
   DEV=${EXTRA:-"iPhone 17 Pro Max"}
   UDID=$(udid_of "$DEV"); [ -n "$UDID" ] || finish "no-device-named-$DEV" 1
   xcrun simctl spawn "$UDID" log show --last 6m --style compact --predicate "process == \"$PNAME\"" 2>/dev/null \
-    | grep -v "^Timestamp\|^Filtering" | grep -i "BUILD\]\|\[NAV\]\|\[FPS\]\|\[HUM\]\|Unity\|launch\|error\|exception" | tail -80
+    | grep -v "^Timestamp\|^Filtering" | grep -i "BUILD\]\|\[NAV\]\|\[FPS\]\|\[HUM\]\|\[MEM\]\|Unity\|launch\|error\|exception" | tail -120
   finish ok 0 ;;
 
 netlog)

@@ -163,6 +163,92 @@ namespace ReadingBuddy.Tests
             Assert.IsFalse(cache.TryGet("b", out ignored));
         }
 
+        // ---- inUseProvider: sprites something is still displaying are never destroyed ----
+
+        [Test]
+        public void InUseEntry_SurvivesEvictionAndAnOlderFreeEntryGoesInstead()
+        {
+            var cache = new SpriteLruCache(SpriteBytes * 2, 0);
+            var evicted = new List<Sprite>();
+            cache.OnEvict = s => evicted.Add(s);
+
+            Sprite a = MakeSprite();   // oldest, but on screen
+            Sprite b = MakeSprite();   // oldest free entry
+            cache.inUseProvider = () => new HashSet<Sprite> { a };
+
+            cache.Add("a", a);
+            cache.Add("b", b);
+            cache.Add("c", MakeSprite());   // one entry over budget
+
+            Sprite got;
+            Assert.IsTrue(cache.TryGet("a", out got), "an in-use sprite must not be evicted");
+            Assert.IsFalse(cache.TryGet("b", out got), "the next LRU entry should go instead");
+            Assert.AreEqual(1, evicted.Count);
+            Assert.AreSame(b, evicted[0]);
+        }
+
+        [Test]
+        public void EverythingInUse_NothingIsDestroyedAndBytesStayOverBudget()
+        {
+            var cache = new SpriteLruCache(SpriteBytes, 0);
+            int evictions = 0;
+            cache.OnEvict = s => evictions++;
+
+            var live = new HashSet<Sprite>();
+            cache.inUseProvider = () => live;
+
+            for (int i = 0; i < 3; i++)
+            {
+                Sprite s = MakeSprite();
+                live.Add(s);
+                cache.Add("k" + i, s);
+            }
+
+            Assert.AreEqual(0, evictions, "nothing evictable — the cache must destroy nothing");
+            Assert.AreEqual(3, cache.Count);
+            Assert.AreEqual(SpriteBytes * 3, cache.Bytes,
+                "staying over budget is the intended outcome when everything is on screen");
+        }
+
+        [Test]
+        public void InUseProvider_IsCalledOncePerEvictionPass()
+        {
+            var cache = new SpriteLruCache(SpriteBytes * 2, 0);
+            int calls = 0;
+            cache.inUseProvider = () => { calls++; return new HashSet<Sprite>(); };
+
+            cache.Add("a", MakeSprite());
+            cache.Add("b", MakeSprite());
+            Assert.AreEqual(0, calls, "inside budget there is no eviction pass, so no scan");
+
+            cache.Add("c", MakeSprite());   // pass 1: evicts "a"
+            Assert.AreEqual(1, calls);
+
+            cache.Add("d", MakeSprite());   // pass 2: evicts "b"
+            Assert.AreEqual(2, calls, "one scan per pass, not one per evicted entry");
+        }
+
+        [Test]
+        public void SkippedInUseEntry_BecomesMostRecentlyUsed()
+        {
+            var cache = new SpriteLruCache(SpriteBytes * 2, 0);
+
+            Sprite a = MakeSprite();
+            cache.inUseProvider = () => new HashSet<Sprite> { a };
+
+            cache.Add("a", a);
+            cache.Add("b", MakeSprite());
+            cache.Add("c", MakeSprite());   // "a" is skipped and re-queued at the tail, "b" goes
+
+            // "a" is now the newest, so the next over-budget add evicts "c", not "a".
+            cache.inUseProvider = null;
+            cache.Add("d", MakeSprite());
+
+            Sprite got;
+            Assert.IsTrue(cache.TryGet("a", out got), "a skipped entry should rank as newest");
+            Assert.IsFalse(cache.TryGet("c", out got));
+        }
+
         [Test]
         public void TryGet_MissReportsNullAndFalse()
         {

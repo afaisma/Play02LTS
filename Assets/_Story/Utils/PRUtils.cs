@@ -31,9 +31,10 @@ public class PRUtils
     // the old 100-entry cap allowed >2 GB and killed the app on iPhone
     // (EXC_RESOURCE, limit 2098 MB) partway through a picture book. The budget
     // below is decoded GPU bytes; eviction destroys the Sprite and its Texture,
-    // which is what actually returns the memory. The 4 most recently added
-    // entries are never evicted, so the current page's sprites and the
-    // prefetched next page's can't be destroyed under a live Image.
+    // which is what actually returns the memory. The 2 most recently added
+    // entries are never evicted (the current page and the prefetched next page,
+    // which is not yet displayed); anything else still on screen is protected by
+    // the in-use scan below rather than by its position in the LRU order.
     private static readonly SpriteLruCache cacheImages = MakeImageCache();
 
     private static SpriteLruCache MakeImageCache()
@@ -42,7 +43,29 @@ public class PRUtils
         // and everything current; the smaller budget leaves headroom on devices
         // whose per-app limit is well under the 2098 MB seen on modern hardware.
         long budget = (SystemInfo.systemMemorySize >= 3000 ? 160L : 96L) * 1024 * 1024;
-        var cache = new SpriteLruCache(budget, 4);
+        // protectNewest = 2: the current page and the prefetched next page (not on any Image
+        // yet). It must stay SMALL — story pages are up to 29 MB each, and every protected
+        // entry is memory the budget cannot reclaim (12 x 29 MB was a 350 MB leak on Timmy).
+        // Loaded-but-not-yet-assigned sprites are covered by the deferred trim instead: it
+        // runs at the end of the NEXT frame, after every DownloadImage of this frame has
+        // assigned its sprite, so the in-use scan sees them.
+        var cache = new SpriteLruCache(budget, 2);
+        cache.deferEviction = true; // trimmed by AddToCacheImages -> TrimImageCacheAtEndOfFrame
+        // A shelf can legitimately hold more displayed covers than the budget allows (29
+        // rows x 6 MB on the learn-to-read shelf), and an Image keeps drawing a destroyed
+        // Sprite as a grey square with nothing to reload it. So ask the scene what is
+        // actually on screen and never destroy those, even at the cost of staying over
+        // budget. Runs once per eviction pass, not once per entry.
+        cache.inUseProvider = () =>
+        {
+            var inUse = new HashSet<Sprite>();
+            foreach (Image img in UnityEngine.Object.FindObjectsByType<Image>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (img != null && img.sprite != null) inUse.Add(img.sprite);
+            }
+            return inUse;
+        };
         cache.OnEvict = s =>
         {
             if (s != null)
@@ -378,9 +401,26 @@ public class PRUtils
         yield return LoadImageSprite(url, (s, e) => { });
     }
 
+    private static bool _trimScheduled;
+
     private static void AddToCacheImages(string url, Sprite sprite)
     {
         cacheImages.Add(url, sprite);
+        if (!_trimScheduled)
+        {
+            _trimScheduled = true;
+            Runnable.Run(TrimImageCacheAtEndOfFrame());
+        }
+    }
+
+    // One end-of-frame eviction pass per frame that added something: by then every
+    // DownloadImage of this frame has assigned its Sprite, so the in-use scan is accurate.
+    private static IEnumerator TrimImageCacheAtEndOfFrame()
+    {
+        yield return null;                    // let this frame's DownloadImage coroutines resume
+        yield return new WaitForEndOfFrame(); // ...and assign, then scan what is in use
+        _trimScheduled = false;
+        cacheImages.Trim();
     }
 
     public static Color GetOppositeColor(Color color)

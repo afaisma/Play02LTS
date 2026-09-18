@@ -1060,6 +1060,18 @@ public class PRScript : MonoBehaviour
         if (_readNextSheet != null) { Destroy(_readNextSheet.gameObject); _readNextSheet = null; }
     }
 
+    // Last MemProbe.Log from ExecuteStep (realtime seconds), for the 0.5 s throttle.
+    private float _lastMemProbeAt = -1f;
+
+    // Last path segment of baseURL (".../stories/timmy/" -> "timmy"), to tag the memory lines
+    // with the book being read.
+    private string BookFolder()
+    {
+        string s = (baseURL ?? "").TrimEnd('/');
+        int i = s.LastIndexOf('/');
+        return i >= 0 ? s.Substring(i + 1) : s;
+    }
+
     public void ExecuteStep(int index)
     {
         if (index < 0 || index >= _scriptlets.Count)
@@ -1076,6 +1088,15 @@ public class PRScript : MonoBehaviour
                 ExecuteScriptlet(_mapEvents[execKey].Content);
             }
             ExecuteScriptlet(_scriptlets[nCurrentStep].Content);
+
+            // One memory line per page turn: this is the trace that shows the image and audio
+            // budgets actually holding as a book is read through. Throttled so a fast
+            // double-tap (or a GoTo that lands on the same step twice) can't spam it.
+            if (Time.realtimeSinceStartup - _lastMemProbeAt >= 0.5f)
+            {
+                _lastMemProbeAt = Time.realtimeSinceStartup;
+                MemProbe.Log("page " + (index + 1) + "/" + _scriptlets.Count + " " + BookFolder());
+            }
 
             // Warm the next page's image caches so a forward page turn doesn't wait on a
             // cold download. Forward-only, delayed, and cancellable (see PrefetchNextPage)

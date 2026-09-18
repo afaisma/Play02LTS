@@ -169,6 +169,15 @@ public class BooksScrollView : MonoBehaviour
             // depends on which shelf is showing). Re-stamp them; the cover is already loaded.
             prBook.bookViewItem.SetBookProperties(prBook);
             prBook.bookViewItem.gameObject.SetActive(true);
+            // ...unless it isn't any more: a shelf whose covers exceed the image cache budget can
+            // have had this one destroyed under it (Unity-null sprite = a grey square). Re-fetch it
+            // exactly as a fresh row would.
+            if (prBook.bookViewItem.imageBook != null && prBook.bookViewItem.imageBook.sprite == null)
+            {
+                string reloadUrl = Globals.WithContentRev(
+                    Globals.baseURL + prBook.bookImageUrl, prBook.contentRev);
+                EnqueueCoverDownload(reloadUrl, prBook.bookViewItem.imageBook);
+            }
             return;
         }
 

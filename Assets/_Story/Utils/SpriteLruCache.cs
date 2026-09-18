@@ -39,6 +39,12 @@ public class SpriteLruCache
     /// entry's Sprite. Set by the owner to release the underlying objects.</summary>
     public Action<Sprite> OnEvict;
 
+    /// <summary>Optional: the set of Sprites something is still displaying. Called ONCE at
+    /// the start of an eviction pass (never when we are inside budget); entries whose Sprite
+    /// is in the set are skipped instead of destroyed, however old they are. Null = nothing
+    /// is known to be in use, which is the pure-C# behaviour the tests exercise.</summary>
+    public Func<HashSet<Sprite>> inUseProvider;
+
     /// <summary>Approximate decoded bytes currently held.</summary>
     public long Bytes { get; private set; }
 
@@ -96,19 +102,63 @@ public class SpriteLruCache
         map[key] = order.AddLast(entry);
         Bytes += entry.Bytes;
 
+        // Evict now, unless the owner asked to defer: a freshly loaded Sprite is in the cache
+        // for a moment before its Image assigns it, so an inline pass with several loads in
+        // flight can destroy a cover that is about to be displayed. With deferEviction set, the
+        // owner calls Trim() at the end of the frame, when every assignment of that frame is done.
+        if (deferEviction) { trimPending = true; return; }
+        EvictToBudget();
+    }
+
+    /// <summary>See <see cref="deferEviction"/>.</summary>
+    public bool deferEviction;
+    private bool trimPending;
+
+    /// <summary>Run the deferred eviction pass (no-op when nothing was added since the last one).</summary>
+    public void Trim()
+    {
+        if (!trimPending) return;
+        trimPending = false;
         EvictToBudget();
     }
 
     private void EvictToBudget()
     {
-        while (Bytes > budgetBytes && Count > protectNewest)
-        {
-            LinkedListNode<Entry> lru = order.First;
-            order.RemoveFirst();
-            map.Remove(lru.Value.Key);
-            Bytes -= lru.Value.Bytes;
+        // Nothing to do inside budget — and in particular, do not pay for the in-use scan.
+        if (Bytes <= budgetBytes || Count <= protectNewest) return;
 
-            if (OnEvict != null) OnEvict(lru.Value.Sprite);
+        // One snapshot for the whole pass: the scan is the expensive part, and nothing can
+        // start or stop displaying a Sprite in the middle of this loop.
+        HashSet<Sprite> inUse = inUseProvider != null ? inUseProvider() : null;
+
+        // Walk oldest-first, considering each entry present when the pass began exactly once.
+        // The `remaining` counter is what makes that "exactly once" true: skipped entries go to
+        // the tail, so following node.Next alone would walk in circles forever once two or more
+        // entries are in use.
+        int remaining = Count;
+        LinkedListNode<Entry> node = order.First;
+        while (node != null && remaining-- > 0 && Bytes > budgetBytes && Count > protectNewest)
+        {
+            LinkedListNode<Entry> next = node.Next;
+
+            if (inUse != null && node.Value.Sprite != null && inUse.Contains(node.Value.Sprite))
+            {
+                // Still on screen. Destroying it would leave a grey square with nothing to
+                // reload it, so keep it and carry on with the next LRU entry — even if that
+                // means finishing the pass over budget.
+                order.Remove(node);
+                order.AddLast(node);
+            }
+            else
+            {
+                order.Remove(node);
+                map.Remove(node.Value.Key);
+                Bytes -= node.Value.Bytes;
+
+                if (OnEvict != null) OnEvict(node.Value.Sprite);
+            }
+
+            node = next;
         }
     }
 }
