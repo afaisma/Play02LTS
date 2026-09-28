@@ -5,10 +5,12 @@ using UnityEngine;
 //
 // ReadingBuddy's UI is authored portrait (canvases reference 1080x1920, match 0.5). On a
 // desktop the player would otherwise open as a landscape fullscreen window and smear a phone
-// layout across a monitor. This keeps the window PORTRAIT at 9:16:
+// layout across a monitor. This keeps the window PORTRAIT at 3:4 — the iPad
+// ratio, since the desktop build is a tablet-style demo and every layout is already proven at
+// 3:4 by the iPad Simulator smoke:
 //   • on start: a comfortable window that fits the monitor (height ≈ 90% of the display,
 //     capped at 1280), centred by the OS;
-//   • on user resize: after the drag settles (Debounce), snap back to 9:16, driving from
+//   • on user resize: after the drag settles (Debounce), snap back to 3:4, driving from
 //     whichever dimension the user changed most — so dragging the bottom edge scales the
 //     window, dragging the side edge scales it too, and it never ends up landscape.
 // The math lives in FitPortrait() (pure, unit-tested); the MonoBehaviour only observes
@@ -16,14 +18,14 @@ using UnityEngine;
 // ============================================================================================
 public static class WindowAspectLock
 {
-    public const float Aspect = 9f / 16f;      // width / height
+    public const float Aspect = 3f / 4f;       // width / height (tablet portrait)
     public const int MinHeight = 640;
     public const int MaxDefaultHeight = 1280;
     public const float DisplayFraction = 0.90f; // start-up window height vs. display height
     public const float Tolerance = 0.015f;      // aspect drift that triggers a snap (1.5%)
     public const float Debounce = 0.25f;        // seconds of no size change before snapping
 
-    /// <summary>Is (w,h) already portrait 9:16 within tolerance?</summary>
+    /// <summary>Is (w,h) already portrait 3:4 within tolerance?</summary>
     public static bool IsPortraitFit(int w, int h)
     {
         if (w <= 0 || h <= 0) return false;
@@ -32,7 +34,7 @@ public static class WindowAspectLock
 
     /// <summary>
     /// Given the window's current size and the size it had before the user touched it, return a
-    /// 9:16 size. Drives from the dimension that changed most (so both edge drags feel natural);
+    /// 3:4 size. Drives from the dimension that changed most (so both edge drags feel natural);
     /// clamps height to [MinHeight, maxHeight]. Always returns a valid portrait size.
     /// </summary>
     public static Vector2Int FitPortrait(int w, int h, int lastW, int lastH, int maxHeight)
@@ -45,7 +47,7 @@ public static class WindowAspectLock
         return new Vector2Int(width, height);
     }
 
-    /// <summary>Start-up size: DisplayFraction of the display height, capped, and 9:16.</summary>
+    /// <summary>Start-up size: DisplayFraction of the display height, capped, and 3:4.</summary>
     public static Vector2Int InitialSize(int displayHeight)
     {
         int height = Mathf.RoundToInt(displayHeight * DisplayFraction);

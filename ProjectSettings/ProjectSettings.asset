@@ -44,7 +44,7 @@ PlayerSettings:
     duration: 2
   m_VirtualRealitySplashScreen: {fileID: 0}
   m_HolographicTrackingLossScreen: {fileID: 0}
-  defaultScreenWidth: 720
+  defaultScreenWidth: 960
   defaultScreenHeight: 1280
   defaultScreenWidthWeb: 960
   defaultScreenHeightWeb: 600
@@ -175,10 +175,10 @@ PlayerSettings:
     Bratwurst: 0
     Standalone: 0
     VisionOS: 0
-    iPhone: 312
+    iPhone: 313
     tvOS: 0
   overrideDefaultApplicationIdentifier: 1
-  AndroidBundleVersionCode: 312
+  AndroidBundleVersionCode: 313
   AndroidMinSdkVersion: 25
   AndroidTargetSdkVersion: 34
   AndroidPreferredInstallLocation: 0
