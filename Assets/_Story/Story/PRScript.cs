@@ -1237,7 +1237,10 @@ public class PRScript : MonoBehaviour
         message.fontSizeMax = 72;
 
         // Same round house button as every other surface; it just goes Home.
-        var homeSlot = HomeButton.Create(_scriptErrorPanel.transform, 140f, Home);
+        // HomeNow, not Home: HomeButton.Create already runs the tap through TapFeedback.TapThenGo,
+        // and Home() would nest a second TapThenGo that the latch drops - the button did nothing
+        // and left the full-screen NavCover up.
+        var homeSlot = HomeButton.Create(_scriptErrorPanel.transform, 140f, HomeNow);
         var homeRect = (RectTransform)homeSlot.transform;
         homeRect.anchorMin = homeRect.anchorMax = new Vector2(0.5f, 0.28f);
         homeRect.pivot = new Vector2(0.5f, 0.5f);
@@ -1370,6 +1373,10 @@ public class PRScript : MonoBehaviour
         // null until parse() runs, and SetUIAccordingToCurrentStep() would NRE on it.
         if (_scriptlets == null) return;
         buttonController.DisableButtonsForTime(1f);
+        // Same clear a page turn does (StoryStepsUI.SetStep): the page script is about to run again,
+        // and without it every AddGalleryImage is appended a second time (picture listed twice, the
+        // gallery arrow appears, the first swipe only moves to the duplicate).
+        storyStepsUI.gallery.clearUpGalleryItems();
         ExecuteStep(nCurrentStep);
         SetUIAccordingToCurrentStep();
     }

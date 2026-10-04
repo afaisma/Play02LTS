@@ -556,6 +556,10 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         audioSource.volume = !_PlayAudio ? 0 : 1;
         audioSource.Play();
+        // No clip = the narration could not be loaded (offline, missing file). Autopage must not
+        // treat that as "finished reading": it turned such pages after one second each, straight
+        // to the end of the book.
+        bool hasNarration = audioSource.clip != null;
 
         // If we have an actual JSON timings URL, show real highlighting
         if (!string.IsNullOrEmpty(textURL))
@@ -576,7 +580,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             OnAudioFinished?.Invoke();
 
             // Conditionally trigger next step
-            if (triggerNextStep)
+            if (triggerNextStep && hasNarration)
             {
                 StartCoroutine(WaitAndTriggerNextStep());
             }
@@ -588,7 +592,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             Debug.Log("Static text – no JSON timings used.");
             OnAudioFinished?.Invoke();
 
-            if (triggerNextStep)
+            if (triggerNextStep && hasNarration)
             {
                 StartCoroutine(WaitAndTriggerNextStep());
             }
