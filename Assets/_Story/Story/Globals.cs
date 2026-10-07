@@ -204,6 +204,9 @@ public class Globals : MonoBehaviour
     void Start()
     {
         gameStartTime = Time.time; // Initialize game start time for statistics
+        // The catalog address comes from the edition. A value typed into the prefab field is a
+        // developer override (a local server); the shipped prefab keeps it empty (EditionTests).
+        if (string.IsNullOrEmpty(csvUrl)) csvUrl = Edition.Current.catalogUrl;
         CSVURL = csvUrl;
         baseURL = PRUtils.RemoveFileNameFromUrl(csvUrl);
 

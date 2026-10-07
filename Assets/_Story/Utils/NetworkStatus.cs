@@ -32,7 +32,7 @@ public class NetworkStatus : MonoBehaviour
         // HEAD avoids re-downloading the CSV body on every poll.
         string probeUrl = !string.IsNullOrEmpty(Globals.CSVURL)
             ? Globals.CSVURL
-            : "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
+            : Edition.Current.catalogUrl;
 
         using (UnityWebRequest request = UnityWebRequest.Head(probeUrl))
         {

@@ -1,0 +1,10 @@
+{
+  "id": "readingbuddy",
+  "appName": "ReadingBuddy",
+  "appIdentifiers": [
+    "com.imagiration.readingteacher",
+    "com.Imagiration.Reading-Teacher-App"
+  ],
+  "appStoreId": "6449234127",
+  "catalogUrl": "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.json"
+}

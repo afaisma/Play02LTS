@@ -111,7 +111,7 @@ public class WelcomeController : MonoBehaviour
         }
         else
         {
-            var brand = MakeText(content.transform, "Brand", "ReadingBuddy", 58, TextAlignmentOptions.Center);
+            var brand = MakeText(content.transform, "Brand", Edition.Current.appName, 58, TextAlignmentOptions.Center);
             brand.fontStyle = FontStyles.Bold; brand.color = UiTheme.Primary;
             brand.gameObject.AddComponent<LayoutElement>().preferredHeight = 72f;
 

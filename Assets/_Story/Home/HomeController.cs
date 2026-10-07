@@ -302,7 +302,7 @@ public class HomeController : MonoBehaviour
 
         // Centred: with the home icon gone from this row the left-aligned title read as if
         // something had been cut off beside it.
-        var title = MakeText(rowGO.transform, "Title", "ReadingBuddy", 64, TextAlignmentOptions.Center);
+        var title = MakeText(rowGO.transform, "Title", Edition.Current.appName, 64, TextAlignmentOptions.Center);
         title.fontStyle = FontStyles.Bold;
         title.color = UiTheme.Primary;
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;

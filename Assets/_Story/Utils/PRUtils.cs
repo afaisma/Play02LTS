@@ -555,7 +555,7 @@ public class PRUtils
             else
             {
                 // For iOS versions less than 10.3
-                Application.OpenURL("itms-apps://itunes.apple.com/app/id6449234127");
+                Application.OpenURL("itms-apps://itunes.apple.com/app/id" + Edition.Current.appStoreId);
             }
         }
 #elif UNITY_ANDROID
