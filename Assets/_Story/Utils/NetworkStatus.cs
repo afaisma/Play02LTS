@@ -10,8 +10,9 @@ public class NetworkStatus : MonoBehaviour
     [FormerlySerializedAs("_canvasNetworkStatus")] public GameObject _networkStatusDialog;
 
     // Keeps the 5-second poll from re-opening a dialog the user deliberately closed. See
-    // NetworkDialogVisibility for the rule (and its tests).
-    private readonly NetworkDialogVisibility visibility = new NetworkDialogVisibility();
+    // NetworkDialogVisibility for the rule (and its tests). Static: this prefab sits in every scene,
+    // and a dismiss must survive a scene change.
+    private static readonly NetworkDialogVisibility visibility = new NetworkDialogVisibility();
 
     private void Start()
     {

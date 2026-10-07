@@ -34,6 +34,24 @@ public static class DiskCache
 
     private static string Root => Path.Combine(Application.persistentDataPath, "cache");
 
+#if UNITY_IOS
+    // Everything here can be downloaded again, so keep it out of the iCloud backup (Apple's data
+    // storage rule). The flag on the folder covers all files inside it.
+    static DiskCache()
+    {
+        if (Application.platform != RuntimePlatform.IPhonePlayer) return;
+        try
+        {
+            Directory.CreateDirectory(Root);
+            UnityEngine.iOS.Device.SetNoBackupFlag(Root);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"DiskCache: no-backup flag failed: {e.Message}");
+        }
+    }
+#endif
+
     /// <summary>Compute the on-disk path for a URL. Creates the parent
     /// directory if needed. Does not check existence.</summary>
     public static string PathFor(string url, string subdir, string ext)

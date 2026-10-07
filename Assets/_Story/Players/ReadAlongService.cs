@@ -352,7 +352,10 @@ public class ReadAlongService : MonoBehaviour
         // the point-guard that used to clear _pendingKind here: with no straggler reaching Feed,
         // there is nothing left to commit a stale pending.)
         _session++;
-        if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
+        // Also stop a recognizer that is still starting (first start loads the model for seconds and
+        // _recognizing is not set yet) - otherwise it finishes starting and the mic stays on.
+        if (_recognizer != null && (_recognizing || _recognizer.State == SpeechProcessorState.Initializing))
+            _recognizer.StopProcessing();
     }
 
     // Mic/recognizer can't run (init or permission failure). Turn read-along OFF cleanly so the
