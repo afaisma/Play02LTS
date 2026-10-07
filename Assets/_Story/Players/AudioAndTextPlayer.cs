@@ -66,6 +66,8 @@ public class AudioAndTextPlayer : MonoBehaviour
     [SerializeField] public UnityEvent OnAutoNextStep;
     [SerializeField] public UnityEvent OnAudioFinished;
     public bool IsAutoplaying => triggerNextStep;
+    // Set while the page has a dialogue (DialogueController): Autopage must wait for the answer.
+    [System.NonSerialized] public bool holdAutoNextStep;
     private bool triggerNextStep = false;
     [SerializeField] private Toggle nextStepToggle;
 
@@ -614,6 +616,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     private IEnumerator WaitAndTriggerNextStep()
     {
         yield return new WaitForSeconds(0.5f);
+        if (holdAutoNextStep) yield break;
         OnAutoNextStep?.Invoke();
     }
 

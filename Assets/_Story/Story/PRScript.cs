@@ -111,6 +111,11 @@ public class PRScript : MonoBehaviour
     private List<PRCharacter> _characters;
     private List<ButtonStruct> buttonStructs = new List<ButtonStruct>();
     private bool _bookPuzzleEnabled = true;
+    // ---- dialogue ---- Questions on a page (Dialogue* script commands; Assets/_Story/Dialogue).
+    private DialogueController _dialogue;
+    private DialogueController Dialogue => _dialogue != null ? _dialogue : (_dialogue = DialogueController.For(this));
+    /// <summary>True when the page on screen is the book's last one.</summary>
+    public bool IsLastPage => IsOnLastStep();
     private bool _puzzleEnabledCurrentPage = true;
 
     public string baseURL = "";
@@ -205,6 +210,7 @@ public class PRScript : MonoBehaviour
         nCurrentStep = ResumeStepSeed();
 
         //AlertDialogManager.Instance.ShowAlertDialog("executing: " + _settings.Content);
+        Dialogue.BeginBook(); // Dialogue* commands in the preamble are the book's defaults
         ExecuteScriptlet(_settings.Content);
     }
 
@@ -285,6 +291,10 @@ public class PRScript : MonoBehaviour
 
     private void OnAudioPlaybackFinished()
     {
+        // A page with a dialogue: the narration ending opens the question, and the page waits for it
+        // (no Read-next sheet, no puzzle button under the dialogue).
+        Dialogue.OnNarrationFinished();
+        if (Dialogue.HoldsPage) return;
         // Last page: the narration ending IS the book ending. Hand this beat to the Read-next sheet
         // and return before the puzzle button — the two would otherwise appear at the same instant and
         // the puzzle would sit behind the sheet. Returning here is the whole puzzle suppression, so it
@@ -989,6 +999,22 @@ public class PRScript : MonoBehaviour
     }
 
     /// <summary>
+    /// Run a global [event NAME] handler with the given MiniScript globals (the dialogue events
+    /// OnAnswer / OnNoAnswer). No handler in the book = nothing happens.
+    /// </summary>
+    public void RunStoryEvent(string evName, Dictionary<string, Value> globals)
+    {
+        if (_mapEvents == null || !_mapEvents.TryGetValue((evName, ""), out Scriptlet scriptlet)) return;
+        SetupInterpreter();
+        _interpreter.Reset(scriptlet.Content);
+        _interpreter.Compile();
+        _interpreter.SetGlobalValue("nCurrentStep", new ValNumber(this.nCurrentStep));
+        _interpreter.SetGlobalValue("nSteps",       new ValNumber(this._scriptlets.Count));
+        foreach (var g in globals) _interpreter.SetGlobalValue(g.Key, g.Value);
+        _interpreter.RunUntilDone(10);
+    }
+
+    /// <summary>
     /// Read-along (Mode A) finished the current page. If the book defines an [event OnPageRead]
     /// handler, run it (e.g. reveal a creature) and stay on the page; otherwise preserve the default
     /// read-along behavior of auto-advancing to the next page. Called by ReadAlongService at lenient
@@ -996,6 +1022,7 @@ public class PRScript : MonoBehaviour
     /// </summary>
     public void OnPageReadComplete()
     {
+        if (Dialogue.OnPageRead()) return; // the page's question comes before the page turn
         if (_mapEvents != null && _mapEvents.ContainsKey(("OnPageRead", "")))
             RunStoryEvent("OnPageRead"); // reveal hook — do NOT advance
         else if (IsOnLastStep())
@@ -1081,6 +1108,7 @@ public class PRScript : MonoBehaviour
         {
             _puzzleEnabledCurrentPage = _bookPuzzleEnabled;
             storyStepsUI.gallery.ShowPuzzleButton(false);
+            Dialogue.BeginPage(); // closes the previous page's dialogue; this page describes its own
 
             var execKey = ("OnExecuteStep", "");
             if (_mapEvents.ContainsKey(execKey))
@@ -1449,6 +1477,7 @@ public class PRScript : MonoBehaviour
     public void LeftSwipe(SwipeableObject swipeable)
     {
         Debug.Log("LeftSwipe " + swipeable.name);
+        if (Dialogue.IsOpen) return; // a swipe on the picture must not turn the page under a question
         if (swipeable.name.ToLower() == "gallery")
         {
             // H8: when there are more images to the right, advance within the gallery.
@@ -1472,6 +1501,7 @@ public class PRScript : MonoBehaviour
     public void RightSwipe(SwipeableObject swipeable)
     {
         Debug.Log("RightSwipe " + swipeable.name);
+        if (Dialogue.IsOpen) return;
         if (swipeable.name.ToLower() == "gallery")
         {
             // H8: when there are more images to the left, retreat within the gallery.

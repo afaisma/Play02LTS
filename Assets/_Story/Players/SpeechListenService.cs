@@ -52,6 +52,9 @@ public class SpeechListenService : MonoBehaviour
     private Action _onHint;
     private Func<bool> _isSpeaking;      // true while the app's prompt audio is playing
     private Coroutine _armCo;            // pending "wait for prompt to finish, then listen" coroutine
+    // ---- dialogue answers (ArmPhrases) ---- null while listening for a ListenFor keyword
+    private Func<string, string> _matcher;   // recognized text -> the id it means, or null
+    private Action<string> _onHeardId;
 
     // Pre-create one warm instance; it stays inert until a script calls ListenFor → Arm().
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -89,6 +92,7 @@ public class SpeechListenService : MonoBehaviour
 
         // Reset the hint budget only on a real page/word change; same-word re-arms (the hint re-prompt
         // path) keep counting toward maxHints so re-prompts can't loop forever.
+        _matcher = null; _onHeardId = null; // ListenFor mode
         string newTarget = AudioAndTextPlayer.NormalizeWord(word);
         if (newTarget != _target) _hintCount = 0;
 
@@ -118,6 +122,35 @@ public class SpeechListenService : MonoBehaviour
         Debug.Log($"[Listen] arm '{_target}' hintAfter={hintAfterSec} (waiting for prompt to finish)");
     }
 
+    // ---- dialogue answers ---- Listen for any of several words or phrases (the choices of a
+    // dialogue). `match` turns a recognized text into the id it means (or null); the first match
+    // fires onHeard(id) ONCE, then the listener disarms, as with ListenFor. No hint and no
+    // "not understood" here: the dialogue runs its own silence clock and never says "wrong".
+    // Additive: nothing here runs unless a book shows a dialogue with spoken answers.
+    public void ArmPhrases(IList<string> phrases, Func<string, string> match, Action<string> onHeard,
+        Func<bool> isSpeaking)
+    {
+        if (_armCo != null) { StopCoroutine(_armCo); _armCo = null; }
+        _target = "";
+        _hintCount = 0;
+        _matcher = match;
+        _onHeardId = onHeard;
+        _onHeard = _onNotUnderstood = _onHint = null;
+        _hintAfterSec = float.MaxValue;
+        _isSpeaking = isSpeaking;
+
+        _armed = true;
+        _listening = false;
+        _heardFired = false;
+        _heardSpeech = false;
+        _hintFired = false;
+
+        EnsureStack();
+        _recognizer.Vocabulary = new List<string>(phrases) { "[unk]" };
+        _armCo = StartCoroutine(ArmWhenQuiet());
+        Debug.Log($"[Listen] arm {phrases.Count} phrases (waiting for prompt to finish)");
+    }
+
     // Hold the recognizer off until the prompt audio has stopped (+ a short tail/echo settle), so the
     // prompt is never fed into the recognizer's stream. Only then start listening and start the hint clock.
     private IEnumerator ArmWhenQuiet()
@@ -139,6 +172,7 @@ public class SpeechListenService : MonoBehaviour
         _armed = false;
         _listening = false;
         _onHeard = _onNotUnderstood = _onHint = null;
+        _matcher = null; _onHeardId = null;
         if (_armCo != null) { StopCoroutine(_armCo); _armCo = null; }
         if (_restartCo != null) { StopCoroutine(_restartCo); _restartCo = null; }
         if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
@@ -229,6 +263,20 @@ public class SpeechListenService : MonoBehaviour
         // Ignore anything heard while the app is speaking (covers onNotUnderstood/onHint re-prompt
         // overlap and any straggler results between StopProcessing and the prompt actually ending).
         if (_isSpeaking != null && _isSpeaking()) return;
+
+        if (_matcher != null) // dialogue answers
+        {
+            string id = string.IsNullOrEmpty(recognized) ? null : _matcher(recognized);
+            if (id != null && !_heardFired)
+            {
+                _heardFired = true;
+                Debug.Log($"[Listen] heard choice '{id}' in \"{recognized}\"");
+                var heard = _onHeardId;
+                Disarm();        // debounce: latch + stop before reacting
+                heard?.Invoke(id);
+            }
+            return;
+        }
 
         bool sawTarget = false;
         bool sawSpeech = false;

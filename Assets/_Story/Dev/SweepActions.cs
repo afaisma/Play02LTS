@@ -11,6 +11,8 @@
 //   home | learn | settings | parents | bookstore   navigation
 //   library|<filter> Library shelf (everything, fairytales, learn to read, level2, new, ...)
 //   book|<folder>    open the book whose bookUrl contains <folder> (e.g. FarmAnimalsRhymebook)
+//   bookfile|<url>   open a book that is NOT in the catalog by the address of its script
+//                    (file:///.../stories/<Folder>/<script>.txt) — for test books on this Mac
 //   mode|<Mode>      reading-mode picker tile: Storyteller | AppVoice | IRead | Pictures
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
@@ -19,7 +21,9 @@
 //   rate | ratelater the rate-app panel in / out
 //   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly)
 //   stall | stallclear                  the read-along stall hint (arrow pulse + once-ever caption)
-// Conditions for "wait|<what>": catalog | playing | idle | picker | scene=<name>
+//   A dialogue is driven with click|Choice_<name>, click|TapToAnswer, click|Skip, click|Next;
+//   prefint|dialogue_mic=0 switches its microphone off (Recognissimo is stubbed in the Simulator).
+// Conditions for "wait|<what>": catalog | playing | idle | picker | dialogue | scene=<name>
 #if UNITY_EDITOR || READINGBUDDY_DEV
 using System;
 using System.Collections;
@@ -109,6 +113,23 @@ public static class SweepActions
                 break;
             }
 
+            case "bookfile":
+            {
+                // A book outside the catalog: only the fields the reader needs. bookUrl (the
+                // progress key) is "<Folder>/<script>", as the catalog would give it.
+                var bT = T("PRBook");
+                object book = Activator.CreateInstance(bT);
+                string[] parts = arg.Split('/');
+                if (parts.Length < 2) throw new Exception("bookfile needs the full address of the script");
+                bT.GetField("bookFullUrl", Any).SetValue(book, arg);
+                bT.GetField("bookUrl", Any).SetValue(book, parts[parts.Length - 2] + "/" + parts[parts.Length - 1]);
+                bT.GetField("bookName", Any).SetValue(book, parts[parts.Length - 2]);
+                bT.GetField("ageFrom", Any).SetValue(book, 5);
+                bT.GetField("ageTo", Any).SetValue(book, 12);
+                T("Globals").GetMethod("GotoPrBook", Any).Invoke(null, new[] { book });
+                break;
+            }
+
             case "mode":
             {
                 var pT = T("UnifiedReadingModePicker");
@@ -173,6 +194,12 @@ public static class SweepActions
                 var pT = T("UnifiedReadingModePicker");
                 var p = UnityEngine.Object.FindFirstObjectByType(pT);
                 return p != null && (bool)pT.GetField("_open", Any).GetValue(p);
+            }
+            case "dialogue":
+            {
+                var dT = T("DialogueController");
+                var d = UnityEngine.Object.FindFirstObjectByType(dT);
+                return d != null && (bool)dT.GetProperty("IsOpen", Any).GetValue(d);
             }
             default: throw new Exception("unknown condition " + what);
         }
