@@ -60,7 +60,7 @@ public class DialogueController : MonoBehaviour
             // Off only because the system said no: on again as soon as the grown-up has allowed
             // the microphone in the system settings. ("Tap only" stays off.)
             if (PlayerPrefs.GetInt(MicRefusedPrefKey, 0) != 1) return false;
-            if (!Application.HasUserAuthorization(UserAuthorization.Microphone)) return false;
+            if (!DialogueMicPermission.Granted) return false;
             PlayerPrefs.SetInt(MicPrefKey, 1);
             PlayerPrefs.DeleteKey(MicRefusedPrefKey);
             PlayerPrefs.Save();
@@ -459,8 +459,7 @@ public class DialogueController : MonoBehaviour
     private IEnumerator BeginMic()
     {
         if (!MicAllowed) yield break; // the "Tap to answer" button is the way to answer
-        if (!Application.HasUserAuthorization(UserAuthorization.Microphone))
-            yield return Application.RequestUserAuthorization(UserAuthorization.Microphone);
+        if (!DialogueMicPermission.Granted) yield return DialogueMicPermission.Request();
         // The dialogue may have closed while the permission question was up.
         if (IsOpen && _flow.spec.IsSound && _flow.step == DialogueFlow.Step.Ask && !_mic.Begin())
             Debug.Log("[Dialogue] no microphone: this dialogue is answered by touch only");

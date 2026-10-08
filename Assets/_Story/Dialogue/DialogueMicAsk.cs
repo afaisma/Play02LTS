@@ -34,7 +34,7 @@ public class DialogueMicAsk : MonoBehaviour
         return false;
 #else
         return DialogueController.MicAllowed
-               && !Application.HasUserAuthorization(UserAuthorization.Microphone)
+               && !DialogueMicPermission.Granted
                && DialogueScript.WantsMicrophone(script);
 #endif
     }
@@ -49,8 +49,8 @@ public class DialogueMicAsk : MonoBehaviour
         bool refused = false;
         if (allow)
         {
-            yield return Application.RequestUserAuthorization(UserAuthorization.Microphone);
-            allow = Application.HasUserAuthorization(UserAuthorization.Microphone);
+            yield return DialogueMicPermission.Request();
+            allow = DialogueMicPermission.Granted;
             refused = !allow;
         }
         if (!allow)

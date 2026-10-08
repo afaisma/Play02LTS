@@ -28,7 +28,7 @@ public class DialogueMic : MonoBehaviour
         return false;
 #else
         if (Microphone.devices == null || Microphone.devices.Length == 0) return false;
-        if (!Application.HasUserAuthorization(UserAuthorization.Microphone)) return false;
+        if (!DialogueMicPermission.Granted) return false;
         _device = null; // default microphone
         StartRecording();
         return _clip != null;
