@@ -174,6 +174,41 @@ public class DialogueScript
         return _page;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex InputLine =
+        new System.Text.RegularExpressions.Regex(@"^\s*DialogueInput\s*\(?\s*""(\w+)""");
+
+    /// <summary>
+    /// Does this book script have a question that listens (voice, both or sound)? Read from the
+    /// text, before the book runs: DialogueInput before the first page is the book's default, on
+    /// a page it holds for that page.
+    /// </summary>
+    public static bool WantsMicrophone(string script)
+    {
+        bool bookTouch = false, pageTouch = false, preamble = true, inPage = false, pageHasQuestion = false;
+        foreach (string raw in (script ?? "").Split('\n'))
+        {
+            string line = raw.TrimStart();
+            if (line.StartsWith("////////["))
+            {
+                if (pageHasQuestion && !pageTouch) return true;
+                preamble = false;
+                inPage = line.StartsWith("////////[chunk"); // not an event block
+                pageTouch = bookTouch; pageHasQuestion = false;
+                continue;
+            }
+            if (line.StartsWith("//")) continue;
+            var m = InputLine.Match(line);
+            if (m.Success)
+            {
+                bool touch = m.Groups[1].Value.ToLowerInvariant() == "touch";
+                if (inPage) pageTouch = touch;
+                else if (preamble) bookTouch = pageTouch = touch;
+            }
+            else if (inPage && line.StartsWith("DialogueQuestion")) pageHasQuestion = true;
+        }
+        return pageHasQuestion && !pageTouch;
+    }
+
     private static bool TryParse<T>(string value, out T result) where T : struct
     {
         result = default;

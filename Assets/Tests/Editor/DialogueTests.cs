@@ -453,6 +453,47 @@ namespace ReadingBuddy.Tests
             Assert.AreEqual("no", DialogueSpeech.Match("yes no", choices));
         }
 
+        // ---- WantsMicrophone (the question for the grown-up before the book) ----
+
+        private const string PageWithQuestion = "////////[chunk_1]\nDialogueQuestion \"Is it big?\", \"\"\nDialogueShow\n";
+
+        [Test]
+        public void WantsMicrophone_BookWithoutQuestions_No()
+        {
+            Assert.IsFalse(DialogueScript.WantsMicrophone("GoTo(\"Next\")\n////////[chunk_1]\nPlayAudioAndText \"a\", \"b\"\n"));
+            Assert.IsFalse(DialogueScript.WantsMicrophone(""));
+            Assert.IsFalse(DialogueScript.WantsMicrophone(null));
+        }
+
+        [Test]
+        public void WantsMicrophone_QuestionWithTheDefaultInput_Yes()
+        {
+            Assert.IsTrue(DialogueScript.WantsMicrophone(PageWithQuestion));
+        }
+
+        [Test]
+        public void WantsMicrophone_BookSetToTouch_No()
+        {
+            Assert.IsFalse(DialogueScript.WantsMicrophone("DialogueInput \"touch\"\n" + PageWithQuestion));
+        }
+
+        [Test]
+        public void WantsMicrophone_BookSetToTouch_OnePageListens_Yes()
+        {
+            string script = "DialogueInput \"touch\"\n" + PageWithQuestion +
+                            "////////[chunk_2]\nDialogueQuestion \"Say it!\", \"\"\nDialogueInput \"sound\"\nDialogueShow\n";
+            Assert.IsTrue(DialogueScript.WantsMicrophone(script));
+        }
+
+        [Test]
+        public void WantsMicrophone_OnlyTouchPages_No()
+        {
+            string script = "////////[chunk_1]\nDialogueInput(\"touch\")\nDialogueQuestion \"Is it big?\", \"\"\n" +
+                            "////////[event OnAnswer\nScriptLog \"x\"\n" +
+                            "////////[chunk_2]\n// DialogueQuestion \"commented out\", \"\"\n";
+            Assert.IsFalse(DialogueScript.WantsMicrophone(script));
+        }
+
         // ---- SoundTrigger ("any sound counts") ----
 
         private static bool FeedFor(SoundTrigger t, float level, float seconds)

@@ -309,7 +309,18 @@ public class PRScript : MonoBehaviour
     public void Reload()
     {
         storyStepsUI.Cleanup();
-        StartCoroutine(PRUtils.DownloadFile(scriptURL, (content) => { parse(content); }));
+        StartCoroutine(PRUtils.DownloadFile(scriptURL, (content) =>
+        {
+            // A book with spoken questions first asks the grown-up about the microphone (once).
+            if (DialogueMicAsk.Needed(content)) StartCoroutine(AskMicrophoneThenParse(content));
+            else parse(content);
+        }));
+    }
+
+    private IEnumerator AskMicrophoneThenParse(string content)
+    {
+        yield return DialogueMicAsk.Ask();
+        parse(content);
     }
 
     void SetupInterpreter()
