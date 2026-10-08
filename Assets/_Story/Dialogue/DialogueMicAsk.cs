@@ -46,14 +46,20 @@ public class DialogueMicAsk : MonoBehaviour
         DialogueMicAsk screen = Show(a => { allow = a; answered = true; });
         while (!answered) yield return null;
 
+        bool refused = false;
         if (allow)
         {
             yield return Application.RequestUserAuthorization(UserAuthorization.Microphone);
             allow = Application.HasUserAuthorization(UserAuthorization.Microphone);
+            refused = !allow;
         }
         if (!allow)
         {
             PlayerPrefs.SetInt(DialogueController.MicPrefKey, 0);
+            // "Allow" was chosen but the system said no (it asks only once): remembered, so the
+            // microphone comes back by itself when it is allowed in the system settings.
+            if (refused) PlayerPrefs.SetInt(DialogueController.MicRefusedPrefKey, 1);
+            else PlayerPrefs.DeleteKey(DialogueController.MicRefusedPrefKey);
             PlayerPrefs.Save();
         }
         Debug.Log("[Dialogue] microphone question: " + (allow ? "allowed" : "tap only"));

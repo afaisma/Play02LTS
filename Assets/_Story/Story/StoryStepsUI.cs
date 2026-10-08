@@ -106,7 +106,7 @@ public class StoryStepsUI : MonoBehaviour
     }
     public void NextStep()
     {
-        prScript.NextStep();
+        prScript.NextStepByUser();
     }
     
 

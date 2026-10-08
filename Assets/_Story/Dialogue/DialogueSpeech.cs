@@ -58,13 +58,18 @@ public static class DialogueSpeech
     /// <summary>
     /// The id of the choice named in the recognized text, or null. Whole words only ("no" is not
     /// found in "know"). When several choices are named, the one said last wins (a child who says
-    /// "house... beanstalk" means the beanstalk).
+    /// "house... beanstalk" means the beanstalk); when two end at the same word, the longer one
+    /// ("hot dog", not "dog").
+    ///
+    /// final = false for a result that may still grow (the recognizer reports the words as they
+    /// come): then a phrase that is the beginning of another choice's phrase is not accepted yet
+    /// ("ice" while "ice cream" is also a choice) - the final result decides.
     /// </summary>
-    public static string Match(string recognized, IEnumerable<DialogueChoice> choices)
+    public static string Match(string recognized, IEnumerable<DialogueChoice> choices, bool final = true)
     {
         string text = " " + Normalize(recognized) + " ";
-        string best = null;
-        int bestEnd = -1;
+        string best = null, bestPhrase = null;
+        int bestEnd = -1, bestAt = -1;
         foreach (DialogueChoice c in choices)
         {
             foreach (string p in Phrases(c))
@@ -72,9 +77,18 @@ public static class DialogueSpeech
                 int at = text.LastIndexOf(" " + p + " ", System.StringComparison.Ordinal);
                 if (at < 0) continue;
                 int end = at + p.Length;
-                if (end > bestEnd) { bestEnd = end; best = c.id; }
+                if (end > bestEnd || (end == bestEnd && at < bestAt))
+                {
+                    bestEnd = end; bestAt = at; best = c.id; bestPhrase = p;
+                }
             }
         }
+        if (best == null || final) return best;
+
+        foreach (DialogueChoice c in choices)
+            if (c.id != best)
+                foreach (string p in Phrases(c))
+                    if (p.StartsWith(bestPhrase + " ", System.StringComparison.Ordinal)) return null;
         return best;
     }
 

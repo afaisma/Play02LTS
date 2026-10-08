@@ -53,7 +53,7 @@ public class SpeechListenService : MonoBehaviour
     private Func<bool> _isSpeaking;      // true while the app's prompt audio is playing
     private Coroutine _armCo;            // pending "wait for prompt to finish, then listen" coroutine
     // ---- dialogue answers (ArmPhrases) ---- null while listening for a ListenFor keyword
-    private Func<string, string> _matcher;   // recognized text -> the id it means, or null
+    private Func<string, bool, string> _matcher;   // (recognized text, is it the final result) -> the id it means, or null
     private Action<string> _onHeardId;
 
     // Pre-create one warm instance; it stays inert until a script calls ListenFor → Arm().
@@ -127,7 +127,7 @@ public class SpeechListenService : MonoBehaviour
     // fires onHeard(id) ONCE, then the listener disarms, as with ListenFor. No hint and no
     // "not understood" here: the dialogue runs its own silence clock and never says "wrong".
     // Additive: nothing here runs unless a book shows a dialogue with spoken answers.
-    public void ArmPhrases(IList<string> phrases, Func<string, string> match, Action<string> onHeard,
+    public void ArmPhrases(IList<string> phrases, Func<string, bool, string> match, Action<string> onHeard,
         Func<bool> isSpeaking)
     {
         if (_armCo != null) { StopCoroutine(_armCo); _armCo = null; }
@@ -270,7 +270,7 @@ public class SpeechListenService : MonoBehaviour
 
         if (_matcher != null) // dialogue answers
         {
-            string id = string.IsNullOrEmpty(recognized) ? null : _matcher(recognized);
+            string id = string.IsNullOrEmpty(recognized) ? null : _matcher(recognized, isFinal);
             if (id != null && !_heardFired)
             {
                 _heardFired = true;

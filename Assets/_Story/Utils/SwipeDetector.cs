@@ -58,6 +58,10 @@ public class SwipeDetector : MonoBehaviour
                         EventSystem.current.RaycastAll(tapPed, tapHits);
                         foreach (RaycastResult h in tapHits)
                         {
+                            // The question sheet lies over the page text: a tap on it (a choice,
+                            // Skip, Next page) belongs to the sheet and must not also say the word
+                            // of the page that happens to be under the finger.
+                            if (h.gameObject != null && h.gameObject.GetComponentInParent<DialogueView>() != null) break;
                             AudioAndTextPlayer player = h.gameObject != null
                                 ? h.gameObject.GetComponentInParent<AudioAndTextPlayer>() : null;
                             if (player != null) { player.TryPlayWordAtScreenPos(touch.position); break; }

@@ -307,6 +307,16 @@ public class PRScript : MonoBehaviour
         storyStepsUI.gallery.ShowPuzzleButton(true);
     }
 
+    /// <summary>
+    /// A question was skipped (or closed) and the page stays: what the end of the narration would
+    /// have brought on a page without a question - the puzzle button.
+    /// </summary>
+    public void OnDialogueClosedOnPage()
+    {
+        if (_puzzleEnabledCurrentPage && storyStepsUI != null && storyStepsUI.gallery != null)
+            storyStepsUI.gallery.ShowPuzzleButton(true);
+    }
+
     public void Reload()
     {
         storyStepsUI.Cleanup();
@@ -1034,10 +1044,11 @@ public class PRScript : MonoBehaviour
     /// </summary>
     public void OnPageReadComplete()
     {
-        if (Dialogue.OnPageRead()) return; // the page's question comes before the page turn
-        if (_mapEvents != null && _mapEvents.ContainsKey(("OnPageRead", "")))
-            RunStoryEvent("OnPageRead"); // reveal hook — do NOT advance
-        else if (IsOnLastStep())
+        bool hasHandler = _mapEvents != null && _mapEvents.ContainsKey(("OnPageRead", ""));
+        if (hasHandler) RunStoryEvent("OnPageRead"); // reveal hook — do NOT advance
+        if (Dialogue.OnPageRead(hasHandler)) return; // the page's question comes before the page turn
+        if (hasHandler) return;
+        if (IsOnLastStep())
             OnLastStepFinished();        // last page: NextStep() here is a silent no-op (read-along used
                                          // to dead-end on the final page) — offer the next BOOK instead
         else
@@ -1337,6 +1348,16 @@ public class PRScript : MonoBehaviour
         SetUIAccordingToCurrentStep();
     }
     
+    /// <summary>
+    /// The reader asks for the next page (the Next arrow, a swipe). The same as NextStep, except
+    /// in "I read it myself" on a page with a question: the question comes first.
+    /// </summary>
+    public void NextStepByUser()
+    {
+        if (Dialogue.OpenBeforePageTurn()) return;
+        NextStep();
+    }
+
     public void NextStep()
     {
         SpeechListenService.Instance?.Disarm(); // page change → drop any Mode B listener
@@ -1458,7 +1479,7 @@ public class PRScript : MonoBehaviour
     {
        if (customString.ToLower() == "Next".ToLower())
        {
-           NextStep();
+           NextStepByUser();
        }
        else if (customString.ToLower() == "Prev".ToLower())
        {
@@ -1504,12 +1525,12 @@ public class PRScript : MonoBehaviour
             }
             else
             {
-                NextStep();
+                NextStepByUser();
             }
         }
         else if (swipeable.name.ToLower() == "textforeground")
         {
-            NextStep();
+            NextStepByUser();
         }
     }
 //

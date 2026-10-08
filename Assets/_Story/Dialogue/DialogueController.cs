@@ -21,6 +21,8 @@ public class DialogueController : MonoBehaviour
     /// Off: spoken answers and "any sound" are not listened for; every dialogue is answered by touch.
     /// </summary>
     public const string MicPrefKey = "dialogue_mic";
+    /// <summary>Set when the microphone was switched off because the system refused the permission.</summary>
+    public const string MicRefusedPrefKey = "dialogue_mic_refused";
     public const string CaptionLookAgain = "Let’s look again.";
     public const string CaptionWait = "It’s OK. I can wait.";
 
@@ -41,6 +43,8 @@ public class DialogueController : MonoBehaviour
     private float _quiet;               // seconds without an answer while nothing is being spoken
     private bool _fromReadAlong;        // opened by "I read it myself" finishing the page
     private int _playsAtPageStart;      // narration requests before this page's script ran
+    private bool _narrationOver;        // this page's narration has ended (or the page has none)
+    private float _pageStartedAt;
     private Coroutine _promptCo;
 
     /// <summary>The sheet is on screen.</summary>
@@ -48,7 +52,21 @@ public class DialogueController : MonoBehaviour
     /// <summary>This page has a dialogue that is waiting or open: the page must not turn by itself.</summary>
     public bool HoldsPage => _pending != null || IsOpen;
 
-    public static bool MicAllowed => PlayerPrefs.GetInt(MicPrefKey, 1) == 1;
+    public static bool MicAllowed
+    {
+        get
+        {
+            if (PlayerPrefs.GetInt(MicPrefKey, 1) == 1) return true;
+            // Off only because the system said no: on again as soon as the grown-up has allowed
+            // the microphone in the system settings. ("Tap only" stays off.)
+            if (PlayerPrefs.GetInt(MicRefusedPrefKey, 0) != 1) return false;
+            if (!Application.HasUserAuthorization(UserAuthorization.Microphone)) return false;
+            PlayerPrefs.SetInt(MicPrefKey, 1);
+            PlayerPrefs.DeleteKey(MicRefusedPrefKey);
+            PlayerPrefs.Save();
+            return true;
+        }
+    }
 
     public static DialogueController For(PRScript pr)
     {
@@ -91,6 +109,8 @@ public class DialogueController : MonoBehaviour
         ForgetClips();
         Script.BeginPage();
         _playsAtPageStart = _pr.audioAndTextPlayer != null ? _pr.audioAndTextPlayer.playRequests : 0;
+        _narrationOver = false;
+        _pageStartedAt = Time.realtimeSinceStartup;
     }
 
     /// <summary>
@@ -99,8 +119,10 @@ public class DialogueController : MonoBehaviour
     /// </summary>
     public void EndPage()
     {
-        if (_pending == null || _pr.audioAndTextPlayer == null) return;
-        if (_pr.audioAndTextPlayer.playRequests == _playsAtPageStart) OpenPending();
+        if (_pr.audioAndTextPlayer == null) return;
+        if (_pr.audioAndTextPlayer.playRequests != _playsAtPageStart) return;
+        _narrationOver = true;
+        if (_pending != null) OpenPending();
     }
 
     /// <summary>The DialogueShow command.</summary>
@@ -116,17 +138,22 @@ public class DialogueController : MonoBehaviour
     /// <summary>The page narration ended.</summary>
     public void OnNarrationFinished()
     {
+        _narrationOver = true;
         // "I read it myself": the (muted) page audio ends long before the child has read the page.
         // The dialogue opens when the reading is complete (OnPageRead).
         if (_pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.ReadAlongActive) return;
         OpenPending();
     }
 
-    /// <summary>Read-along finished the page. True = a dialogue opened, do not turn the page.</summary>
-    public bool OnPageRead()
+    /// <summary>
+    /// Read-along finished the page. True = a dialogue is open, do not turn the page.
+    /// staysOnPage: the book has its own OnPageRead handler, which keeps the page; closing the
+    /// question then must not turn it either.
+    /// </summary>
+    public bool OnPageRead(bool staysOnPage)
     {
         OpenPending();
-        if (IsOpen) _fromReadAlong = true;
+        if (IsOpen) _fromReadAlong = !staysOnPage;
         return IsOpen;
     }
 
@@ -146,6 +173,25 @@ public class DialogueController : MonoBehaviour
         if (_view != null) _view.HideSummary();
     }
 
+    /// <summary>
+    /// The reader asks for the next page (the Next arrow or a swipe). In "I read it myself" the
+    /// question opens only when the page has been read aloud, so a child who cannot read the page
+    /// would never see it: there the question opens now, and the page turns after it.
+    /// True = a question opened; do not turn the page. (When the app reads, the Next arrow during
+    /// the narration keeps its meaning: go on, without the question.)
+    /// </summary>
+    public bool OpenBeforePageTurn()
+    {
+        if (_pending == null || _pr.audioAndTextPlayer == null || !_pr.audioAndTextPlayer.ReadAlongActive) return false;
+        if (UnifiedReadingModePicker.IsOpen) return false;
+        // As when the page has been read: read-along stops listening, the question listens now.
+        var readAlong = FindObjectOfType<ReadAlongService>();
+        if (readAlong != null) readAlong.Stop();
+        OpenPending();
+        if (IsOpen) _fromReadAlong = true; // Skip then turns the page, which is what was asked for
+        return IsOpen;
+    }
+
     // ---------------------------------------------------------------- open / close
 
     private void OpenPending()
@@ -160,7 +206,9 @@ public class DialogueController : MonoBehaviour
         _quiet = 0f;
 
         if (_view == null) _view = DialogueView.Create();
-        bool voiceOn = spec.VoiceWanted && MicAllowed;
+        // The "Say it or tap it" sign only when something can really be heard (picture choices
+        // without a word have nothing to listen for).
+        bool voiceOn = spec.VoiceWanted && MicAllowed && DialogueSpeech.Vocabulary(spec.choices).Count > 0;
         _view.Show(spec, voiceOn, PictureBottomScreenY(), ResolveUrl,
             id => Answer(id, "touch"), ReplayQuestion, Skip, NextPage, () => Answer("", "touch"));
 
@@ -197,14 +245,20 @@ public class DialogueController : MonoBehaviour
         bool last = _pr.IsLastPage;
         CloseNow();
         if (last) EndBook();
+        // A question shown with "now" can be closed while the page is still being read: then the
+        // end of the narration turns the page (or brings the puzzle button), as without a question.
+        else if (NarrationAudible) { }
         else if (turn) _pr.NextStep();
+        else _pr.OnDialogueClosedOnPage();
     }
+
+    private bool NarrationAudible => _pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsAudible;
 
     // The last page is done: the Read-next sheet. If the page is still being narrated (a dialogue
     // shown with "now"), the end of the narration brings the sheet, as on a page without a dialogue.
     private void EndBook()
     {
-        if (_pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsPlaying) return;
+        if (NarrationAudible) return;
         _pr.OnLastStepFinished();
     }
 
@@ -268,6 +322,10 @@ public class DialogueController : MonoBehaviour
                 break;
         }
 
+        // DialogueOnOther "close": the child did answer, so the star is earned (shown at the end).
+        // Before the book's handler, which may turn the page.
+        if (reaction == DialogueFlow.Reaction.Close && flow.spec.settings.reward) _stars.Earn(_pr.nCurrentStep);
+
         // The book's own reaction comes after the built-in one, while this page is still the
         // current one (so nCurrentStep in the handler is the page of the question).
         _pr.RunStoryEvent("OnAnswer", new Dictionary<string, Value>
@@ -279,12 +337,7 @@ public class DialogueController : MonoBehaviour
         });
 
         // Going on comes last. Not if the handler has already turned the page.
-        if (reaction == DialogueFlow.Reaction.Close && _flow == flow)
-        {
-            // DialogueOnOther "close": the child did answer, so the star is earned (shown at the end).
-            if (flow.spec.settings.reward) _stars.Earn(_pr.nCurrentStep);
-            CloseAndGoOn();
-        }
+        if (reaction == DialogueFlow.Reaction.Close && _flow == flow) CloseAndGoOn();
     }
 
     // The reward for an answered question: a star for every answer (also on a second try, also
@@ -398,7 +451,7 @@ public class DialogueController : MonoBehaviour
         if (words.Count == 0) return;
         _armedSpeech = true;
         SpeechListenService.Get().ArmPhrases(words,
-            text => DialogueSpeech.Match(text, open),
+            (text, final) => DialogueSpeech.Match(text, open, final),
             id => Answer(id, "voice"),
             IsSpeaking);
     }
@@ -432,7 +485,7 @@ public class DialogueController : MonoBehaviour
     private bool IsSpeaking()
     {
         if (_promptLoading || (_voice != null && _voice.isPlaying)) return true;
-        if (_pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsPlaying) return true;
+        if (NarrationAudible) return true;
         return _pr.audioPlayer != null && _pr.audioPlayer.IsPlaying;
     }
 
@@ -463,6 +516,12 @@ public class DialogueController : MonoBehaviour
     {
         if (!string.IsNullOrEmpty(reference))
         {
+            // A question shown with "now" opens while the page is still being read: its recording
+            // waits for the narration, so that two voices never speak at once. (The narration
+            // starts a moment after the page script, hence the short wait at the page start.)
+            while (!_narrationOver && (NarrationAudible || Time.realtimeSinceStartup - _pageStartedAt < 1.5f))
+                yield return null;
+
             yield return LoadClipCo(reference);
             if (_clips.TryGetValue(reference, out AudioClip clip) && clip != null)
             {

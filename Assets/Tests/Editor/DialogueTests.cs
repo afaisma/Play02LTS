@@ -454,6 +454,35 @@ namespace ReadingBuddy.Tests
             Assert.AreEqual("no", DialogueSpeech.Match("yes no", choices));
         }
 
+        [Test]
+        public void Speech_Match_SameEnd_TheLongerPhraseWins()
+        {
+            var choices = new List<DialogueChoice>
+            {
+                new DialogueChoice { id = "dog", text = "Dog" },
+                new DialogueChoice { id = "hotdog", text = "A hot dog" },
+            };
+            Assert.AreEqual("hotdog", DialogueSpeech.Match("a hot dog", choices));
+            Assert.AreEqual("dog", DialogueSpeech.Match("the dog", choices));
+            choices.Reverse();
+            Assert.AreEqual("hotdog", DialogueSpeech.Match("a hot dog", choices), "the order of the choices does not matter");
+        }
+
+        [Test]
+        public void Speech_Match_WhileStillSpeaking_AShorterBeginningWaits()
+        {
+            var choices = new List<DialogueChoice>
+            {
+                new DialogueChoice { id = "ice", text = "Ice" },
+                new DialogueChoice { id = "icecream", text = "Ice cream" },
+                new DialogueChoice { id = "milk", text = "Milk" },
+            };
+            Assert.IsNull(DialogueSpeech.Match("ice", choices, final: false), "\"ice cream\" may still be coming");
+            Assert.AreEqual("ice", DialogueSpeech.Match("ice", choices, final: true));
+            Assert.AreEqual("icecream", DialogueSpeech.Match("ice cream", choices, final: false));
+            Assert.AreEqual("milk", DialogueSpeech.Match("milk", choices, final: false), "nothing longer begins with it");
+        }
+
         // ---- Rewards ----
 
         [Test]

@@ -31,7 +31,24 @@ public class DialogueView : MonoBehaviour
 
     private const float HiddenBelow = 60f;   // the sheet's bottom corners sit below the screen edge
     private const float Offscreen = 1400f;
-    private const float MinBody = 330f;      // a Yes / No card: padding, glyph, word
+    // The height the sheet keeps for the choices, by kind (at least their layout minimums).
+    private const float IconCardMin = 330f;     // a Yes / No card: padding, glyph, word
+    private const float PictureCardOneRow = 330f, PictureCardInRows = 240f; // a picture large enough to see, and the word
+    private const float WordRowMin = 130f, WordRowGap = 34f, CardRowGap = 40f;
+    private const float SoundMin = 296f;        // the smallest microphone and the level meter
+    private const float HeaderHeight = 170f, CaptionRoom = 60f;
+
+    private static float BodyNeed(DialogueSpec spec)
+    {
+        if (spec.IsSound) return SoundMin;
+        int n = spec.choices.Count;
+        bool cards = false, pictures = false;
+        foreach (DialogueChoice c in spec.choices) { cards |= c.HasPicture || c.IsIcon; pictures |= c.HasPicture; }
+        if (!cards) return n * WordRowMin + (n - 1) * WordRowGap;
+        int rows = n > 3 ? (n + 1) / 2 : 1;
+        float card = !pictures ? IconCardMin : rows == 1 ? PictureCardOneRow : PictureCardInRows;
+        return rows * card + (rows - 1) * CardRowGap;
+    }
 
     private class ChoiceVisual
     {
@@ -46,6 +63,7 @@ public class DialogueView : MonoBehaviour
     private RectTransform _sheet, _content, _body, _footer;
     private RectTransform _fx, _starPill, _summary;   // rewards: confetti layer, stars on the sheet, end of book
     private CanvasGroup _sheetGroup;
+    private LayoutElement _headerSize;
     private TMP_Text _caption, _question;
     private Button _speakerButton;
     private GameObject _speakerIdle, _speakerPlaying, _checkBadge;
@@ -103,10 +121,13 @@ public class DialogueView : MonoBehaviour
         float side = Mathf.Max(60f, (canvasW - 1000f) * 0.5f);
         float bottom = SafeAreaInsets.ForRect(_sheet).Bottom + 36f + HiddenBelow;
         // Around the choices: the top padding (56), the header (170), the footer (130) and the two
-        // gaps of 40. The choices themselves need MinBody, or the footer is pushed off the screen
-        // (a tablet in portrait: the picture is tall, so the sheet under it would be too short).
+        // gaps of 40. The choices themselves need their room, or the footer is pushed off the
+        // screen (a tablet in portrait: the picture is tall, so the sheet under it would be too
+        // short; or a question with four or five answers). The sheet then covers more of the
+        // picture, but never the top of the screen.
         float around = bottom + 56f + 170f + 130f + 80f - HiddenBelow;
-        height = Mathf.Max(height, around + MinBody);
+        height = Mathf.Max(height, around + BodyNeed(spec) + CaptionRoom);
+        height = Mathf.Min(height, canvasH - SafeAreaInsets.ForRect(_sheet).Top - 140f);
         _sheet.sizeDelta = new Vector2(0f, height + HiddenBelow);
         _content.offsetMin = new Vector2(side, bottom);
         _content.offsetMax = new Vector2(-side, -56f);
@@ -165,6 +186,7 @@ public class DialogueView : MonoBehaviour
         _question.text = praise;
         _speakerButton.gameObject.SetActive(false);
         _checkBadge.SetActive(true);
+        if (_levelBars.Count > 0) SetLevel(0f); // the sound meter rests; it would stay lit at the answer's level
         foreach (var kv in _choices)
         {
             ChoiceVisual v = kv.Value;
@@ -248,8 +270,12 @@ public class DialogueView : MonoBehaviour
 
     public void SetCaption(string text)
     {
+        bool shown = !string.IsNullOrEmpty(text);
         _caption.text = text ?? "";
-        _caption.gameObject.SetActive(!string.IsNullOrEmpty(text));
+        _caption.gameObject.SetActive(shown);
+        // The caption gets its own line above the question (the sheet keeps room for it), so a
+        // long question is not pressed into it.
+        _headerSize.preferredHeight = _headerSize.minHeight = HeaderHeight + (shown ? CaptionRoom : 0f);
     }
 
     /// <summary>The speaker button is filled while the question (or praise) is being spoken.</summary>
@@ -324,8 +350,8 @@ public class DialogueView : MonoBehaviour
         hlg.childAlignment = TextAnchor.MiddleLeft;
         hlg.childControlWidth = true; hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-        var rle = row.gameObject.AddComponent<LayoutElement>();
-        rle.preferredHeight = 170f; rle.minHeight = 170f;
+        _headerSize = row.gameObject.AddComponent<LayoutElement>();
+        _headerSize.preferredHeight = HeaderHeight; _headerSize.minHeight = HeaderHeight;
 
         // Speaker: hear the question again.
         var sp = new GameObject("Speaker", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -482,7 +508,7 @@ public class DialogueView : MonoBehaviour
             if (choice.IconName == "cross") UiGlyphs.BuildClose(holder, ink, 170f);
             else BuildCheck(holder, ink, 190f);
         }
-        else
+        else if (choice.HasPicture) // a word-only choice among pictures is just its word
         {
             var pic = new GameObject("Picture", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             pic.transform.SetParent(v.go.transform, false);

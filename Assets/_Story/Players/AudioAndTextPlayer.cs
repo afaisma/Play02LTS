@@ -82,6 +82,8 @@ public class AudioAndTextPlayer : MonoBehaviour
     // True while a pre-generated prompt/narration clip is playing. Used by Mode B
     // (SpeechListenService) to gate the recognizer so the mic never hears the app's own prompt.
     public bool IsPlaying => audioSource != null && audioSource.isPlaying;
+    /// <summary>The narration is playing and can be heard (not "App is silent", where it runs muted).</summary>
+    public bool IsAudible => IsPlaying && !audioSource.mute && audioSource.volume > 0.001f;
 
     public string hilightTextColor = "FF55FF";
     public string hilightBackColor = "00FF0044";
