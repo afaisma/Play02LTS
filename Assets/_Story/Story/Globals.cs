@@ -759,6 +759,16 @@ public class Globals : MonoBehaviour
     // are ignored everywhere, which is what keeps the NEXT schema change painless.
     private const int KnownSchemaVersion = 1;
 
+    /// <summary>
+    /// The book-script API level of this app: which script commands it knows. 1 = everything
+    /// before the Dialogue* commands; 2 = Dialogue* (questions on a page). A catalog entry may
+    /// say "min_api": N (written by catalog_gen.py from the commands the book uses); a book above
+    /// this app's level is left out of the catalog, because an unknown command stops a book.
+    /// Raise it, and add the commands to API_LEVEL_COMMANDS in catalog_gen.py, whenever the
+    /// app gains script commands.
+    /// </summary>
+    public const int ScriptApiLevel = 2;
+
     // Parse the generated stories.json catalog into the same List<PRBook> ParseCSV
     // produces, so the library UI, filters and PlayerPrefs progress keys need zero
     // changes. Uses the vendored SimpleJSON (already used by AudioAndTextPlayer) rather
@@ -786,6 +796,7 @@ public class Globals : MonoBehaviour
         JSONNode booksNode = root["books"];
         int counter = 0;
         int badBookCount = 0;
+        int tooNewCount = 0;
         for (int i = 0; i < booksNode.Count; i++)
         {
             JSONNode b = booksNode[i];
@@ -796,6 +807,9 @@ public class Globals : MonoBehaviour
             // stays contiguous regardless of how many entries were skipped.
             try
             {
+                // A book that needs script commands this app does not have is not shown at all.
+                if (b["min_api"].AsInt > ScriptApiLevel) { tooNewCount++; continue; }
+
                 // bookUrl = the "script" string VERBATIM. It keys PlayerPrefs progress
                 // ({bookUrl}_page / {bookUrl}_done); any drift silently resets a child's
                 // progress for that book — the critical invariant of this migration.
@@ -858,6 +872,8 @@ public class Globals : MonoBehaviour
             }
         }
 
+        if (tooNewCount > 0)
+            Debug.Log($"ParseJSON: {tooNewCount} book(s) need a newer app (min_api above {ScriptApiLevel}) and are not shown.");
         if (badBookCount > 0)
         {
             Debug.LogWarning($"ParseJSON: loaded {parsedPRBooks.Count} books, skipped {badBookCount} malformed entry(ies).");

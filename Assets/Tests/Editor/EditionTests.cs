@@ -122,7 +122,7 @@ namespace ReadingBuddy.Tests
                 Assert.IsNotEmpty(e.appName, e.id + ": appName");
                 Assert.IsNotEmpty(e.appIdentifiers, e.id + ": appIdentifiers");
                 StringAssert.StartsWith("https://", e.catalogUrl, e.id + ": catalogUrl");
-                StringAssert.EndsWith("/stories.json", e.catalogUrl, e.id + ": catalogUrl");
+                StringAssert.IsMatch(@"/stories(\.[a-z0-9]+)?\.json$", e.catalogUrl, e.id + ": catalogUrl");
             }
         }
 
@@ -137,6 +137,23 @@ namespace ReadingBuddy.Tests
                 foreach (string identifier in e.appIdentifiers)
                     Assert.IsTrue(identifiers.Add(identifier.ToLowerInvariant()), "app identifier used twice: " + identifier);
             }
+        }
+
+        // The test edition: its own identifier and its own catalog, so that a test build can
+        // never show production users a test book, and never be taken for the store app.
+        [Test]
+        public void Shipped_TestEdition_HasItsOwnIdentifierAndCatalog()
+        {
+            List<Edition> all = ShippedEditions();
+            Edition prod = all.Find(e => e.id == Edition.DefaultId);
+            Edition test = all.Find(e => e.id == "readingbuddy-test");
+            Assert.IsNotNull(test, "Resources/Editions/readingbuddy-test.json");
+            Assert.AreNotEqual(prod.catalogUrl, test.catalogUrl);
+            Assert.AreNotEqual(prod.appName, test.appName);
+            Assert.AreSame(test, Edition.Pick(all, "com.imagiration.readingteacher.test"));
+            Assert.AreSame(prod, Edition.Pick(all, "com.imagiration.readingteacher"));
+            // Both catalogs sit in the same folder: the book folders are shared.
+            Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(test.catalogUrl));
         }
 
         // The project settings decide which product a build is. They must name an edition directly

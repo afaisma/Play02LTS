@@ -168,6 +168,28 @@ namespace ReadingBuddy.Tests
             Assert.AreEqual(quirky + "_page", Globals.Prefs_BookUrl_To_Page_Key(books[0].bookUrl));
         }
 
+        // --- A book that needs a newer app (min_api) is not shown ---
+
+        [Test]
+        public void BookAboveThisAppsScriptApiLevel_IsLeftOut()
+        {
+            string Book(string id, string extra) =>
+                @"{ ""name"": ""B" + id + @""", ""author"": ""A"", ""cover"": ""c.jpg"", ""script"": """ + id +
+                @"/script.txt"", ""age_from"": 3, ""age_to"": 6, ""genres"": [ ""family"" ], ""notes_for_parents"": ""n"", ""id"": """ +
+                id + @"""" + extra + " }";
+            string json = @"{ ""schema_version"": 1, ""books"": [ " +
+                          Book("a", "") + ", " +
+                          Book("b", @", ""min_api"": " + Globals.ScriptApiLevel) + ", " +
+                          Book("good", @", ""min_api"": " + (Globals.ScriptApiLevel + 1)) + " ] }";
+
+            List<PRBook> books = Globals.ParseJSON(json);
+
+            Assert.AreEqual(2, books.Count, "no min_api and min_api at this app's level are shown");
+            Assert.AreEqual("a/script.txt", books[0].bookUrl);
+            Assert.AreEqual("b/script.txt", books[1].bookUrl);
+            Assert.GreaterOrEqual(Globals.ScriptApiLevel, 2, "this app knows the Dialogue* commands");
+        }
+
         // --- Malformed book entry skipped, remainder loads (C2 parity) ---
 
         [Test]
