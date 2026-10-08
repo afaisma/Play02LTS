@@ -34,6 +34,10 @@ public class DialogueSettings
     public DialogueOnSilence onSilence = DialogueOnSilence.Repeat;
     public float silenceSeconds = 8f;
     public bool skip = true;
+    /// <summary>Answering this question earns a star (with the chime). False = DialogueReward "none".</summary>
+    public bool reward = true;
+    /// <summary>A sound of the book that replaces the chime ("" = the chime).</summary>
+    public string rewardSound = "";
 
     public DialogueSettings Clone() => (DialogueSettings)MemberwiseClone();
 }
@@ -162,6 +166,18 @@ public class DialogueScript
 
     public void Skip(bool show) => Settings.skip = show;
 
+    public void Reward(string value, string sound)
+    {
+        value = (value ?? "").Trim().ToLowerInvariant();
+        if (value != "star" && value != "none")
+        {
+            Warn("DialogueReward: unknown value \"" + value + "\" (star, none)");
+            return;
+        }
+        Settings.reward = value == "star";
+        Settings.rewardSound = (sound ?? "").Trim();
+    }
+
     /// <summary>
     /// The page's dialogue, ready to show; null (with a warning) when it is incomplete. The page
     /// keeps collecting afterwards, so a later DialogueShow on the same page gets the same one.
@@ -207,6 +223,32 @@ public class DialogueScript
             else if (inPage && line.StartsWith("DialogueQuestion")) pageHasQuestion = true;
         }
         return pageHasQuestion && !pageTouch;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex QuestionLine =
+        new System.Text.RegularExpressions.Regex(@"^\s*DialogueQuestion\b",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex RewardLine =
+        new System.Text.RegularExpressions.Regex(@"^\s*DialogueReward\s*\(?\s*""\s*(star|none)\s*""",
+            System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Will this page's question earn a star? Read from the text, before the book runs, so the
+    /// row of stars can show how many questions the book has. preamble = the lines before the
+    /// first page (the book's defaults).
+    /// </summary>
+    public static bool PageEarnsStar(string preamble, string page)
+    {
+        if (!QuestionLine.IsMatch(page ?? "")) return false;
+        return RewardOn(page, RewardOn(preamble, true));
+    }
+
+    // The last DialogueReward in the text decides; without one (or with only unknown values,
+    // which the running book ignores too), the fallback.
+    private static bool RewardOn(string text, bool fallback)
+    {
+        var matches = RewardLine.Matches(text ?? "");
+        return matches.Count == 0 ? fallback : matches[matches.Count - 1].Groups[1].Value.ToLowerInvariant() != "none";
     }
 
     private static bool TryParse<T>(string value, out T result) where T : struct

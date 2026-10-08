@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
 
 // EditMode tests for the dialogue rules (Assets/_Story/Dialogue): the command collector, the
 // answer / silence rules, spoken-answer matching and the "any sound" trigger. No scene needed.
@@ -451,6 +452,113 @@ namespace ReadingBuddy.Tests
             var choices = new[] { Choice("yes", "Yes"), Choice("no", "No") };
             Assert.AreEqual("yes", DialogueSpeech.Match("no yes", choices));
             Assert.AreEqual("no", DialogueSpeech.Match("yes no", choices));
+        }
+
+        // ---- Rewards ----
+
+        [Test]
+        public void Reward_DefaultIsAStar_BookAndPageCanChangeIt()
+        {
+            var s = new DialogueScript();
+            s.BeginBook();
+            s.Reward("none", "");
+            s.BeginPage();
+            s.Question("Q1?", ""); s.Choice("a", "A", "", "", -1, -1, -1);
+            Assert.IsFalse(s.Take().settings.reward, "the book's default");
+            s.BeginPage();
+            s.Question("Q2?", ""); s.Choice("a", "A", "", "", -1, -1, -1);
+            s.Reward("star", " gen//moo ");
+            DialogueSpec d = s.Take();
+            Assert.IsTrue(d.settings.reward);
+            Assert.AreEqual("gen//moo", d.settings.rewardSound);
+            s.BeginPage();
+            s.Question("Q3?", ""); s.Choice("a", "A", "", "", -1, -1, -1);
+            Assert.IsFalse(s.Take().settings.reward, "a page's setting does not leak into the next page");
+
+            Assert.IsTrue(new DialogueSettings().reward, "without any command a question earns a star");
+        }
+
+        [Test]
+        public void Reward_UnknownValue_WarnsAndChangesNothing()
+        {
+            var s = new DialogueScript();
+            var warnings = new List<string>();
+            s.Warn = warnings.Add;
+            s.BeginBook();
+            s.Reward("fireworks", "");
+            s.BeginPage();
+            s.Question("Q?", ""); s.Choice("a", "A", "", "", -1, -1, -1);
+            Assert.IsTrue(s.Take().settings.reward);
+            Assert.AreEqual(1, warnings.Count);
+        }
+
+        [Test]
+        public void PageEarnsStar_ReadFromTheScriptText()
+        {
+            const string page = "////////[chunk_1]\nDialogueQuestion \"Is it big?\", \"\"\nDialogueShow\n";
+            Assert.IsTrue(DialogueScript.PageEarnsStar("", page));
+            Assert.IsTrue(DialogueScript.PageEarnsStar(null, page));
+            Assert.IsFalse(DialogueScript.PageEarnsStar("", "////////[chunk_1]\nPlayAudioAndText \"a\", \"b\"\n"), "no question");
+            Assert.IsFalse(DialogueScript.PageEarnsStar("", "////////[chunk_1]\n// DialogueQuestion \"x\", \"\"\n"), "commented out");
+            Assert.IsFalse(DialogueScript.PageEarnsStar("DialogueReward \"none\"\n", page), "the book's default");
+            Assert.IsTrue(DialogueScript.PageEarnsStar("DialogueReward \"none\"\n", page + "DialogueReward \"star\", \"gen//moo\"\n"));
+            Assert.IsFalse(DialogueScript.PageEarnsStar("", page + "DialogueReward(\"none\")\n"));
+            Assert.IsFalse(DialogueScript.PageEarnsStar("DialogueReward \"None\"\n", page + "DialogueReward \"fireworks\"\n"),
+                "an unknown value is ignored, as in the running book");
+            Assert.IsFalse(DialogueScript.PageEarnsStar("", page.Replace("\n", "\r\n") + "DialogueReward \"none\"\r\n"), "Windows line ends");
+        }
+
+        [Test]
+        public void StarRow_EveryAnswerEarns_SkippedStaysEmpty()
+        {
+            var row = new StarRow();
+            row.Reset(new[] { 9, 2, 4 });
+            Assert.AreEqual(3, row.Total);
+            Assert.AreEqual(1, row.Earn(4), "the place in page order");
+            Assert.AreEqual(1, row.Earn(4), "answering the same page again changes nothing");
+            Assert.AreEqual(2, row.Earn(9));
+            Assert.AreEqual(2, row.Earned);
+            CollectionAssert.AreEqual(new[] { false, true, true }, row.States(), "page 2 was skipped");
+        }
+
+        [Test]
+        public void StarRow_AQuestionTheTextDidNotShow_GetsAPlace()
+        {
+            var row = new StarRow();
+            row.Reset(new[] { 2, 9 });
+            Assert.AreEqual(1, row.Earn(5));
+            CollectionAssert.AreEqual(new[] { false, true, false }, row.States());
+            row.Reset(null);
+            Assert.AreEqual(0, row.Total);
+            Assert.AreEqual(0, row.Earned);
+        }
+
+        [Test]
+        public void Rewards_LevelAndSummaryText()
+        {
+            Assert.AreEqual(RewardLevel.Calm, DialogueRewards.ParseLevel(""));
+            Assert.AreEqual(RewardLevel.Calm, DialogueRewards.ParseLevel(null));
+            Assert.AreEqual(RewardLevel.Calm, DialogueRewards.ParseLevel("7"));
+            Assert.AreEqual(RewardLevel.Lively, DialogueRewards.ParseLevel("lively"));
+            Assert.AreEqual(RewardLevel.Quiet, DialogueRewards.ParseLevel(" Quiet "));
+            Assert.AreEqual("You answered 1 question!", DialogueRewards.SummaryText(1));
+            Assert.AreEqual("You answered 7 questions!", DialogueRewards.SummaryText(7));
+        }
+
+        [Test]
+        public void Rewards_ChimesAreShortAndNotLoud()
+        {
+            foreach (bool lively in new[] { false, true })
+            {
+                AudioClip clip = DialogueRewards.Chime(lively);
+                Assert.Less(clip.length, 1.6f);
+                var data = new float[clip.samples];
+                clip.GetData(data, 0);
+                float peak = 0f;
+                foreach (float v in data) peak = Mathf.Max(peak, Mathf.Abs(v));
+                Assert.Greater(peak, 0.05f);
+                Assert.Less(peak, 0.7f, "never close to full volume");
+            }
         }
 
         // ---- WantsMicrophone (the question for the grown-up before the book) ----

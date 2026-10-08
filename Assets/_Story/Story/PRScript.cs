@@ -210,7 +210,8 @@ public class PRScript : MonoBehaviour
         nCurrentStep = ResumeStepSeed();
 
         //AlertDialogManager.Instance.ShowAlertDialog("executing: " + _settings.Content);
-        Dialogue.BeginBook(); // Dialogue* commands in the preamble are the book's defaults
+        // Dialogue* commands in the preamble are the book's defaults.
+        Dialogue.BeginBook(_settings.Content, _scriptlets.ConvertAll(s => s.Content));
         ExecuteScriptlet(_settings.Content);
     }
 
@@ -1085,6 +1086,7 @@ public class PRScript : MonoBehaviour
         // later legitimate finish can still offer the next book.
         if (_scriptErrorPanel != null) { _readNextFired = false; yield break; }
 
+        Dialogue.ShowSummary(); // a book with questions: the stars the child collected
         _readNextSheet = ReadNextSheet.Create(
             this,
             storyStepsUI != null ? storyStepsUI.canvasMain : null,
@@ -1096,6 +1098,7 @@ public class PRScript : MonoBehaviour
     {
         if (_readNextCo != null) { StopCoroutine(_readNextCo); _readNextCo = null; }
         if (_readNextSheet != null) { Destroy(_readNextSheet.gameObject); _readNextSheet = null; }
+        Dialogue.HideSummary(); // the stars of the finished book go with the sheet
     }
 
     // Last MemProbe.Log from ExecuteStep (realtime seconds), for the 0.5 s throttle.

@@ -13,9 +13,11 @@ using Miniscript;
 ///   DialogueOnOther "retry|accept|close"    after another answer
 ///   DialogueOnSilence seconds, "repeat|hint|close"
 ///   DialogueSkip 1|0                        the Skip button
+///   DialogueReward "star|none" [, sound]    answering earns a star (default) or nothing; sound =
+///                                           a recording of the book played instead of the chime
 ///   DialogueShow ["now"]                    open it (default: after the page narration)
 ///
-/// The four settings commands set the whole book's defaults when they run before the first page,
+/// The five settings commands set the whole book's defaults when they run before the first page,
 /// and one dialogue's when they run inside a page. Events: [event OnAnswer] (answer, isCorrect,
 /// how, attempt) and [event OnNoAnswer] run in addition to the built-in reaction.
 ///
@@ -101,6 +103,15 @@ public static class DialogueCommands
                 Current?.Script.OnSilence(0f, first.ToString());
             else
                 Current?.Script.OnSilence(Num(context, "seconds"), Str(context, "value"));
+            return new Intrinsic.Result(ValNumber.one);
+        };
+
+        f = Intrinsic.Create("DialogueReward");
+        f.AddParam("value", "star");
+        f.AddParam("sound", "");
+        f.code = (context, partialResult) =>
+        {
+            Current?.Script.Reward(Str(context, "value"), Str(context, "sound"));
             return new Intrinsic.Result(ValNumber.one);
         };
 

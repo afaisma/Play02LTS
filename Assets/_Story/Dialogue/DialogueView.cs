@@ -44,6 +44,7 @@ public class DialogueView : MonoBehaviour
 
     private Canvas _canvas;
     private RectTransform _sheet, _content, _body, _footer;
+    private RectTransform _fx, _starPill, _summary;   // rewards: confetti layer, stars on the sheet, end of book
     private CanvasGroup _sheetGroup;
     private TMP_Text _caption, _question;
     private Button _speakerButton;
@@ -87,6 +88,10 @@ public class DialogueView : MonoBehaviour
     {
         _spec = spec;
         _onChoice = onChoice; _onReplay = onReplay; _onSkip = onSkip; _onNext = onNext; _onTap = onTap;
+        ClearStarPill();
+        // First of all: a sheet that is still sliding away is not interactable, and a button
+        // built under it would start in its greyed "disabled" look and keep it.
+        _sheetGroup.interactable = true;
 
         Canvas.ForceUpdateCanvases();
         var canvasRect = (RectTransform)_canvas.transform;
@@ -118,7 +123,6 @@ public class DialogueView : MonoBehaviour
         BuildFooter(spec, voiceOn, praise: false, nextLabel: null);
 
         _sheet.gameObject.SetActive(true);
-        _sheetGroup.interactable = true;
         _sheet.DOKill();
         _sheet.anchoredPosition = new Vector2(0f, -Offscreen);
         _sheet.DOAnchorPosY(-HiddenBelow, 0.3f).SetEase(Ease.OutCubic).SetUpdate(true);
@@ -174,6 +178,72 @@ public class DialogueView : MonoBehaviour
             v.outline.effectDistance = new Vector2(9f, 9f);
         }
         BuildFooter(flow.spec, voiceOn: false, praise: true, nextLabel: nextLabel);
+    }
+
+    /// <summary>
+    /// The reward after the answer (call after ShowPraise): the row of stars on the top edge of
+    /// the sheet with the new star (and a caption such as "I heard you!"), a small move of the
+    /// chosen card and, in the lively level, confetti.
+    /// </summary>
+    public void ShowReward(IList<bool> stars, int newIndex, bool glow, string caption, bool confetti)
+    {
+        ClearStarPill();
+        _starPill = DialogueRewardView.BuildStarPill(_sheet, stars, newIndex, glow, caption,
+            ((RectTransform)_canvas.transform).rect.width - 120f);
+        _starPill.anchorMin = _starPill.anchorMax = new Vector2(0.5f, 1f);
+        _starPill.pivot = new Vector2(0.5f, 0.5f);
+        _starPill.anchoredPosition = Vector2.zero; // half above the sheet's edge: takes no room inside
+
+        foreach (var kv in _choices)
+            if (kv.Value.go != null && kv.Value.go.activeSelf)
+                kv.Value.go.transform.DOPunchScale(Vector3.one * 0.05f, 0.5f, 1, 0f).SetUpdate(true);
+
+        if (confetti) DialogueRewardView.Confetti(_fx, 22);
+    }
+
+    /// <summary>The end of the book: the collected stars at the top of the screen, with slow confetti.</summary>
+    public void ShowSummary(string text, IList<bool> stars)
+    {
+        RemoveSummary(); // not the confetti: pieces of the last answer may still be falling
+        float width = ((RectTransform)_canvas.transform).rect.width;
+        _summary = DialogueRewardView.BuildSummary(_fx, text, stars, Mathf.Min(width - 80f, 980f));
+        _summary.anchorMin = _summary.anchorMax = new Vector2(0.5f, 1f);
+        _summary.pivot = new Vector2(0.5f, 1f);
+        _summary.anchoredPosition = new Vector2(0f, -(SafeAreaInsets.ForRect(_fx).Top + 36f));
+        _summary.localScale = Vector3.one * 0.8f;
+        _summary.DOScale(1f, 0.4f).SetEase(Ease.OutBack).SetUpdate(true);
+        RectTransform summary = _summary;
+        summary.GetComponent<CanvasGroup>().DOFade(0f, 0.6f).SetDelay(9f).SetUpdate(true)
+            .OnComplete(() => { if (summary != null) Destroy(summary.gameObject); });
+        DialogueRewardView.Confetti(_fx, 36);
+    }
+
+    public void HideSummary()
+    {
+        if (_fx != null) DialogueRewardView.ClearConfetti(_fx);
+        RemoveSummary();
+    }
+
+    private void RemoveSummary()
+    {
+        if (_summary == null) return;
+        _summary.DOKill();
+        _summary.GetComponent<CanvasGroup>().DOKill();
+        Destroy(_summary.gameObject);
+        _summary = null;
+    }
+
+    private void ClearStarPill()
+    {
+        if (_starPill == null) return;
+        foreach (Transform t in _starPill.GetComponentsInChildren<Transform>(true))
+        {
+            t.DOKill();
+            var img = t.GetComponent<Image>();
+            if (img != null) img.DOKill();
+        }
+        Destroy(_starPill.gameObject);
+        _starPill = null;
     }
 
     public void SetCaption(string text)
@@ -240,6 +310,10 @@ public class DialogueView : MonoBehaviour
         fle.preferredHeight = 130f; fle.minHeight = 130f;
 
         _sheet.gameObject.SetActive(false);
+
+        // Rewards are drawn over everything else on this canvas and never take a tap.
+        _fx = NewRect("Rewards", transform);
+        DialogChrome.Stretch(_fx);
     }
 
     private void BuildHeader(Transform parent)
@@ -623,6 +697,8 @@ public class DialogueView : MonoBehaviour
     private void OnDestroy()
     {
         KillChoiceTweens();
+        ClearStarPill();
+        HideSummary();
         if (_sheet != null) _sheet.DOKill();
     }
 

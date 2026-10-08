@@ -25,6 +25,7 @@ public class DialogueController : MonoBehaviour
     public const string CaptionWait = "It’s OK. I can wait.";
 
     public readonly DialogueScript Script = new DialogueScript();
+    private readonly StarRow _stars = new StarRow();
 
     private PRScript _pr;
     private DialogueView _view;
@@ -64,11 +65,23 @@ public class DialogueController : MonoBehaviour
 
     // ---------------------------------------------------------------- called by PRScript
 
-    public void BeginBook()
+    /// <param name="preamble">The script lines before the first page.</param>
+    /// <param name="pages">The script text of every page, in order.</param>
+    public void BeginBook(string preamble, IList<string> pages)
     {
         DialogueCommands.Current = this;
         CloseNow();
         Script.BeginBook();
+
+        // One place in the row of stars for every question that earns one - from the page the
+        // book opens at (a book resumed at page 6 does not show the earlier questions as missed).
+        var starPages = new List<int>();
+        for (int i = Mathf.Max(0, _pr.nCurrentStep + 1); i < pages.Count; i++)
+            if (DialogueScript.PageEarnsStar(preamble, pages[i])) starPages.Add(i);
+        _stars.Reset(starPages);
+        HideSummary();
+        // Made now, not at the first answer (building it there could cost a frame of the animation).
+        if (starPages.Count > 0) DialogueRewards.Chime(DialogueRewards.Level == RewardLevel.Lively);
     }
 
     public void BeginPage()
@@ -117,6 +130,22 @@ public class DialogueController : MonoBehaviour
         return IsOpen;
     }
 
+    /// <summary>
+    /// The book has ended (the Read-next sheet is about to come): show the collected stars.
+    /// Nothing for a book without questions, or when none was answered.
+    /// </summary>
+    public void ShowSummary()
+    {
+        if (_view == null || _stars.Earned == 0) return;
+        _view.ShowSummary(DialogueRewards.SummaryText(_stars.Earned), _stars.States());
+    }
+
+    /// <summary>The page changed (or the book is opened again): the summary goes.</summary>
+    public void HideSummary()
+    {
+        if (_view != null) _view.HideSummary();
+    }
+
     // ---------------------------------------------------------------- open / close
 
     private void OpenPending()
@@ -137,6 +166,11 @@ public class DialogueController : MonoBehaviour
 
         Ask();
         Debug.Log("[Dialogue] open: " + spec.question);
+        if (!PlayerPrefs.HasKey(DialogueRewards.UsedPrefKey))
+        {
+            PlayerPrefs.SetInt(DialogueRewards.UsedPrefKey, 1); // Settings now offers the reward level
+            PlayerPrefs.Save();
+        }
     }
 
     private void CloseNow()
@@ -226,7 +260,7 @@ public class DialogueController : MonoBehaviour
                 StopMic();
                 string praise = flow.spec.praiseText.Length > 0 ? flow.spec.praiseText : DialogueSpec.DefaultPraise;
                 _view.ShowPraise(flow, praise, _pr.IsLastPage ? DialogueView.TextDone : DialogueView.TextNextPage);
-                PlayPrompt(flow.spec.praiseAudio);
+                Reward(flow.spec, how);
                 break;
             case DialogueFlow.Reaction.Retry:
                 _view.Refresh(flow, CaptionLookAgain);
@@ -245,7 +279,49 @@ public class DialogueController : MonoBehaviour
         });
 
         // Going on comes last. Not if the handler has already turned the page.
-        if (reaction == DialogueFlow.Reaction.Close && _flow == flow) CloseAndGoOn();
+        if (reaction == DialogueFlow.Reaction.Close && _flow == flow)
+        {
+            // DialogueOnOther "close": the child did answer, so the star is earned (shown at the end).
+            if (flow.spec.settings.reward) _stars.Earn(_pr.nCurrentStep);
+            CloseAndGoOn();
+        }
+    }
+
+    // The reward for an answered question: a star for every answer (also on a second try, also
+    // by "any sound"), a little more for an answer given by voice or sound, then the praise.
+    private void Reward(DialogueSpec spec, string how)
+    {
+        RewardLevel level = DialogueRewards.Level;
+        if (spec.settings.reward)
+        {
+            bool spoken = how != "touch";
+            int place = _stars.Earn(_pr.nCurrentStep);
+            _view.ShowReward(_stars.States(), place, spoken, spoken ? DialogueRewards.TextHeard : "",
+                level == RewardLevel.Lively);
+        }
+        StopPrompt();
+        _promptCo = StartCoroutine(RewardThenPraiseCo(spec, level));
+    }
+
+    private IEnumerator RewardThenPraiseCo(DialogueSpec spec, RewardLevel level)
+    {
+        if (spec.settings.reward && level != RewardLevel.Quiet)
+        {
+            // The book's own sound for this question, or the chime.
+            AudioClip clip = null;
+            if (spec.settings.rewardSound.Length > 0)
+            {
+                yield return LoadClipCo(spec.settings.rewardSound);
+                _clips.TryGetValue(spec.settings.rewardSound, out clip);
+            }
+            if (clip == null) clip = DialogueRewards.Chime(level == RewardLevel.Lively);
+            EnsureVoice();
+            _voice.clip = clip;
+            _voice.Play();
+            yield return new WaitForSecondsRealtime(Mathf.Min(clip.length, 3f));
+            _voice.Stop();
+        }
+        yield return PlayPromptCo(spec.praiseAudio);
     }
 
     private void Silence()
@@ -376,14 +452,31 @@ public class DialogueController : MonoBehaviour
         if (_voice != null) _voice.Stop();
     }
 
-    // A missing or unreachable recording is not an error for the child: the question is on screen.
+    private void EnsureVoice()
+    {
+        if (_voice != null) return;
+        _voice = gameObject.AddComponent<AudioSource>();
+        _voice.playOnAwake = false;
+    }
+
     private IEnumerator PlayPromptCo(string reference)
     {
-        if (_voice == null)
+        if (!string.IsNullOrEmpty(reference))
         {
-            _voice = gameObject.AddComponent<AudioSource>();
-            _voice.playOnAwake = false;
+            yield return LoadClipCo(reference);
+            if (_clips.TryGetValue(reference, out AudioClip clip) && clip != null)
+            {
+                EnsureVoice();
+                _voice.clip = clip;
+                _voice.Play();
+            }
         }
+        _promptCo = null;
+    }
+
+    // A missing or unreachable recording is not an error for the child: the question is on screen.
+    private IEnumerator LoadClipCo(string reference)
+    {
         if (!_clips.TryGetValue(reference, out AudioClip clip))
         {
             _promptLoading = true;
@@ -398,12 +491,6 @@ public class DialogueController : MonoBehaviour
             _clips[reference] = clip; // also remembers a miss, so a replay does not ask again
             _promptLoading = false;
         }
-        if (clip != null)
-        {
-            _voice.clip = clip;
-            _voice.Play();
-        }
-        _promptCo = null;
     }
 
     private void ForgetClips()

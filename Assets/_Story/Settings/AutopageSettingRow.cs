@@ -86,7 +86,7 @@ public static class AutopageSettingRow
     /// on it rather than the first Canvas in the scene — persistent objects (the debug console) can
     /// carry their own canvas, and landing on one of those would put the row in the wrong space.
     /// </summary>
-    private static Transform FindSettingsCanvas()
+    internal static Transform FindSettingsCanvas()
     {
         foreach (string sibling in new[] { "ButtonRateThisApp", "txtVersion", "sliderReadingRate" })
         {
