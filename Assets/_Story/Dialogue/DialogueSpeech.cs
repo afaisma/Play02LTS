@@ -85,41 +85,53 @@ public static class DialogueSpeech
 }
 
 /// <summary>
-/// "Any sound counts": decides when the microphone level means the child made a sound. The first
-/// moments measure the room; after that a level clearly above the room, held for a short time,
-/// is a sound. A single click or a door slam is too short to count.
+/// "Any sound counts": decides when the microphone level means the child made a sound.
+///
+/// The first moments measure the room. After that a level clearly above the room, held for a
+/// short time, is a sound; a single click or a door slam is too short to count. Two things keep
+/// an eager child from being missed: a clearly loud level counts at once, also while the room is
+/// still being measured, and the room estimate keeps following the quiet moments, so a room that
+/// was measured too high (the child was already making sounds) comes down again.
+/// The numbers are first guesses; they need tuning with real children and real rooms.
 /// </summary>
 public class SoundTrigger
 {
     public float minLevel = 0.02f;       // never trigger below this, however quiet the room
     public float aboveRoom = 3f;         // how many times louder than the room
+    public float loudLevel = 0.1f;       // clearly a voice in any room; the trigger level never goes above it
     public float holdSeconds = 0.25f;    // how long the sound must last
-    public float roomSeconds = 0.5f;     // how long the room is measured
+    public float roomSeconds = 0.5f;     // how long the room is measured first
+    public float followSeconds = 1f;     // how fast the room estimate follows quiet moments
 
-    private float _roomTime, _roomSum, _held;
-    private int _roomSamples;
+    private const float MaxStep = 0.1f;  // one long frame is not seconds of sound or of silence
 
-    public float Threshold =>
-        System.Math.Max(minLevel, (_roomSamples > 0 ? _roomSum / _roomSamples : 0f) * aboveRoom);
+    private float _roomTime, _roomSum, _room, _held;
+
+    public float Threshold => System.Math.Min(loudLevel, System.Math.Max(minLevel, _room * aboveRoom));
 
     public bool MeasuringRoom => _roomTime < roomSeconds;
 
     /// <summary>Feed the current level; true at the moment a sound is recognized.</summary>
     public bool Feed(float level, float deltaSeconds)
     {
-        if (MeasuringRoom)
+        float dt = System.Math.Min(deltaSeconds, MaxStep);
+        bool measuring = MeasuringRoom;
+        if (measuring)
         {
-            _roomTime += deltaSeconds;
-            _roomSum += level;
-            _roomSamples++;
+            _roomTime += dt;
+            _roomSum += level * dt;
+            if (_roomTime > 0f) _room = _roomSum / _roomTime;
+        }
+
+        if (level > (measuring ? loudLevel : Threshold))
+        {
+            _held += dt;
+            if (_held >= holdSeconds) { _held = 0f; return true; }
             return false;
         }
-        if (level > Threshold)
-        {
-            _held += deltaSeconds;
-            if (_held >= holdSeconds) { _held = 0f; return true; }
-        }
-        else _held = 0f;
+
+        _held = 0f;
+        if (!measuring) _room += (level - _room) * System.Math.Min(1f, dt / followSeconds);
         return false;
     }
 }

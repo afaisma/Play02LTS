@@ -94,7 +94,13 @@ public static class DialogueCommands
         f.AddParam("value", "repeat");
         f.code = (context, partialResult) =>
         {
-            Current?.Script.OnSilence(Num(context, "seconds"), Str(context, "value"));
+            // DialogueOnSilence "close" (no seconds): the word arrives in the first parameter.
+            Value first = context.GetVar("seconds");
+            if (first is ValString && !float.TryParse(first.ToString(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float _))
+                Current?.Script.OnSilence(0f, first.ToString());
+            else
+                Current?.Script.OnSilence(Num(context, "seconds"), Str(context, "value"));
             return new Intrinsic.Result(ValNumber.one);
         };
 
@@ -124,6 +130,13 @@ public static class DialogueCommands
     private static float Num(TAC.Context context, string name)
     {
         Value v = context.GetVar(name);
-        return v == null ? 0f : v.FloatValue();
+        if (v == null) return 0f;
+        if (v is ValString) // a number written in quotes
+        {
+            float.TryParse(v.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float f);
+            return f;
+        }
+        return v.FloatValue();
     }
 }

@@ -1116,6 +1116,7 @@ public class PRScript : MonoBehaviour
                 ExecuteScriptlet(_mapEvents[execKey].Content);
             }
             ExecuteScriptlet(_scriptlets[nCurrentStep].Content);
+            Dialogue.EndPage(); // a page without narration opens its question now
 
             // One memory line per page turn: this is the trace that shows the image and audio
             // budgets actually holding as a book is read through. Throttled so a fast

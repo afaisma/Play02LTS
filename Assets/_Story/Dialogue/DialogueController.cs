@@ -38,6 +38,8 @@ public class DialogueController : MonoBehaviour
     private bool _promptLoading;
     private bool _armedSpeech;
     private float _quiet;               // seconds without an answer while nothing is being spoken
+    private bool _fromReadAlong;        // opened by "I read it myself" finishing the page
+    private int _playsAtPageStart;      // narration requests before this page's script ran
     private Coroutine _promptCo;
 
     /// <summary>The sheet is on screen.</summary>
@@ -75,6 +77,17 @@ public class DialogueController : MonoBehaviour
         CloseNow();
         ForgetClips();
         Script.BeginPage();
+        _playsAtPageStart = _pr.audioAndTextPlayer != null ? _pr.audioAndTextPlayer.playRequests : 0;
+    }
+
+    /// <summary>
+    /// The page script has run. A page that asked for no narration has nothing to wait for, so
+    /// its dialogue opens now (otherwise it would wait for a narration end that never comes).
+    /// </summary>
+    public void EndPage()
+    {
+        if (_pending == null || _pr.audioAndTextPlayer == null) return;
+        if (_pr.audioAndTextPlayer.playRequests == _playsAtPageStart) OpenPending();
     }
 
     /// <summary>The DialogueShow command.</summary>
@@ -99,8 +112,8 @@ public class DialogueController : MonoBehaviour
     /// <summary>Read-along finished the page. True = a dialogue opened, do not turn the page.</summary>
     public bool OnPageRead()
     {
-        if (_pending == null) return IsOpen;
         OpenPending();
+        if (IsOpen) _fromReadAlong = true;
         return IsOpen;
     }
 
@@ -129,7 +142,9 @@ public class DialogueController : MonoBehaviour
     private void CloseNow()
     {
         _pending = null;
+        _fromReadAlong = false;
         StopListening();
+        StopMic();
         StopPrompt();
         if (_flow != null)
         {
@@ -139,19 +154,35 @@ public class DialogueController : MonoBehaviour
         if (_pr != null && _pr.audioAndTextPlayer != null) _pr.audioAndTextPlayer.holdAutoNextStep = false;
     }
 
-    // Skip, DialogueOnOther "close", DialogueOnSilence "close": the story goes on.
+    // Skip, DialogueOnOther "close", DialogueOnSilence "close": the story goes on as it would
+    // have without the question. Autopage (or a page the child has just read aloud) turns the
+    // page; otherwise the child turns it. The last page ends the book.
     private void CloseAndGoOn()
     {
-        bool auto = _pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsAutoplaying;
-        CloseNow();
-        if (auto) _pr.NextStep();
-    }
-
-    private void NextPage()
-    {
+        bool turn = _fromReadAlong || (_pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsAutoplaying);
         bool last = _pr.IsLastPage;
         CloseNow();
-        if (!last) _pr.NextStep();
+        if (last) EndBook();
+        else if (turn) _pr.NextStep();
+    }
+
+    // The last page is done: the Read-next sheet. If the page is still being narrated (a dialogue
+    // shown with "now"), the end of the narration brings the sheet, as on a page without a dialogue.
+    private void EndBook()
+    {
+        if (_pr.audioAndTextPlayer != null && _pr.audioAndTextPlayer.IsPlaying) return;
+        _pr.OnLastStepFinished();
+    }
+
+    // The "Next page" / "Done" button of the praise. Guarded: the button stays on screen while
+    // the sheet slides away, and a second tap must not turn a second page.
+    private void NextPage()
+    {
+        if (!IsOpen || _flow.step != DialogueFlow.Step.Praise) return;
+        bool last = _pr.IsLastPage;
+        CloseNow();
+        if (last) EndBook();
+        else _pr.NextStep();
     }
 
     private void Skip()
@@ -184,13 +215,15 @@ public class DialogueController : MonoBehaviour
         DialogueFlow flow = _flow;
         DialogueFlow.Reaction reaction = flow.Answer(id);
         if (reaction == DialogueFlow.Reaction.None) return;
-        bool right = reaction == DialogueFlow.Reaction.Correct;
+        // For the book: was it THE answer (also true when the dialogue has none, or any sound counts).
+        bool right = flow.spec.IsSound || flow.spec.answer.Length == 0 || id == flow.spec.answer;
         Debug.Log($"[Dialogue] answer '{id}' by {how}: {reaction} (attempt {flow.attempts})");
 
         switch (reaction)
         {
             case DialogueFlow.Reaction.Correct:
                 StopListening();
+                StopMic();
                 string praise = flow.spec.praiseText.Length > 0 ? flow.spec.praiseText : DialogueSpec.DefaultPraise;
                 _view.ShowPraise(flow, praise, _pr.IsLastPage ? DialogueView.TextDone : DialogueView.TextNextPage);
                 PlayPrompt(flow.spec.praiseAudio);
@@ -199,12 +232,10 @@ public class DialogueController : MonoBehaviour
                 _view.Refresh(flow, CaptionLookAgain);
                 Ask();
                 break;
-            case DialogueFlow.Reaction.Close:
-                CloseAndGoOn();
-                break;
         }
 
-        // The book's own reaction comes after the built-in one. It may turn the page.
+        // The book's own reaction comes after the built-in one, while this page is still the
+        // current one (so nCurrentStep in the handler is the page of the question).
         _pr.RunStoryEvent("OnAnswer", new Dictionary<string, Value>
         {
             { "answer", new ValString(id) },
@@ -212,50 +243,57 @@ public class DialogueController : MonoBehaviour
             { "how", new ValString(how) },
             { "attempt", new ValNumber(flow.attempts) },
         });
+
+        // Going on comes last. Not if the handler has already turned the page.
+        if (reaction == DialogueFlow.Reaction.Close && _flow == flow) CloseAndGoOn();
     }
 
     private void Silence()
     {
         DialogueFlow flow = _flow;
         DialogueFlow.SilenceReaction reaction = flow.Silence();
+        // After the last repeat the dialogue waits quietly: no question, no event.
+        if (reaction == DialogueFlow.SilenceReaction.None) return;
         Debug.Log($"[Dialogue] no answer ({flow.silences}): {reaction}");
-        switch (reaction)
+        if (reaction == DialogueFlow.SilenceReaction.Repeat)
         {
-            case DialogueFlow.SilenceReaction.Repeat:
-                _view.Refresh(flow, CaptionWait);
-                Ask();
-                break;
-            case DialogueFlow.SilenceReaction.Close:
-                CloseAndGoOn();
-                break;
+            _view.Refresh(flow, CaptionWait);
+            Ask();
         }
         _pr.RunStoryEvent("OnNoAnswer", new Dictionary<string, Value>
         {
             { "attempt", new ValNumber(flow.silences) },
         });
+        if (reaction == DialogueFlow.SilenceReaction.Close && _flow == flow) CloseAndGoOn();
     }
 
     private void Update()
     {
         if (!IsOpen) return;
+        // The reading-mode picker came up over the question (it opens by itself on the first page
+        // of a book). The picker replays the page when it closes; the question comes back then.
+        if (UnifiedReadingModePicker.IsOpen) { CloseNow(); return; }
         bool speaking = IsSpeaking();
         _view.SetSpeaking(_promptLoading || (_voice != null && _voice.isPlaying));
         if (_flow.step != DialogueFlow.Step.Ask) return;
 
-        if (_sound != null && _mic != null && _mic.Running)
+        // One long frame (a system alert, the app coming back) must not count as seconds of silence.
+        float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+
+        if (_sound != null && _mic != null && _mic.HasData)
         {
             if (speaking) _view.SetLevel(0f);
             else
             {
                 // The meter is full at four times the trigger level.
                 _view.SetLevel(_mic.Level / (_sound.Threshold * 4f));
-                if (_sound.Feed(_mic.Level, Time.unscaledDeltaTime)) { Answer("", "sound"); return; }
+                if (_sound.Feed(_mic.Level, dt)) { Answer("", "sound"); return; }
             }
         }
 
         // Silence clock: only while the app itself is quiet.
         if (speaking) { _quiet = 0f; return; }
-        _quiet += Time.unscaledDeltaTime;
+        _quiet += dt;
         if (_quiet >= _flow.spec.settings.silenceSeconds)
         {
             _quiet = 0f;
@@ -270,9 +308,11 @@ public class DialogueController : MonoBehaviour
         DialogueSpec spec = _flow.spec;
         if (spec.IsSound)
         {
+            // The microphone runs for the whole dialogue; a repeated question only measures the
+            // room again.
             if (_mic == null) _mic = gameObject.AddComponent<DialogueMic>();
             _sound = new SoundTrigger();
-            StartCoroutine(BeginMic());
+            if (!_mic.Running) StartCoroutine(BeginMic());
             return;
         }
         if (!spec.VoiceWanted || !MicAllowed) return;
@@ -304,8 +344,12 @@ public class DialogueController : MonoBehaviour
             _armedSpeech = false;
             SpeechListenService.Instance?.Disarm();
         }
-        if (_mic != null) _mic.End();
         _sound = null;
+    }
+
+    private void StopMic()
+    {
+        if (_mic != null) _mic.End();
     }
 
     // True while the app itself makes sound: nothing heard then is an answer.
@@ -395,6 +439,7 @@ public class DialogueController : MonoBehaviour
     private void OnDestroy()
     {
         StopListening();
+        StopMic();
         ForgetClips();
         if (DialogueCommands.Current == this) DialogueCommands.Current = null;
         if (_view != null) Destroy(_view.gameObject);

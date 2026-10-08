@@ -485,9 +485,18 @@ namespace ReadingBuddy.Tests
         public void Sound_NoisyRoom_NeedsALouderSound()
         {
             var t = new SoundTrigger();
-            FeedFor(t, 0.05f, 0.5f);
-            Assert.AreEqual(0.15f, t.Threshold, 0.001f);
-            Assert.IsFalse(FeedFor(t, 0.1f, 0.5f));
+            FeedFor(t, 0.02f, 0.5f);
+            Assert.AreEqual(0.06f, t.Threshold, 0.001f);
+            Assert.IsFalse(FeedFor(t, 0.05f, 0.5f));
+            Assert.IsTrue(FeedFor(t, 0.3f, 0.3f));
+        }
+
+        [Test]
+        public void Sound_VeryNoisyRoom_ALoudSoundStillCounts()
+        {
+            var t = new SoundTrigger();
+            FeedFor(t, 0.06f, 0.5f);
+            Assert.AreEqual(t.loudLevel, t.Threshold, "the trigger level has a ceiling");
             Assert.IsTrue(FeedFor(t, 0.3f, 0.3f));
         }
 
@@ -501,11 +510,39 @@ namespace ReadingBuddy.Tests
         }
 
         [Test]
-        public void Sound_SoundDuringTheRoomMeasurement_DoesNotTrigger()
+        public void Sound_LoudSoundDuringTheRoomMeasurement_Counts()
+        {
+            // An eager child answers before the room has been measured.
+            var t = new SoundTrigger();
+            Assert.IsTrue(FeedFor(t, 0.3f, 0.4f));
+        }
+
+        [Test]
+        public void Sound_SoftSoundDuringTheRoomMeasurement_DoesNotTrigger()
         {
             var t = new SoundTrigger();
-            Assert.IsFalse(FeedFor(t, 0.3f, 0.4f));
+            Assert.IsFalse(FeedFor(t, 0.05f, 0.4f));
             Assert.IsTrue(t.MeasuringRoom);
+        }
+
+        [Test]
+        public void Sound_RoomMeasuredTooHigh_ComesDownInQuietMoments()
+        {
+            // The child hummed while the room was measured, then went quiet.
+            var t = new SoundTrigger();
+            FeedFor(t, 0.03f, 0.5f);
+            Assert.AreEqual(0.09f, t.Threshold, 0.001f);
+            FeedFor(t, 0.004f, 4f);
+            Assert.Less(t.Threshold, 0.03f);
+            Assert.IsTrue(FeedFor(t, 0.05f, 0.3f), "a soft voice is now heard");
+        }
+
+        [Test]
+        public void Sound_OneLongFrame_IsNotASound()
+        {
+            var t = new SoundTrigger();
+            FeedFor(t, 0.004f, 0.5f);
+            Assert.IsFalse(t.Feed(0.5f, 3f), "a frame that took seconds counts as one short step");
         }
     }
 }

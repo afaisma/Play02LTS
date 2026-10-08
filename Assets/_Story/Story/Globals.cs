@@ -13,7 +13,7 @@ public class Globals : MonoBehaviour
 {
     public static string CSVURL = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
     public static string baseURL;
-    public string csvUrl = "http://d5wtw8f0w3ire.cloudfront.net/uploads/stories_02/stories.csv";
+    public string csvUrl = ""; // empty = the catalog of the current edition (Edition.Current.catalogUrl)
     public string convinienceLocal = "http://localhost:8090/api/files/download/stories/stories.csv";
     public string convinienceAWS = "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.csv";
 

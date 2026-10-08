@@ -31,6 +31,7 @@ public class DialogueView : MonoBehaviour
 
     private const float HiddenBelow = 60f;   // the sheet's bottom corners sit below the screen edge
     private const float Offscreen = 1400f;
+    private const float MinBody = 330f;      // a Yes / No card: padding, glyph, word
 
     private class ChoiceVisual
     {
@@ -43,6 +44,7 @@ public class DialogueView : MonoBehaviour
 
     private Canvas _canvas;
     private RectTransform _sheet, _content, _body, _footer;
+    private CanvasGroup _sheetGroup;
     private TMP_Text _caption, _question;
     private Button _speakerButton;
     private GameObject _speakerIdle, _speakerPlaying, _checkBadge;
@@ -91,17 +93,20 @@ public class DialogueView : MonoBehaviour
         float canvasH = canvasRect.rect.height, canvasW = canvasRect.rect.width;
         float height = pictureBottomScreenY >= 0f ? pictureBottomScreenY / _canvas.scaleFactor + 40f : canvasH * 0.52f;
         height = Mathf.Clamp(height, canvasH * 0.42f, canvasH * 0.62f);
-        _sheet.sizeDelta = new Vector2(0f, height + HiddenBelow);
 
         // Side margins: 60 on a phone; wider on a tablet so the content is not stretched.
         float side = Mathf.Max(60f, (canvasW - 1000f) * 0.5f);
         float bottom = SafeAreaInsets.ForRect(_sheet).Bottom + 36f + HiddenBelow;
+        // Around the choices: the top padding (56), the header (170), the footer (130) and the two
+        // gaps of 40. The choices themselves need MinBody, or the footer is pushed off the screen
+        // (a tablet in portrait: the picture is tall, so the sheet under it would be too short).
+        float around = bottom + 56f + 170f + 130f + 80f - HiddenBelow;
+        height = Mathf.Max(height, around + MinBody);
+        _sheet.sizeDelta = new Vector2(0f, height + HiddenBelow);
         _content.offsetMin = new Vector2(side, bottom);
         _content.offsetMax = new Vector2(-side, -56f);
         _contentWidth = canvasW - 2f * side;
-        // What is left for the choices between the header (170) and the footer (130), with the
-        // two gaps of 40 around the body and the top padding of 56.
-        _bodyHeight = height + HiddenBelow - bottom - 56f - 170f - 130f - 80f;
+        _bodyHeight = height - around;
 
         _question.text = spec.question;
         SetCaption("");
@@ -113,6 +118,7 @@ public class DialogueView : MonoBehaviour
         BuildFooter(spec, voiceOn, praise: false, nextLabel: null);
 
         _sheet.gameObject.SetActive(true);
+        _sheetGroup.interactable = true;
         _sheet.DOKill();
         _sheet.anchoredPosition = new Vector2(0f, -Offscreen);
         _sheet.DOAnchorPosY(-HiddenBelow, 0.3f).SetEase(Ease.OutCubic).SetUpdate(true);
@@ -122,6 +128,7 @@ public class DialogueView : MonoBehaviour
     {
         if (!Visible) return;
         KillChoiceTweens();
+        _sheetGroup.interactable = false; // no button works while the sheet slides away (it still stops the tap)
         _sheet.DOKill();
         _sheet.DOAnchorPosY(-Offscreen, 0.25f).SetEase(Ease.InCubic).SetUpdate(true)
             .OnComplete(() => { if (_sheet != null) _sheet.gameObject.SetActive(false); });
@@ -202,9 +209,10 @@ public class DialogueView : MonoBehaviour
 
     private void BuildSheet()
     {
-        var sheetGO = new GameObject("Sheet", typeof(RectTransform), typeof(Image), typeof(Outline));
+        var sheetGO = new GameObject("Sheet", typeof(RectTransform), typeof(Image), typeof(Outline), typeof(CanvasGroup));
         sheetGO.transform.SetParent(transform, false);
         _sheet = sheetGO.GetComponent<RectTransform>();
+        _sheetGroup = sheetGO.GetComponent<CanvasGroup>();
         _sheet.anchorMin = new Vector2(0f, 0f);
         _sheet.anchorMax = new Vector2(1f, 0f);
         _sheet.pivot = new Vector2(0.5f, 0f);
@@ -316,6 +324,9 @@ public class DialogueView : MonoBehaviour
         bool pictures = false;
         foreach (DialogueChoice c in spec.choices) pictures |= c.HasPicture;
         float cardWidth = (_contentWidth - 44f * (perRow - 1)) / perRow;
+        int rowCount = (spec.choices.Count + perRow - 1) / perRow;
+        // As tall as the picture and its label need, but never more than the sheet has.
+        float cardHeight = Mathf.Min(cardWidth + 94f, (_bodyHeight - 40f * (rowCount - 1)) / rowCount);
         var rows = _body.gameObject.AddComponent<VerticalLayoutGroup>();
         rows.spacing = 40f;
         rows.childAlignment = TextAnchor.MiddleCenter;
@@ -332,7 +343,7 @@ public class DialogueView : MonoBehaviour
                 hlg.childControlWidth = true; hlg.childControlHeight = true;
                 hlg.childForceExpandWidth = true; hlg.childForceExpandHeight = true;
             }
-            BuildCard(row, spec.choices[i], i, resolveUrl, pictures ? cardWidth + 94f : -1f);
+            BuildCard(row, spec.choices[i], i, resolveUrl, pictures ? cardHeight : -1f);
         }
     }
 
@@ -378,7 +389,10 @@ public class DialogueView : MonoBehaviour
         Color ink = icon ? (sage ? Hex(0x3F5230) : Hex(0x33505A)) : UiTheme.TextPrimary;
 
         ChoiceVisual v = NewChoice(parent, choice, fill, border);
-        if (height > 0f) v.go.AddComponent<LayoutElement>().preferredHeight = height;
+        // Equal widths: without this a card would be as wide as its picture file is large.
+        var cle = v.go.AddComponent<LayoutElement>();
+        cle.minWidth = 0f; cle.preferredWidth = 0f; cle.flexibleWidth = 1f;
+        if (height > 0f) cle.preferredHeight = height;
         var vlg = v.go.AddComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(22, 22, 22, 14);
         vlg.spacing = 10f;
@@ -401,7 +415,8 @@ public class DialogueView : MonoBehaviour
             var ple = pic.GetComponent<LayoutElement>();
             // Explicit: an Image's own preferred size is its sprite's pixel size, which would
             // squeeze the label out of the card.
-            ple.preferredHeight = height - 138f; ple.minHeight = 180f; ple.flexibleHeight = 0f;
+            ple.preferredHeight = Mathf.Max(60f, height - 138f); ple.minHeight = 60f; ple.flexibleHeight = 0f;
+            ple.preferredWidth = 0f; ple.flexibleWidth = 1f;
             var img = pic.GetComponent<Image>();
             img.color = UiTheme.Track; // placeholder tone until the picture arrives
             img.raycastTarget = false;

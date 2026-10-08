@@ -68,6 +68,10 @@ public class AudioAndTextPlayer : MonoBehaviour
     public bool IsAutoplaying => triggerNextStep;
     // Set while the page has a dialogue (DialogueController): Autopage must wait for the answer.
     [System.NonSerialized] public bool holdAutoNextStep;
+    // Counts every narration request (Play / PlayExt), also one refused because the reading-mode
+    // picker is open. DialogueController compares it before and after a page script to know
+    // whether the page has narration to wait for.
+    [System.NonSerialized] public int playRequests;
     private bool triggerNextStep = false;
     [SerializeField] private Toggle nextStepToggle;
 
@@ -160,6 +164,7 @@ public class AudioAndTextPlayer : MonoBehaviour
 
     public void PlayExt(string audioURL, float fromS, float toS, string textContentURL, int pageNum)
     {
+        playRequests++;
         if (UnifiedReadingModePicker.IsOpen) return; // nothing narrates while the reading-mode picker is open
         PreparePlayVoiceSettings();
         currentWordIndex = 0;
@@ -178,6 +183,7 @@ public class AudioAndTextPlayer : MonoBehaviour
     public void Play(string chunkname, string currentVoicePostfix, string content, float startTime = -1,
         float endTime = -1)
     {
+        playRequests++;
         if (UnifiedReadingModePicker.IsOpen) return; // nothing narrates while the reading-mode picker is open
         PreparePlayVoiceSettings();
 

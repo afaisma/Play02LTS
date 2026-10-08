@@ -175,7 +175,11 @@ public class SpeechListenService : MonoBehaviour
         _matcher = null; _onHeardId = null;
         if (_armCo != null) { StopCoroutine(_armCo); _armCo = null; }
         if (_restartCo != null) { StopCoroutine(_restartCo); _restartCo = null; }
-        if (_recognizer != null && _recognizing) _recognizer.StopProcessing();
+        // Also stop a recognizer that is still starting (the first start loads the model for
+        // seconds and _recognizing is not set yet) - otherwise it finishes starting and the
+        // microphone stays on. Same rule as ReadAlongService.Stop().
+        if (_recognizer != null && (_recognizing || _recognizer.State == SpeechProcessorState.Initializing))
+            _recognizer.StopProcessing();
     }
 
     // ---------------------------------------------------------------- recognition lifecycle
