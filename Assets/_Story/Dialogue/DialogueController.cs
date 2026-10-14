@@ -276,6 +276,8 @@ public class DialogueController : MonoBehaviour
     private void Skip()
     {
         if (!IsOpen) return;
+        if (_flow.step == DialogueFlow.Step.Ask)
+            DialogueResults.Add(Globals.g_prbook, _pr.nCurrentStep + 1, "", false, "skip", _flow.attempts);
         _flow.Skip();
         CloseAndGoOn();
     }
@@ -306,6 +308,7 @@ public class DialogueController : MonoBehaviour
         // For the book: was it THE answer (also true when the dialogue has none, or any sound counts).
         bool right = flow.spec.IsSound || flow.spec.answer.Length == 0 || id == flow.spec.answer;
         Debug.Log($"[Dialogue] answer '{id}' by {how}: {reaction} (attempt {flow.attempts})");
+        DialogueResults.Add(Globals.g_prbook, _pr.nCurrentStep + 1, id, right, how, flow.attempts);
 
         switch (reaction)
         {
@@ -384,6 +387,7 @@ public class DialogueController : MonoBehaviour
         // After the last repeat the dialogue waits quietly: no question, no event.
         if (reaction == DialogueFlow.SilenceReaction.None) return;
         Debug.Log($"[Dialogue] no answer ({flow.silences}): {reaction}");
+        DialogueResults.Add(Globals.g_prbook, _pr.nCurrentStep + 1, "", false, "none", flow.silences);
         if (reaction == DialogueFlow.SilenceReaction.Repeat)
         {
             _view.Refresh(flow, CaptionWait);

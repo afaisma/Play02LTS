@@ -62,6 +62,7 @@ public class SettingsScene : MonoBehaviour
         // "Turn pages automatically" — built in code against this scene's canvas (see
         // AutopageSettingRow); it moved here out of the reading-mode modal.
         AutopageSettingRow.Attach();
+        QuestionLevelSetting.Attach();  // only when the catalog has books made for a question level
         DialogueRewardSetting.Attach(); // only after a book with questions has been opened on this device
     }
 

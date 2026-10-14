@@ -28,8 +28,16 @@ public class Edition
     public string appStoreId = "";
     /// <summary>Address of the catalog (stories.json). The books and home_doors.json sit beside it.</summary>
     public string catalogUrl = "";
+    /// <summary>True = the product shows only the books made for a question level (ReadingBuddy Talk).</summary>
+    public bool questionBooksOnly = false;
+    /// <summary>The scene behind "Home": ReadingBuddy's rooms (_Home) or Talk's book list (_HomeTalk).</summary>
+    public string homeScene = "_Home";
 
     private static Edition _current;
+    public const string OverridePref = "edition_override"; // dev builds only
+
+    /// <summary>Forget the picked edition (dev sweeps that switch editions).</summary>
+    public static void Reset() => _current = null;
 
     /// <summary>The edition this app is. Never null.</summary>
     public static Edition Current => _current ??= Load();
@@ -46,6 +54,7 @@ public class Edition
             Edition e = JsonUtility.FromJson<Edition>(json);
             if (e == null || string.IsNullOrEmpty(e.id)) return null;
             if (e.appIdentifiers == null) e.appIdentifiers = new string[0];
+            if (string.IsNullOrEmpty(e.homeScene)) e.homeScene = "_Home";
             return e;
         }
         catch (ArgumentException)
@@ -85,6 +94,12 @@ public class Edition
         }
 
         Edition picked = Pick(editions, Application.identifier);
+#if UNITY_EDITOR || READINGBUDDY_DEV
+        // Editor and Simulator runs carry ReadingBuddy's identifier; a dev pref tries another edition.
+        string wanted = PlayerPrefs.GetString(OverridePref, "");
+        if (!string.IsNullOrEmpty(wanted))
+            foreach (Edition e in editions) if (e.id == wanted) picked = e;
+#endif
         if (picked == null)
         {
             // Cannot happen while EditionTests pass (the default edition file exists and is valid).

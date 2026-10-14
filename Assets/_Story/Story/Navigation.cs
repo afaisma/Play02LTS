@@ -45,7 +45,7 @@ public static class Navigation
     public const string LearnToRead = "_LearnToRead";
 
     public static void GoToStart()       => SceneManager.LoadScene(StartScene);
-    public static void GoToHome()        => GoToSceneAsync(Home);
+    public static void GoToHome()        => GoToSceneAsync(Edition.Current.homeScene);
     public static void GoToLearnToRead() => GoToSceneAsync(LearnToRead);
     public static void GoToLibrary()   => GoToSceneAsync(Library);
     public static void GoToStory()     => GoToSceneAsync(Story);

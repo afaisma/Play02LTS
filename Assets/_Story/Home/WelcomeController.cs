@@ -22,6 +22,13 @@ public class WelcomeController : MonoBehaviour
     private bool _firstRun;
 
     private struct Demo { public string imgA, imgB, title, sub; public Demo(string a, string b, string t, string s){imgA=a;imgB=b;title=t;sub=s;} }
+    // ReadingBuddy Talk: what the app does, in the parent's words. No pictures yet.
+    private static readonly Demo[] TalkDemos =
+    {
+        new Demo("", "", "Every answer counts",            "The goal is that your child responds, not a test."),
+        new Demo("", "", "Listening stays on the phone",   "No audio is saved or sent anywhere."),
+        new Demo("", "", "You choose the level",           "Four levels, from touch only to full answers. Change it any time."),
+    };
     private static readonly Demo[] Demos =
     {
         new Demo("welcome/demo_read_a", "welcome/demo_read_b", "Read along together",           "Words light up as it's read — tap any word to hear it"),
@@ -49,7 +56,9 @@ public class WelcomeController : MonoBehaviour
     private IEnumerator AutoAdvanceReturning()
     {
         float t0 = Time.time;
-        while (Globals.g_listPRBooks == null || Globals.g_listPRBooks.Count == 0)
+        // The whole catalog, not the filtered list: a question level with no books must not hold
+        // a returning user on this screen.
+        while (Globals.g_allPRBooks == null || Globals.g_allPRBooks.Count == 0)
             yield return new WaitForSeconds(0.25f);
         float remaining = AutoAdvanceSeconds - (Time.time - t0);
         if (remaining > 0f) yield return new WaitForSeconds(remaining);
@@ -94,19 +103,24 @@ public class WelcomeController : MonoBehaviour
             // branded via rich text; the rest is regular headline colour. Wrapping is on and the box
             // is two lines tall, so "Welcome to" / "ReadingBuddy!" may break without clipping (and
             // MakeText's auto-sizing shrinks it further on narrower screens).
+            bool talk = Edition.Current.questionBooksOnly;
             var hi = MakeText(content.transform, "Welcome",
-                "Welcome to <color=#" + ColorUtility.ToHtmlStringRGB(UiTheme.Primary) + ">ReadingBuddy</color>!",
-                104, TextAlignmentOptions.Center);
+                talk ? "Books that ask your child a question"
+                     : "Welcome to <color=#" + ColorUtility.ToHtmlStringRGB(UiTheme.Primary) + ">ReadingBuddy</color>!",
+                talk ? 72 : 104, TextAlignmentOptions.Center);
             hi.fontStyle = FontStyles.Bold; hi.color = UiTheme.TextPrimary;
             hi.enableWordWrapping = true;
             hi.gameObject.AddComponent<LayoutElement>().preferredHeight = 260f; // room for two 104pt lines
 
             var sub = MakeText(content.transform, "Subtitle",
-                "A few things that make reading here a little magical", 32, TextAlignmentOptions.Center);
+                talk ? "The app reads a picture book aloud. After some pages it asks a short question. Your child answers by touching a picture, by saying a word, or just by making a sound."
+                     : "A few things that make reading here a little magical", 32, TextAlignmentOptions.Center);
             sub.color = UiTheme.TextSecondary;
-            sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 46f;
+            sub.enableWordWrapping = true;
+            sub.gameObject.AddComponent<LayoutElement>().preferredHeight = talk ? 150f : 46f;
 
-            for (int i = 0; i < Demos.Length; i++) BuildDemoRow(content.transform, Demos[i], i);
+            Demo[] demos = talk ? TalkDemos : Demos;
+            for (int i = 0; i < demos.Length; i++) BuildDemoRow(content.transform, demos[i], i);
             BuildConnectivityNote(content.transform);
         }
         else
@@ -145,20 +159,24 @@ public class WelcomeController : MonoBehaviour
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
         hlg.childAlignment = TextAnchor.MiddleLeft;
 
-        var thumbGO = new GameObject("Thumb", typeof(RectTransform), typeof(LayoutElement), typeof(RectMask2D));
-        thumbGO.transform.SetParent(row.transform, false);
-        thumbGO.GetComponent<LayoutElement>().preferredWidth = 250f;
-
-        var front = MakeThumbImage(thumbGO.transform, d.imgA);
-        var anim = thumbGO.AddComponent<DemoCardAnim>();
-        anim.front = front;
-        if (!string.IsNullOrEmpty(d.imgB))
+        if (!string.IsNullOrEmpty(d.imgA)) // a row without pictures (Talk) is text only
         {
-            var back = MakeThumbImage(thumbGO.transform, d.imgB);
-            var bc = back.color; bc.a = 0f; back.color = bc;
-            anim.back = back;
+            var thumbGO = new GameObject("Thumb", typeof(RectTransform), typeof(LayoutElement), typeof(RectMask2D));
+            thumbGO.transform.SetParent(row.transform, false);
+            thumbGO.GetComponent<LayoutElement>().preferredWidth = 250f;
+
+            var front = MakeThumbImage(thumbGO.transform, d.imgA);
+            var anim = thumbGO.AddComponent<DemoCardAnim>();
+            anim.front = front;
+            if (!string.IsNullOrEmpty(d.imgB))
+            {
+                var back = MakeThumbImage(thumbGO.transform, d.imgB);
+                var bc = back.color; bc.a = 0f; back.color = bc;
+                anim.back = back;
+            }
+            else anim.zoom = true;
         }
-        else anim.zoom = true;
+        else row.GetComponent<LayoutElement>().preferredHeight = 170f;
 
         var col = new GameObject("Col", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         col.transform.SetParent(row.transform, false);

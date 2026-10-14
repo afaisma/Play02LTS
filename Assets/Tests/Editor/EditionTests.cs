@@ -156,6 +156,21 @@ namespace ReadingBuddy.Tests
             Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(test.catalogUrl));
         }
 
+        [Test]
+        public void Shipped_TalkEdition_ShowsOnlyQuestionBooks_AndHasItsOwnHome()
+        {
+            List<Edition> all = ShippedEditions();
+            Edition prod = all.Find(e => e.id == Edition.DefaultId);
+            Edition talk = all.Find(e => e.id == "readingbuddy-talk");
+            Assert.IsNotNull(talk, "Resources/Editions/readingbuddy-talk.json");
+            Assert.IsTrue(talk.questionBooksOnly);
+            Assert.IsFalse(prod.questionBooksOnly, "ReadingBuddy shows every book");
+            Assert.AreEqual("_HomeTalk", talk.homeScene);
+            Assert.AreEqual("_Home", prod.homeScene, "a missing homeScene means ReadingBuddy's Home");
+            Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.readingbuddytalk"));
+            Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(talk.catalogUrl));
+        }
+
         // The project settings decide which product a build is. They must name an edition directly
         // (not through the fallback), and the product name must be that edition's name.
         [Test]

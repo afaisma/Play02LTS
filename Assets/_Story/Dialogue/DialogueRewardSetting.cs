@@ -26,6 +26,9 @@ public static class DialogueRewardSetting
         row.transform.SetParent(canvas, false);
         var rt = (RectTransform)row.transform;
         rt.anchorMin = AnchorMin; rt.anchorMax = AnchorMax;
+        // Lower when the "Question level" row sits above this one.
+        if (canvas.Find(QuestionLevelSetting.RowName) != null)
+            rt.anchorMax = new Vector2(AnchorMax.x, QuestionLevelSetting.RewardRowTopBelowThisRow);
         rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         var card = row.GetComponent<Image>();
         card.sprite = DialogChrome.RoundedSprite(); card.type = Image.Type.Sliced; card.color = UiTheme.Surface;

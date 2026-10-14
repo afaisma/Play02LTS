@@ -13,6 +13,8 @@
 //   book|<folder>    open the book whose bookUrl contains <folder> (e.g. FarmAnimalsRhymebook)
 //   bookfile|<url>   open a book that is NOT in the catalog by the address of its script
 //                    (file:///.../stories/<Folder>/<script>.txt) — for test books on this Mac
+//   catalogfile|<path>  use a catalog file on this Mac instead of the downloaded catalog
+//   edition|<id>     behave as another edition from now on (e.g. readingbuddy-talk)
 //   mode|<Mode>      reading-mode picker tile: Storyteller | AppVoice | IRead | Pictures
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
@@ -113,6 +115,27 @@ public static class SweepActions
                 break;
             }
 
+            case "edition":
+            {
+                // Dev builds only: behave as another edition (Resources/Editions/<id>.json) from now
+                // on, e.g. readingbuddy-talk. The book list is filtered again for it.
+                PlayerPrefs.SetString("edition_override", arg); PlayerPrefs.Save();
+                T("Edition").GetMethod("Reset", Any).Invoke(null, null);
+                T("Globals").GetMethod("ApplyQuestionLevel", Any).Invoke(null, null);
+                break;
+            }
+
+            case "catalogfile":
+            {
+                // Replace the loaded catalog with a catalog file on this Mac (for example a dry-run
+                // stories.test.json), then go to a screen again to see it.
+                var gT = T("Globals");
+                object books = gT.GetMethod("ParseJSON", Any).Invoke(null, new object[] { System.IO.File.ReadAllText(arg) });
+                gT.GetField("g_allPRBooks", Any).SetValue(null, books);
+                gT.GetMethod("ApplyQuestionLevel", Any).Invoke(null, null);
+                break;
+            }
+
             case "bookfile":
             {
                 // A book outside the catalog: only the fields the reader needs. bookUrl (the
@@ -184,7 +207,7 @@ public static class SweepActions
         {
             case "catalog":
             {
-                var list = T("Globals").GetField("g_listPRBooks", Any).GetValue(null) as IList;
+                var list = T("Globals").GetField("g_allPRBooks", Any).GetValue(null) as IList;
                 return list != null && list.Count > 0;
             }
             case "playing": return AnyNarration();

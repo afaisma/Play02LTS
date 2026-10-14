@@ -18,6 +18,16 @@ public class Globals : MonoBehaviour
     public string convinienceAWS = "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.csv";
 
     public static List<PRBook> g_listPRBooks;
+    // The whole catalog. g_listPRBooks is what the book lists show: the catalog without the
+    // copies made for another question level (QuestionLevel).
+    public static List<PRBook> g_allPRBooks;
+
+    /// <summary>Rebuild the shown book list after the question level changed.</summary>
+    public static void ApplyQuestionLevel()
+    {
+        if (g_allPRBooks != null)
+            g_listPRBooks = QuestionLevel.Visible(g_allPRBooks, QuestionLevel.Current, Edition.Current.questionBooksOnly);
+    }
 
     public static string g_scriptName;
     public static int g_openedStoriesCount;
@@ -323,7 +333,8 @@ public class Globals : MonoBehaviour
         StartDownloadCSV(csvUrl, (csv) =>
         {
             List<PRBook> prbooks = ParseCatalog(csvUrl, csv);
-            g_listPRBooks = prbooks;
+            g_allPRBooks = prbooks;
+            g_listPRBooks = QuestionLevel.Visible(prbooks, QuestionLevel.Current, Edition.Current.questionBooksOnly);
 
             if (!string.IsNullOrEmpty(targetScene) && (g_listPRBooks != null))
             {
@@ -407,7 +418,7 @@ public class Globals : MonoBehaviour
     {
         if (!IsDownloading)
         {
-            Navigation.GoToScene("_Home");
+            Navigation.GoToScene(Edition.Current.homeScene);
         }
         else
         {
@@ -845,6 +856,9 @@ public class Globals : MonoBehaviour
                     // Optional per-book reading modes ("human"/"tts"). Missing/empty →
                     // ["tts"], preserving today's behavior. Consumed by UnifiedReadingModePicker.
                     voices = ParseVoices(b["voices"]),
+                    // Optional tags, lower case. "questions-a".."questions-d" = the question
+                    // level this copy of a book is made for (QuestionLevel). Missing → none.
+                    tags = ParseTags(b["tags"]),
                     // Opt-in flag: this book supports the "I read it myself" (read-along) mode.
                     // Missing → false (SimpleJSON AsBool default). No longer gates the picker's
                     // iread tile (every book offers it) — kept for a possible future opt-out.
@@ -898,6 +912,16 @@ public class Globals : MonoBehaviour
     // Parse a JSON voices array (e.g. ["human","tts"]) into the lowercase string list
     // PRBook.voices holds. A missing/empty/non-array node defaults to ["tts"] — every
     // shipped book has TTS, so this preserves today's behavior for catalogs without the field.
+    private static List<string> ParseTags(JSONNode tagsNode)
+    {
+        List<string> tags = new List<string>();
+        if (tagsNode != null && tagsNode.IsArray)
+            foreach (JSONNode t in tagsNode.Children)
+                if (!string.IsNullOrEmpty(t.Value))
+                    tags.Add(t.Value.Trim().ToLowerInvariant());
+        return tags;
+    }
+
     private static List<string> ParseVoices(JSONNode voicesNode)
     {
         List<string> voices = new List<string>();

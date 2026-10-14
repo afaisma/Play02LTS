@@ -464,6 +464,7 @@ public class PRBook
     public string phonicsFocus = "";  // "" default; CSV path never sets it, so initialize here
     public string action = "";        // non-empty = navigation tile (Nav address), not a book; CSV path never sets it
     public string contentRev = "";    // catalog content hash; folded into media URLs as ?v= to bust stale caches. CSV path never sets it
+    public System.Collections.Generic.List<string> tags = new();   // catalog "tags", lower case; e.g. "questions-a" (QuestionLevel). CSV path leaves it empty.
     public string added = "";         // catalog publish date, ISO yyyy-MM-dd; "" = unknown. Drives the "new" filter token (Filter.IsNewBook)
     public int number;
     public int book_done;
