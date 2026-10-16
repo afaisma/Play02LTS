@@ -418,8 +418,9 @@ public class DialogueController : MonoBehaviour
             if (speaking) _view.SetLevel(0f);
             else
             {
-                // The meter is full at four times the trigger level.
-                _view.SetLevel(_mic.Level / (_sound.Threshold * 4f));
+                // The meter is half full at the trigger level: an adult can see that the phone
+                // hears the child, and how much louder is needed.
+                _view.SetLevel(_mic.Level / (_sound.Threshold * 2f));
                 if (_sound.Feed(_mic.Level, dt)) { Answer("", "sound"); return; }
             }
         }

@@ -664,8 +664,8 @@ namespace ReadingBuddy.Tests
         {
             var t = new SoundTrigger();
             FeedFor(t, 0.02f, 0.5f);
-            Assert.AreEqual(0.06f, t.Threshold, 0.001f);
-            Assert.IsFalse(FeedFor(t, 0.05f, 0.5f));
+            Assert.AreEqual(0.04f, t.Threshold, 0.001f);
+            Assert.IsFalse(FeedFor(t, 0.03f, 0.5f));
             Assert.IsTrue(FeedFor(t, 0.3f, 0.3f));
         }
 
@@ -684,7 +684,7 @@ namespace ReadingBuddy.Tests
             var t = new SoundTrigger();
             FeedFor(t, 0f, 0.5f);
             Assert.AreEqual(t.minLevel, t.Threshold);
-            Assert.IsFalse(FeedFor(t, 0.01f, 0.5f));
+            Assert.IsFalse(FeedFor(t, 0.005f, 0.5f));
         }
 
         [Test]
@@ -709,7 +709,7 @@ namespace ReadingBuddy.Tests
             // The child hummed while the room was measured, then went quiet.
             var t = new SoundTrigger();
             FeedFor(t, 0.03f, 0.5f);
-            Assert.AreEqual(0.09f, t.Threshold, 0.001f);
+            Assert.AreEqual(0.06f, t.Threshold, 0.001f);
             FeedFor(t, 0.004f, 4f);
             Assert.Less(t.Threshold, 0.03f);
             Assert.IsTrue(FeedFor(t, 0.05f, 0.3f), "a soft voice is now heard");

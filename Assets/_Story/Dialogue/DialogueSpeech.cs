@@ -110,10 +110,12 @@ public static class DialogueSpeech
 /// </summary>
 public class SoundTrigger
 {
-    public float minLevel = 0.02f;       // never trigger below this, however quiet the room
-    public float aboveRoom = 3f;         // how many times louder than the room
+    // Tuned down after the first real-phone test (a quiet "beans" was missed): half the old
+    // minimum, twice the room instead of three times, and a shorter hold.
+    public float minLevel = 0.01f;       // never trigger below this, however quiet the room
+    public float aboveRoom = 2f;         // how many times louder than the room
     public float loudLevel = 0.1f;       // clearly a voice in any room; the trigger level never goes above it
-    public float holdSeconds = 0.25f;    // how long the sound must last
+    public float holdSeconds = 0.15f;    // how long the sound must last
     public float roomSeconds = 0.5f;     // how long the room is measured first
     public float followSeconds = 1f;     // how fast the room estimate follows quiet moments
 
