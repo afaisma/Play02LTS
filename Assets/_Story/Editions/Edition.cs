@@ -28,7 +28,7 @@ public class Edition
     public string appStoreId = "";
     /// <summary>Address of the catalog (stories.json). The books and home_doors.json sit beside it.</summary>
     public string catalogUrl = "";
-    /// <summary>True = the product shows only the books made for a question level (ReadingBuddy Talk).</summary>
+    /// <summary>True = the product shows only the books made for a question level (Story Comprehension).</summary>
     public bool questionBooksOnly = false;
     /// <summary>The scene behind "Home": ReadingBuddy's rooms (_Home) or Talk's book list (_HomeTalk).</summary>
     public string homeScene = "_Home";

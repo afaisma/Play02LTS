@@ -1,8 +1,8 @@
 {
-  "id": "readingbuddy-talk",
-  "appName": "ReadingBuddy Talk",
+  "id": "story-comprehension",
+  "appName": "Story Comprehension",
   "appIdentifiers": [
-    "com.imagiration.readingbuddytalk"
+    "com.imagiration.storycomprehension"
   ],
   "appStoreId": "",
   "catalogUrl": "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.test.json",

@@ -22,7 +22,7 @@ public class WelcomeController : MonoBehaviour
     private bool _firstRun;
 
     private struct Demo { public string imgA, imgB, title, sub; public Demo(string a, string b, string t, string s){imgA=a;imgB=b;title=t;sub=s;} }
-    // ReadingBuddy Talk: what the app does, in the parent's words. No pictures yet.
+    // Story Comprehension: what the app does, in the parent's words. No pictures yet.
     private static readonly Demo[] TalkDemos =
     {
         new Demo("", "", "Every answer counts",            "The goal is that your child responds, not a test."),
@@ -48,6 +48,69 @@ public class WelcomeController : MonoBehaviour
     private void Start()
     {
         if (!_firstRun) StartCoroutine(AutoAdvanceReturning());
+        else if (Edition.Current.questionBooksOnly) StartCoroutine(DemoQuestionSoon());
+    }
+
+    // ---------------------------------------------------------------- the demo question
+
+    // Story Comprehension, first start: one real question slides up over this page, so the
+    // parent sees and tries what the child will do. It is the book dialogue itself (DialogueView
+    // and DialogueFlow), answered by touch, with pictures inside the app; no sound, no microphone.
+    public const string DemoQuestion = "Touch the pig.";
+    public const string DemoCaption = "Try it: your child will see questions like this";
+    public const string DemoPraise = "Yes! That is the pig.";
+    public const string DemoNextLabel = "Choose the level";
+
+    private DialogueView _demo;
+    private DialogueFlow _demoFlow;
+
+    private IEnumerator DemoQuestionSoon()
+    {
+        yield return new WaitForSeconds(0.8f);
+        if (this == null) yield break;
+        ShowDemoQuestion();
+    }
+
+    private void ShowDemoQuestion()
+    {
+        var spec = new DialogueSpec { question = DemoQuestion, answer = "pig", praiseText = DemoPraise };
+        spec.choices.Add(new DialogueChoice { id = "pig", text = "Pig", image = "res://welcome/talk_pig" });
+        spec.choices.Add(new DialogueChoice { id = "barn", text = "Barn", image = "res://welcome/talk_barn" });
+        spec.settings.input = DialogueInput.Touch;
+        spec.settings.skip = true;
+        _demoFlow = new DialogueFlow(spec);
+        _demo = DialogueView.Create();
+        _demo.Show(spec, voiceOn: false, pictureBottomScreenY: -1f, resolveUrl: url => url,
+            onChoice: DemoAnswer, onReplay: () => { }, onSkip: DemoClose, onNext: DemoNext, onTap: () => { });
+        _demo.Refresh(_demoFlow, DemoCaption);
+    }
+
+    private void DemoAnswer(string id)
+    {
+        switch (_demoFlow.Answer(id))
+        {
+            case DialogueFlow.Reaction.Correct:
+                _demo.ShowPraise(_demoFlow, DemoPraise, DemoNextLabel);
+                break;
+            case DialogueFlow.Reaction.Retry:
+                _demo.Refresh(_demoFlow, DialogueController.CaptionLookAgain);
+                break;
+        }
+    }
+
+    private void DemoClose()
+    {
+        if (_demo != null) _demo.Hide();
+    }
+
+    // "Choose the level": the same as the Continue button below (Home, or retry when the catalog
+    // did not load). While the catalog is still loading the page stays, with its loading button.
+    private void DemoNext()
+    {
+        DemoClose();
+        var go = GameObject.Find("ButtonLoadingRetryContinue");
+        var button = go != null ? go.GetComponent<Button>() : null;
+        if (button != null && button.interactable) button.onClick.Invoke();
     }
 
     // Returning users: linger on the intro for AutoAdvanceSeconds, then go to _Home. We also wait

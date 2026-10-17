@@ -14,7 +14,7 @@
 //   bookfile|<url>   open a book that is NOT in the catalog by the address of its script
 //                    (file:///.../stories/<Folder>/<script>.txt) — for test books on this Mac
 //   catalogfile|<path>  use a catalog file on this Mac instead of the downloaded catalog
-//   edition|<id>     behave as another edition from now on (e.g. readingbuddy-talk)
+//   edition|<id>     behave as another edition from now on (e.g. story-comprehension)
 //   mode|<Mode>      reading-mode picker tile: Storyteller | AppVoice | IRead | Pictures
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
@@ -118,7 +118,7 @@ public static class SweepActions
             case "edition":
             {
                 // Dev builds only: behave as another edition (Resources/Editions/<id>.json) from now
-                // on, e.g. readingbuddy-talk. The book list is filtered again for it.
+                // on, e.g. story-comprehension. The book list is filtered again for it.
                 PlayerPrefs.SetString("edition_override", arg); PlayerPrefs.Save();
                 T("Edition").GetMethod("Reset", Any).Invoke(null, null);
                 T("Globals").GetMethod("ApplyQuestionLevel", Any).Invoke(null, null);

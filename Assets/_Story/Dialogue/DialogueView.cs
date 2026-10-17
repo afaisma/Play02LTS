@@ -594,6 +594,17 @@ public class DialogueView : MonoBehaviour
 
     private static System.Collections.IEnumerator LoadPicture(string url, Image img)
     {
+        if (url.StartsWith("res://")) // a picture inside the app (the Welcome demo question)
+        {
+            var tex = Resources.Load<Texture2D>(url.Substring(6));
+            if (tex != null && img != null)
+            {
+                img.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                img.preserveAspect = true;
+                img.color = Color.white;
+            }
+            yield break;
+        }
         yield return PRUtils.DownloadImage(url, img, true, true);
         if (img != null && img.sprite != null) img.color = Color.white;
     }

@@ -1,7 +1,9 @@
 #if UNITY_EDITOR
 using System;
 using System.IO;
+using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -12,19 +14,27 @@ using UnityEngine;
 /// its identifier, so the APK reads that edition's catalog and installs next to the store app. It
 /// cannot be mistaken for a store build, and a store build can never show test books.
 ///
+/// An edition with its own icon files in Assets/_Story/Editions/Icons/ (&lt;id&gt;_background,
+/// _foreground, _round and _legacy .png) gets them as the app icon; without them the APK keeps the
+/// ReadingBuddy icon.
+///
 /// Menu: Tools / ReadingBuddy / Build ... (Android APK). The project settings are put back
 /// afterwards, also when the build fails. The APK goes to Build_Android/.
 /// </summary>
 public static class RbTestBuild
 {
     private const string TestEditionId = "readingbuddy-test";
-    private const string TalkEditionId = "readingbuddy-talk";
+    private const string TalkEditionId = "story-comprehension";
+    private const string IconsFolder = "Assets/_Story/Editions/Icons/";
+
+    private static readonly PlatformIconKind[] IconKinds =
+        { AndroidPlatformIconKind.Adaptive, AndroidPlatformIconKind.Round, AndroidPlatformIconKind.Legacy };
 
     [MenuItem("Tools/ReadingBuddy/Build TEST app (Android APK)")]
     public static void BuildTestMenu() => BuildMenu(TestEditionId, "ReadingBuddyTest");
 
-    [MenuItem("Tools/ReadingBuddy/Build ReadingBuddy Talk (Android APK)")]
-    public static void BuildTalkMenu() => BuildMenu(TalkEditionId, "ReadingBuddyTalk");
+    [MenuItem("Tools/ReadingBuddy/Build Story Comprehension (Android APK)")]
+    public static void BuildTalkMenu() => BuildMenu(TalkEditionId, "StoryComprehension");
 
     private static void BuildMenu(string editionId, string fileStem)
     {
@@ -59,11 +69,13 @@ public static class RbTestBuild
         string root = Path.GetDirectoryName(Application.dataPath);
         string buildDir = Path.Combine(root, "Build_Android");
         string built = Path.Combine(buildDir, fileStem + ".apk");
+        List<Texture2D[]> prevIcons = null;
         try
         {
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, test.appIdentifiers[0]);
             PlayerSettings.productName = test.appName;
             EditorUserBuildSettings.buildAppBundle = false; // an APK to send, not a store bundle
+            prevIcons = SetEditionIcons(editionId);
             Directory.CreateDirectory(buildDir);
 
             var scenes = new System.Collections.Generic.List<string>();
@@ -85,7 +97,8 @@ public static class RbTestBuild
             File.Move(built, apk);
             long mb = new FileInfo(apk).Length / (1024 * 1024);
             return "ALL DONE: " + apk + " (" + mb + " MB), identifier " +
-                   test.appIdentifiers[0] + ", catalog " + test.catalogUrl;
+                   test.appIdentifiers[0] + ", catalog " + test.catalogUrl +
+                   (prevIcons != null ? ", own icon" : ", ReadingBuddy icon");
         }
         catch (Exception e)
         {
@@ -97,10 +110,51 @@ public static class RbTestBuild
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, prevId);
             PlayerSettings.productName = prevName;
             EditorUserBuildSettings.buildAppBundle = prevBundle;
+            if (prevIcons != null) RestoreIcons(prevIcons);
             AssetDatabase.SaveAssets();
             Debug.Log("[RB test build] settings put back: " + prevId + " / " + prevName);
         }
     }
+
+    /// <summary>
+    /// Puts the edition's icon files on every Android icon slot. Returns the textures that were
+    /// there (one entry per slot, kinds in IconKinds order), or null when the edition has no icon files.
+    /// </summary>
+    private static List<Texture2D[]> SetEditionIcons(string editionId)
+    {
+        Texture2D background = LoadIcon(editionId + "_background");
+        Texture2D foreground = LoadIcon(editionId + "_foreground");
+        Texture2D round = LoadIcon(editionId + "_round");
+        Texture2D legacy = LoadIcon(editionId + "_legacy");
+        if (background == null || foreground == null || round == null || legacy == null) return null;
+        Texture2D[][] wanted = { new[] { background, foreground }, new[] { round }, new[] { legacy } };
+        var prev = new List<Texture2D[]>();
+        for (int k = 0; k < IconKinds.Length; k++)
+        {
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, IconKinds[k]);
+            foreach (PlatformIcon icon in icons)
+            {
+                prev.Add(icon.GetTextures());
+                icon.SetTextures(wanted[k]);
+            }
+            PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, IconKinds[k], icons);
+        }
+        return prev;
+    }
+
+    private static void RestoreIcons(List<Texture2D[]> prev)
+    {
+        int n = 0;
+        foreach (PlatformIconKind kind in IconKinds)
+        {
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind);
+            foreach (PlatformIcon icon in icons) icon.SetTextures(prev[n++]);
+            PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, icons);
+        }
+    }
+
+    private static Texture2D LoadIcon(string name) =>
+        AssetDatabase.LoadAssetAtPath<Texture2D>(IconsFolder + name + ".png");
 
     private static Edition FindEdition(string id)
     {

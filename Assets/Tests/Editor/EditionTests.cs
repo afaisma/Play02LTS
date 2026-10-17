@@ -161,13 +161,13 @@ namespace ReadingBuddy.Tests
         {
             List<Edition> all = ShippedEditions();
             Edition prod = all.Find(e => e.id == Edition.DefaultId);
-            Edition talk = all.Find(e => e.id == "readingbuddy-talk");
-            Assert.IsNotNull(talk, "Resources/Editions/readingbuddy-talk.json");
+            Edition talk = all.Find(e => e.id == "story-comprehension");
+            Assert.IsNotNull(talk, "Resources/Editions/story-comprehension.json");
             Assert.IsTrue(talk.questionBooksOnly);
             Assert.IsFalse(prod.questionBooksOnly, "ReadingBuddy shows every book");
             Assert.AreEqual("_HomeTalk", talk.homeScene);
             Assert.AreEqual("_Home", prod.homeScene, "a missing homeScene means ReadingBuddy's Home");
-            Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.readingbuddytalk"));
+            Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.storycomprehension"));
             Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(talk.catalogUrl));
         }
 

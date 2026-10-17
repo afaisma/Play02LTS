@@ -6,7 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// Home of ReadingBuddy Talk (_HomeTalk): one screen with the books of the chosen question level.
+/// Home of Story Comprehension (_HomeTalk): one screen with the books of the chosen question level.
 /// Top: the app name and the level chip; under it a line that says what the level means; then the
 /// book tiles (cover, name, how many questions the child has answered); at the bottom the
 /// "For grown-ups" door to Settings, behind the same small sum as ReadingBuddy's.

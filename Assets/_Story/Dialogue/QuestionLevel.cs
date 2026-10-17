@@ -69,7 +69,7 @@ public static class QuestionLevel
 
     /// <summary>
     /// The books of the catalog that are shown at the given level, in catalog order. With
-    /// onlyLevelBooks, books without a level tag are left out too (ReadingBuddy Talk).
+    /// onlyLevelBooks, books without a level tag are left out too (Story Comprehension).
     /// </summary>
     public static List<PRBook> Visible(List<PRBook> all, string level, bool onlyLevelBooks = false)
     {
