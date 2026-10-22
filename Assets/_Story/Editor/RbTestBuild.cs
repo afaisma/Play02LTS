@@ -56,6 +56,32 @@ public static class RbTestBuild
     /// <summary>Builds the test edition's APK. Returns one line that starts with "ALL DONE" or "FAILED".</summary>
     public static string BuildAndroid() => BuildAndroid(TestEditionId, "ReadingBuddyTest");
 
+    private const string PendingKey = "RbTestBuild.pending";   // "<editionId>|<fileStem>"
+    private const string StatusFile = "Build/_smoke/apk_status.txt";
+
+    /// <summary>
+    /// For the editor bridge: remembers a build request, and RunPending builds it once. A bridge
+    /// call that waits for a build times out and is sent again; a second RunPending finds nothing.
+    /// </summary>
+    public static string Schedule(string editionId, string fileStem)
+    {
+        EditorPrefs.SetString(PendingKey, editionId + "|" + fileStem);
+        return "scheduled " + fileStem + ": call RbTestBuild.RunPending(); the result goes to " + StatusFile;
+    }
+
+    public static string RunPending()
+    {
+        string pending = EditorPrefs.GetString(PendingKey, "");
+        if (pending.Length == 0) return "nothing pending";
+        EditorPrefs.DeleteKey(PendingKey);
+        string[] parts = pending.Split('|');
+        string status = Path.Combine(Path.GetDirectoryName(Application.dataPath), StatusFile);
+        File.WriteAllText(status, "building " + parts[1] + "\n");
+        string result = BuildAndroid(parts[0], parts[1]);
+        File.AppendAllText(status, result + "\n");
+        return result;
+    }
+
     /// <summary>Builds an edition's APK. Returns one line that starts with "ALL DONE" or "FAILED".</summary>
     public static string BuildAndroid(string editionId, string fileStem)
     {

@@ -25,6 +25,8 @@ public class DialogueController : MonoBehaviour
     public const string MicRefusedPrefKey = "dialogue_mic_refused";
     public const string CaptionLookAgain = "Let’s look again.";
     public const string CaptionWait = "It’s OK. I can wait.";
+    /// <summary>After a right answer the page turns by itself this long after the praise (a tap turns it sooner).</summary>
+    public const float AutoTurnSeconds = 2f;
 
     public readonly DialogueScript Script = new DialogueScript();
     private readonly StarRow _stars = new StarRow();
@@ -209,7 +211,7 @@ public class DialogueController : MonoBehaviour
         // The "Say it or tap it" sign only when something can really be heard (picture choices
         // without a word have nothing to listen for).
         bool voiceOn = spec.VoiceWanted && MicAllowed && DialogueSpeech.Vocabulary(spec.choices).Count > 0;
-        _view.Show(spec, voiceOn, PictureBottomScreenY(), ResolveUrl,
+        _view.Show(spec, voiceOn, _flow.ChoicesShown(voiceOn), PictureBottomScreenY(), ResolveUrl,
             id => Answer(id, "touch"), ReplayQuestion, Skip, NextPage, () => Answer("", "touch"));
 
         Ask();
@@ -361,6 +363,7 @@ public class DialogueController : MonoBehaviour
 
     private IEnumerator RewardThenPraiseCo(DialogueSpec spec, RewardLevel level)
     {
+        DialogueFlow flow = _flow;
         if (spec.settings.reward && level != RewardLevel.Quiet)
         {
             // The book's own sound for this question, or the chime.
@@ -378,6 +381,11 @@ public class DialogueController : MonoBehaviour
             _voice.Stop();
         }
         yield return PlayPromptCo(spec.praiseAudio);
+        // The praise has been said: the page turns by itself, so the child's attention is not lost
+        // while the grown-up looks for the Next button.
+        while (_voice != null && _voice.isPlaying) yield return null;
+        yield return new WaitForSecondsRealtime(AutoTurnSeconds);
+        if (_flow == flow) NextPage(); // not when a tap has turned the page already
     }
 
     private void Silence()

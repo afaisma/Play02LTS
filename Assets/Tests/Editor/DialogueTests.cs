@@ -252,6 +252,23 @@ namespace ReadingBuddy.Tests
         // ---- DialogueFlow: answers ----
 
         [Test]
+        public void Flow_VoiceQuestion_ShowsChoicesOnlyAfterTwoMisses()
+        {
+            DialogueSpec spec = Jack("tree");
+            spec.settings.input = DialogueInput.Voice;
+            var flow = new DialogueFlow(spec);
+            Assert.IsFalse(flow.ChoicesShown(voiceOn: true), "the child should speak first");
+            Assert.IsTrue(flow.ChoicesShown(voiceOn: false), "no microphone: the choices are the only way to answer");
+            flow.Silence();
+            Assert.IsFalse(flow.ChoicesShown(voiceOn: true));
+            flow.Answer("house");
+            Assert.IsTrue(flow.ChoicesShown(voiceOn: true), "a silence and another answer: two misses");
+
+            var both = new DialogueFlow(Jack("tree")); // DialogueInput "both": choices from the start
+            Assert.IsTrue(both.ChoicesShown(voiceOn: true));
+        }
+
+        [Test]
         public void Flow_RightAnswer_Praises()
         {
             var flow = new DialogueFlow(Jack());

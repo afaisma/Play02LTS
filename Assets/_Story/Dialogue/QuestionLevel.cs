@@ -89,7 +89,7 @@ public static class QuestionLevel
         "Does not speak yet",
         "Says single words",
         "Says three or four words",
-        "Understands the story",
+        "Says full sentences",
     };
     public static readonly string[] TextChildMore =
     {

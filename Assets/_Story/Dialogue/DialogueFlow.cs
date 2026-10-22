@@ -15,6 +15,11 @@ public class DialogueFlow
 
     /// <summary>The question is repeated at most this many times after silences; then it waits quietly.</summary>
     public const int MaxSilenceRepeats = 3;
+    /// <summary>
+    /// A question answered by voice (DialogueInput "voice") shows its choices only after this many
+    /// tries without the answer (a silence or another answer): the child should speak, not tap.
+    /// </summary>
+    public const int TriesBeforeChoices = 2;
 
     public readonly DialogueSpec spec;
     public Step step = Step.Ask;
@@ -29,6 +34,13 @@ public class DialogueFlow
     public DialogueFlow(DialogueSpec spec) { this.spec = spec; }
 
     public bool IsRight(string id) => spec.EveryAnswerCounts || id == spec.answer;
+
+    /// <summary>
+    /// True when the choices are on screen. Always, except for a voice question while the
+    /// microphone listens (voiceOn) and the child has not yet missed TriesBeforeChoices times.
+    /// </summary>
+    public bool ChoicesShown(bool voiceOn) =>
+        !voiceOn || spec.settings.input != DialogueInput.Voice || attempts + silences >= TriesBeforeChoices;
 
     public Reaction Answer(string id)
     {

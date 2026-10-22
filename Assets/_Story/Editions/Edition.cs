@@ -32,6 +32,11 @@ public class Edition
     public bool questionBooksOnly = false;
     /// <summary>The scene behind "Home": ReadingBuddy's rooms (_Home) or Talk's book list (_HomeTalk).</summary>
     public string homeScene = "_Home";
+    /// <summary>
+    /// False = a tap on a word does nothing while the page is being read aloud (Story Comprehension:
+    /// a child could otherwise tap again and again instead of listening). True = ReadingBuddy as before.
+    /// </summary>
+    public bool wordTapWhileReading = true;
 
     private static Edition _current;
     public const string OverridePref = "edition_override"; // dev builds only

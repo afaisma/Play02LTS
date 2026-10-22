@@ -9,6 +9,8 @@
 //                                                  show pages, not onboarding)
 //   continue         Welcome screen's Continue (Globals.Home) — the first-run Welcome waits for it
 //   home | learn | settings | parents | bookstore   navigation
+//   scene|<name>     load any scene by name (e.g. _Welcome after edition|story-comprehension,
+//                    to see that edition's first-run Welcome)
 //   library|<filter> Library shelf (everything, fairytales, learn to read, level2, new, ...)
 //   book|<folder>    open the book whose bookUrl contains <folder> (e.g. FarmAnimalsRhymebook)
 //   bookfile|<url>   open a book that is NOT in the catalog by the address of its script
@@ -93,6 +95,7 @@ public static class SweepActions
                 break;
             }
             case "home":      Call(null, T("Navigation"), "GoToHome"); break;
+            case "scene":     Call(null, T("Navigation"), "GoToScene", arg); break;
             case "learn":     Call(null, T("Navigation"), "GoToLearnToRead"); break;
             case "settings":  Call(null, T("Navigation"), "GoToSettings"); break;
             case "parents":   Call(null, T("Navigation"), "GoToParents"); break;

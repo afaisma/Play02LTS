@@ -22,6 +22,7 @@ public class DialogueView : MonoBehaviour
 {
     // Fixed screen texts (reviewed for this audience: literal, no idioms, never "wrong").
     public const string TextSayOrTap = "Say it or tap it";
+    public const string TextSayIt = "Say your answer";
     public const string TextTapToAnswer = "Tap to answer";
     public const string TextSkip = "Skip";
     public const string TextNextPage = "Next page";
@@ -87,6 +88,9 @@ public class DialogueView : MonoBehaviour
     private readonly Dictionary<string, ChoiceVisual> _choices = new Dictionary<string, ChoiceVisual>();
     private readonly List<RectTransform> _levelBars = new List<RectTransform>();
     private DialogueSpec _spec;
+    private Func<string, string> _resolveUrl;
+    private bool _voiceOn;
+    private bool _choicesHidden;                      // a voice question: the choices come after misses
     private float _contentWidth, _bodyHeight;
     private Action<string> _onChoice;
     private Action _onReplay, _onSkip, _onNext, _onTap;
@@ -117,10 +121,15 @@ public class DialogueView : MonoBehaviour
 
     /// <param name="pictureBottomScreenY">Screen y (pixels) of the page picture's lower edge; the
     /// sheet's top edge goes there, so the picture stays visible. Negative = unknown.</param>
-    public void Show(DialogueSpec spec, bool voiceOn, float pictureBottomScreenY, Func<string, string> resolveUrl,
+    /// <param name="choicesShown">False: a voice question starts with the microphone alone; the
+    /// choices come with Refresh once the flow says so (DialogueFlow.ChoicesShown).</param>
+    public void Show(DialogueSpec spec, bool voiceOn, bool choicesShown, float pictureBottomScreenY, Func<string, string> resolveUrl,
                      Action<string> onChoice, Action onReplay, Action onSkip, Action onNext, Action onTap)
     {
         _spec = spec;
+        _resolveUrl = resolveUrl;
+        _voiceOn = voiceOn;
+        _choicesHidden = !choicesShown;
         _onChoice = onChoice; _onReplay = onReplay; _onSkip = onSkip; _onNext = onNext; _onTap = onTap;
         ClearStarPill();
         // First of all: a sheet that is still sliding away is not interactable, and a button
@@ -160,7 +169,7 @@ public class DialogueView : MonoBehaviour
         SetSpeaking(false);
         _praise = false;
 
-        BuildBody(spec, resolveUrl);
+        if (_choicesHidden) BuildListenBody(); else BuildBody(spec, resolveUrl);
         BuildFooter(spec, voiceOn, praise: false, nextLabel: null);
 
         _scrim.DOKill();
@@ -190,6 +199,7 @@ public class DialogueView : MonoBehaviour
     public void Refresh(DialogueFlow flow, string caption)
     {
         SetCaption(caption);
+        if (_choicesHidden && flow.ChoicesShown(_voiceOn)) RevealChoices();
         foreach (var kv in _choices)
         {
             ChoiceVisual v = kv.Value;
@@ -217,6 +227,7 @@ public class DialogueView : MonoBehaviour
         // From now on a tap anywhere on the sheet turns the page, like the "Next page" button:
         // a child taps the big answer again and again and expects something to happen.
         _praise = true;
+        if (_choicesHidden) RevealChoices(); // the chosen choice is shown with the praise
         foreach (var kv in _choices)
         {
             ChoiceVisual v = kv.Value;
@@ -609,6 +620,33 @@ public class DialogueView : MonoBehaviour
         if (img != null && img.sprite != null) img.color = Color.white;
     }
 
+    // A voice question before its choices are shown: the choices' room, with the microphone in it.
+    // The sheet keeps the height the choices will need, so nothing moves when they come.
+    private void BuildListenBody()
+    {
+        KillChoiceTweens();
+        Clear(_body);
+        _choices.Clear();
+        _levelBars.Clear();
+        var col = _body.gameObject.AddComponent<VerticalLayoutGroup>();
+        col.childAlignment = TextAnchor.MiddleCenter;
+        col.childControlWidth = false; col.childControlHeight = false;
+        col.childForceExpandWidth = false; col.childForceExpandHeight = false;
+        float disc = Mathf.Clamp(_bodyHeight - 30f, 170f, 320f);
+        var outer = Disc("Mic", _body, disc, BlueSoft);
+        var mid = Disc("Mid", outer, disc * 0.74f, BlueMid);
+        var inner = Disc("Inner", mid, disc * 0.52f, BlueInk);
+        BuildMicrophone(UiGlyphs.NewBox(inner, "Glyph", disc * 0.36f), Color.white);
+    }
+
+    // The choices of a voice question come on screen (after misses, or with the praise).
+    private void RevealChoices()
+    {
+        _choicesHidden = false;
+        BuildBody(_spec, _resolveUrl);
+        BuildFooter(_spec, _voiceOn, praise: false, nextLabel: null);
+    }
+
     private void BuildSoundBody()
     {
         var col = _body.gameObject.AddComponent<VerticalLayoutGroup>();
@@ -695,7 +733,7 @@ public class DialogueView : MonoBehaviour
             var ci = chip.GetComponent<Image>();
             ci.sprite = UiGlyphs.CircleSprite(); ci.color = BlueFill; ci.raycastTarget = false;
             BuildMicrophone(UiGlyphs.NewBox(chip.transform, "Glyph", 66f), BlueInk);
-            var hint = DialogChrome.MakeText(_footer, "SayOrTap", TextSayOrTap, 46f, TextAlignmentOptions.Left, CaptionInk);
+            var hint = DialogChrome.MakeText(_footer, "SayOrTap", _choicesHidden ? TextSayIt : TextSayOrTap, 46f, TextAlignmentOptions.Left, CaptionInk);
             var hle = hint.gameObject.AddComponent<LayoutElement>();
             hle.preferredWidth = 430f; hle.preferredHeight = 104f;
         }

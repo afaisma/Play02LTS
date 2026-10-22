@@ -56,9 +56,9 @@ public class WelcomeController : MonoBehaviour
     // Story Comprehension, first start: one real question slides up over this page, so the
     // parent sees and tries what the child will do. It is the book dialogue itself (DialogueView
     // and DialogueFlow), answered by touch, with pictures inside the app; no sound, no microphone.
-    public const string DemoQuestion = "Touch the pig.";
+    public const string DemoQuestion = "Touch the bear.";
     public const string DemoCaption = "Try it: your child will see questions like this";
-    public const string DemoPraise = "Yes! That is the pig.";
+    public const string DemoPraise = "Yes! That is the bear.";
     public const string DemoNextLabel = "Choose the level";
 
     private DialogueView _demo;
@@ -73,14 +73,14 @@ public class WelcomeController : MonoBehaviour
 
     private void ShowDemoQuestion()
     {
-        var spec = new DialogueSpec { question = DemoQuestion, answer = "pig", praiseText = DemoPraise };
-        spec.choices.Add(new DialogueChoice { id = "pig", text = "Pig", image = "res://welcome/talk_pig" });
-        spec.choices.Add(new DialogueChoice { id = "barn", text = "Barn", image = "res://welcome/talk_barn" });
+        var spec = new DialogueSpec { question = DemoQuestion, answer = "bear", praiseText = DemoPraise };
+        spec.choices.Add(new DialogueChoice { id = "girl", text = "Girl", image = "res://welcome/talk_girl" });
+        spec.choices.Add(new DialogueChoice { id = "bear", text = "Bear", image = "res://welcome/talk_bear" });
         spec.settings.input = DialogueInput.Touch;
         spec.settings.skip = true;
         _demoFlow = new DialogueFlow(spec);
         _demo = DialogueView.Create();
-        _demo.Show(spec, voiceOn: false, pictureBottomScreenY: -1f, resolveUrl: url => url,
+        _demo.Show(spec, voiceOn: false, choicesShown: true, pictureBottomScreenY: -1f, resolveUrl: url => url,
             onChoice: DemoAnswer, onReplay: () => { }, onSkip: DemoClose, onNext: DemoNext, onTap: () => { });
         _demo.Refresh(_demoFlow, DemoCaption);
     }

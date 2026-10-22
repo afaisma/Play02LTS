@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 83cc38ba5266442cfb50289d8c839f6a
+guid: 84755a8f01abb440e89b604cdedb293f
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 8290050619851713771
-    second: talk_barn_0
+      213: 7440899751104443629
+    second: talk_girl_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -139,7 +139,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: talk_barn_0
+      name: talk_girl_0
       rect:
         serializedVersion: 2
         x: 0
@@ -154,8 +154,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: beca44ebd1d2c0370800000000000000
-      internalID: 8290050619851713771
+      spriteID: de47fd966e2634760800000000000000
+      internalID: 7440899751104443629
       vertices: []
       indices: 
       edges: []
@@ -174,7 +174,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      talk_barn_0: 8290050619851713771
+      talk_girl_0: 7440899751104443629
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

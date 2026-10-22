@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: cfa735ee91dd641798ac00381fc7512c
+guid: ee43678ad1e1d405ba69c7d2458ab74d
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -8833203174428362151
-    second: talk_pig_0
+      213: 4899798205204446174
+    second: talk_bear_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -139,7 +139,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: talk_pig_0
+      name: talk_bear_0
       rect:
         serializedVersion: 2
         x: 0
@@ -154,8 +154,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 95a385f53882a6580800000000000000
-      internalID: -8833203174428362151
+      spriteID: edbbe44e1849ff340800000000000000
+      internalID: 4899798205204446174
       vertices: []
       indices: 
       edges: []
@@ -174,7 +174,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      talk_pig_0: -8833203174428362151
+      talk_bear_0: 4899798205204446174
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

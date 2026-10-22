@@ -1017,6 +1017,8 @@ public class AudioAndTextPlayer : MonoBehaviour
         // Read-along (Mode A) has no echo-gate: a wordbank slice played here would be heard by the
         // live mic and wrongly advance the matcher cursor — so word-tap is off while it owns the page.
         if (!wordTapEnabled || ReadAlongActive || uiForeground == null) return false;
+        // Story Comprehension: no word while the page is being read (the edition says so).
+        if (IsAudible && !Edition.Current.wordTapWhileReading) return false;
         // Overlay canvases hit-test with a null camera; others use their world/event camera.
         Camera cam = null;
         Canvas c = uiForeground.canvas;

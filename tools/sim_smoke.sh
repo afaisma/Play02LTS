@@ -5,6 +5,7 @@
 #   tools/sim_smoke.sh launch "<device>"        fresh install + launch + three screenshots
 #   tools/sim_smoke.sh run "<device>" [plan]    fresh install + the sweep plan (tools/sim_smoke.plan
 #                                               or the given plan file) with host screenshots per cap step
+#                                               (SIM_GRANT_MIC=1 allows the microphone before the launch)
 #   tools/sim_smoke.sh all                      run on the four smoke devices
 #   tools/sim_smoke.sh smoke                    build + all (what the Unity menu item starts)
 #   tools/sim_smoke.sh store "<device>"         like run, with tools/sim_store.plan, captures in
@@ -91,6 +92,9 @@ run|store)
   xcrun simctl bootstatus "$UDID" -b >/dev/null
   xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
   xcrun simctl install "$UDID" "$APP" || finish install-failed 1
+  # SIM_GRANT_MIC=1: the microphone is allowed before the launch, so a dialogue book skips its
+  # "Allow microphone" screen (the sweep cannot answer the system question).
+  [ "${SIM_GRANT_MIC:-0}" = 1 ] && xcrun simctl privacy "$UDID" grant microphone "$BUNDLE"
   T0=$(date +%s)
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" -sweep "$PLAN" || finish launch-failed 1
   DOCS=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)/Documents/sweep
