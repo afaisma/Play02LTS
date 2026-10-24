@@ -23,7 +23,8 @@
 //   click|<name>     press any active Button by GameObject name (e.g. ShowAllAges)
 //   next | prev      page-turn arrows
 //   rate | ratelater the rate-app panel in / out
-//   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly)
+//   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly;
+//                    the dialog comes after two offline polls, so send offline| twice)
 //   stall | stallclear                  the read-along stall hint (arrow pulse + once-ever caption)
 //   A dialogue is driven with click|Choice_<name>, click|TapToAnswer, click|Skip, click|Next;
 //   prefint|dialogue_mic=0 switches its microphone off (Recognissimo is stubbed in the Simulator).

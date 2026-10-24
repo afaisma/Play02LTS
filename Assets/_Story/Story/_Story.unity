@@ -9831,7 +9831,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 22888423}
         m_TargetAssemblyTypeName: PRScript, Assembly-CSharp
-        m_MethodName: NextStep
+        m_MethodName: NextStepByUser
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

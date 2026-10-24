@@ -948,6 +948,19 @@ public class Globals : MonoBehaviour
     {
         Debug.Log("Downloading CSV from: " + url);
         IsDownloading = true;
+        // No connection at all: the last catalog from the phone at once, not after the 20-second wait.
+        if (Application.internetReachability == NetworkReachability.NotReachable)
+        {
+            string offline = DiskCache.TryReadText(url, "catalog", ".json");
+            if (!string.IsNullOrEmpty(offline))
+            {
+                IsDownloading = false;
+                Debug.Log("DownloadCSV: no connection, served catalog from cache");
+                onComplete(offline);
+                ConfigureLoadingButton();
+                yield break;
+            }
+        }
         using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
             request.timeout = 20;  // CSV is startup-critical; fail fast so the

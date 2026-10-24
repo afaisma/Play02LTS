@@ -63,6 +63,7 @@ public class SettingsScene : MonoBehaviour
         // AutopageSettingRow); it moved here out of the reading-mode modal.
         AutopageSettingRow.Attach();
         QuestionLevelSetting.Attach();  // only when the catalog has books made for a question level
+        DialogueSkipSetting.Attach();   // same condition
         DialogueRewardSetting.Attach(); // only after a book with questions has been opened on this device
     }
 

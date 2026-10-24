@@ -24,6 +24,12 @@ public class SpeechListenService : MonoBehaviour
 {
     public static SpeechListenService Instance { get; private set; }
 
+    /// <summary>
+    /// How loud the microphone is right now (RMS of the last samples), while the recognizer runs;
+    /// 0 otherwise. For the level meter of a question answered by voice (DialogueView).
+    /// </summary>
+    public float Level { get; private set; }
+
     // ---- Recognissimo stack (lazy, created once, kept warm across pages) ----
     private SpeechRecognizer _recognizer;
     private MicrophoneSpeechSource _micSource;
@@ -171,6 +177,7 @@ public class SpeechListenService : MonoBehaviour
     {
         _armed = false;
         _listening = false;
+        Level = 0f;
         _onHeard = _onNotUnderstood = _onHint = null;
         _matcher = null; _onHeardId = null;
         if (_armCo != null) { StopCoroutine(_armCo); _armCo = null; }
@@ -229,6 +236,12 @@ public class SpeechListenService : MonoBehaviour
 
         _micSource = sttGO.AddComponent<MicrophoneSpeechSource>();
         _micSource.DeviceName = null; // default microphone
+        _micSource.SamplesReady += (sender, e) =>
+        {
+            float sum = 0f;
+            for (int i = 0; i < e.Length; i++) sum += e.Samples[i] * e.Samples[i];
+            Level = e.Length > 0 ? Mathf.Sqrt(sum / e.Length) : 0f;
+        };
 
         var provider = sttGO.AddComponent<StreamingAssetsLanguageModelProvider>();
         provider.language = SystemLanguage.English;

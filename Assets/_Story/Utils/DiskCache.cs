@@ -26,9 +26,11 @@ public static class DiskCache
 {
     // Per-tier on-disk budgets (bytes). Sized so a child can keep a few dozen
     // opened books fully offline (~300 MB total). Eviction is size-based LRU.
-    public const long ImageBudgetBytes   = 120L * 1024 * 1024; // page art
-    public const long AudioBudgetBytes   = 150L * 1024 * 1024; // narration + word audio
-    public const long TimingsBudgetBytes =   8L * 1024 * 1024; // word-timing JSON
+    // An edition that keeps every book on the phone (Edition.downloadAllBooks) gets room for all
+    // the books of all four levels (about 230 MB of pictures per level).
+    public static long ImageBudgetBytes => Edition.Current.downloadAllBooks ? 1000L * 1024 * 1024 : 120L * 1024 * 1024; // page art
+    public static long AudioBudgetBytes => Edition.Current.downloadAllBooks ? 400L * 1024 * 1024 : 150L * 1024 * 1024; // narration + word audio
+    public static long TimingsBudgetBytes => Edition.Current.downloadAllBooks ? 32L * 1024 * 1024 : 8L * 1024 * 1024; // word-timing JSON
     public const long ScriptBudgetBytes  =   4L * 1024 * 1024; // per-book chunk scripts
     public const long CatalogBudgetBytes =   2L * 1024 * 1024; // library catalog (latest)
 

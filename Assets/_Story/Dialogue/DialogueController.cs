@@ -27,6 +27,8 @@ public class DialogueController : MonoBehaviour
     public const string CaptionWait = "It’s OK. I can wait.";
     /// <summary>After a right answer the page turns by itself this long after the praise (a tap turns it sooner).</summary>
     public const float AutoTurnSeconds = 2f;
+    /// <summary>Microphone level (RMS) that fills the meter of a question answered by voice.</summary>
+    public const float SpeechMeterFull = 0.06f;
 
     public readonly DialogueScript Script = new DialogueScript();
     private readonly StarRow _stars = new StarRow();
@@ -204,6 +206,7 @@ public class DialogueController : MonoBehaviour
 
         DialogueSpec spec = _pending;
         _pending = null;
+        spec.settings.skip &= DialogueSkipSetting.Enabled; // the Skip button is the grown-up's choice (off by default)
         _flow = new DialogueFlow(spec);
         _quiet = 0f;
 
@@ -432,6 +435,12 @@ public class DialogueController : MonoBehaviour
                 if (_sound.Feed(_mic.Level, dt)) { Answer("", "sound"); return; }
             }
         }
+        else if (_armedSpeech && SpeechListenService.Instance != null)
+        {
+            // A question answered by voice: the recognizer's microphone drives the meter (half
+            // full at a normal speaking level), so the adult sees that the phone hears the child.
+            _view.SetLevel(speaking ? 0f : SpeechListenService.Instance.Level / SpeechMeterFull);
+        }
 
         // Silence clock: only while the app itself is quiet.
         if (speaking) { _quiet = 0f; return; }
@@ -552,12 +561,29 @@ public class DialogueController : MonoBehaviour
         {
             _promptLoading = true;
             string url = ResolveUrl(reference + ".mp3");
-            using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG))
+            // The phone's copy first (BookPrefetch, or an earlier reading), then the server.
+            string disk = DiskCache.PathFor(url, "audio", ".mp3");
+            if (System.IO.File.Exists(disk))
             {
-                req.timeout = 10;
-                yield return req.SendWebRequest();
-                if (req.result == UnityWebRequest.Result.Success) clip = DownloadHandlerAudioClip.GetContent(req);
-                else Debug.Log($"[Dialogue] no recording at {url} ({req.error})");
+                using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip("file://" + disk, AudioType.MPEG))
+                {
+                    yield return req.SendWebRequest();
+                    if (req.result == UnityWebRequest.Result.Success) clip = DownloadHandlerAudioClip.GetContent(req);
+                }
+            }
+            if (clip == null)
+            {
+                using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG))
+                {
+                    req.timeout = 10;
+                    yield return req.SendWebRequest();
+                    if (req.result == UnityWebRequest.Result.Success)
+                    {
+                        clip = DownloadHandlerAudioClip.GetContent(req);
+                        if (clip != null) DiskCache.WriteBytes(url, "audio", ".mp3", req.downloadHandler.data, DiskCache.AudioBudgetBytes);
+                    }
+                    else Debug.Log($"[Dialogue] no recording at {url} ({req.error})");
+                }
             }
             _clips[reference] = clip; // also remembers a miss, so a replay does not ask again
             _promptLoading = false;

@@ -37,6 +37,13 @@ public class Edition
     /// a child could otherwise tap again and again instead of listening). True = ReadingBuddy as before.
     /// </summary>
     public bool wordTapWhileReading = true;
+    /// <summary>False = no puzzle button on the pages (Story Comprehension: the questions are the activity).</summary>
+    public bool puzzle = true;
+    /// <summary>
+    /// True = every book of the chosen level is downloaded to the phone from the Home screen
+    /// (BookPrefetch), and the disk cache is large enough to keep them all.
+    /// </summary>
+    public bool downloadAllBooks = false;
 
     private static Edition _current;
     public const string OverridePref = "edition_override"; // dev builds only

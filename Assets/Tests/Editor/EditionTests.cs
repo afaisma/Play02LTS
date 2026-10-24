@@ -169,6 +169,10 @@ namespace ReadingBuddy.Tests
             Assert.AreEqual("_Home", prod.homeScene, "a missing homeScene means ReadingBuddy's Home");
             Assert.IsFalse(talk.wordTapWhileReading, "no word taps while the page is read");
             Assert.IsTrue(prod.wordTapWhileReading, "a missing wordTapWhileReading keeps ReadingBuddy's word taps");
+            Assert.IsFalse(talk.puzzle, "no puzzle button in Story Comprehension");
+            Assert.IsTrue(prod.puzzle, "a missing puzzle keeps ReadingBuddy's puzzle button");
+            Assert.IsTrue(talk.downloadAllBooks, "Story Comprehension keeps every book of the level on the phone");
+            Assert.IsFalse(prod.downloadAllBooks, "ReadingBuddy downloads books as they are opened");
             Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.storycomprehension"));
             Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(talk.catalogUrl));
         }

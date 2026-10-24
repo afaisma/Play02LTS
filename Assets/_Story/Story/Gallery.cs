@@ -146,6 +146,7 @@ public class Gallery : MonoBehaviour
     public void ShowPuzzleButton(bool show)
     {
         if (btnPuzzle == null) return;
+        if (!Edition.Current.puzzle) show = false; // an edition without the puzzle (Story Comprehension)
         btnPuzzle.gameObject.SetActive(show);
         if (show)
         {

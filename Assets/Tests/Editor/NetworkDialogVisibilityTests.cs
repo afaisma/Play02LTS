@@ -10,9 +10,20 @@ namespace ReadingBuddy.Tests
     public class NetworkDialogVisibilityTests
     {
         [Test]
-        public void OfflinePoll_ShowsDialog()
+        public void OfflinePoll_ShowsDialog_OnlyAfterTwoFailedPollsInARow()
         {
             var v = new NetworkDialogVisibility();
+            Assert.IsFalse(v.OnStatusChange(false), "one slow or failed probe is not 'no internet'");
+            Assert.IsTrue(v.OnStatusChange(false));
+        }
+
+        [Test]
+        public void OnePollBackOnline_StartsCountingAgain()
+        {
+            var v = new NetworkDialogVisibility();
+            v.OnStatusChange(false);
+            v.OnStatusChange(true);
+            Assert.IsFalse(v.OnStatusChange(false));
             Assert.IsTrue(v.OnStatusChange(false));
         }
 
@@ -27,6 +38,7 @@ namespace ReadingBuddy.Tests
         public void RepeatedOfflinePolls_KeepShowingUntilDismissed()
         {
             var v = new NetworkDialogVisibility();
+            v.OnStatusChange(false);
             Assert.IsTrue(v.OnStatusChange(false));
             Assert.IsTrue(v.OnStatusChange(false));
             Assert.IsTrue(v.OnStatusChange(false));
@@ -60,6 +72,7 @@ namespace ReadingBuddy.Tests
             v.Dismiss();
             Assert.IsFalse(v.OnStatusChange(false), "still latched while offline");
             v.OnStatusChange(true);                                    // back online
+            v.OnStatusChange(false);
             Assert.IsTrue(v.OnStatusChange(false), "a NEW drop is allowed to show the dialog again");
         }
 
@@ -71,6 +84,7 @@ namespace ReadingBuddy.Tests
             v.Dismiss();
             Assert.IsFalse(v.OnStatusChange(false));
             v.OnStatusChange(true);
+            v.OnStatusChange(false);
             Assert.IsTrue(v.OnStatusChange(false));
         }
     }

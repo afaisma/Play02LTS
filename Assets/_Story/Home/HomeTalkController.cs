@@ -21,6 +21,7 @@ public class HomeTalkController : MonoBehaviour
     private GameObject _canvasRoot;
     private RectTransform _contentRoot;
     private GameObject _loadingLabel;
+    private TMP_Text _downloadLine;   // "Downloading books for offline use: 3 of 20…" (BookPrefetch)
     private GameObject _sheet;
     private GameObject _gate;
 
@@ -113,9 +114,25 @@ public class HomeTalkController : MonoBehaviour
 
         BuildTitleRow(_contentRoot);
         BuildLevelLine(_contentRoot);
+        BuildDownloadLine(_contentRoot);
         BuildBookGrid(_contentRoot);
         BuildGrownupsFooter(_contentRoot);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRoot);
+        // The books of this level go to the phone, so they work without internet (the edition says so).
+        if (Edition.Current.downloadAllBooks && QuestionLevel.IsChosen) BookPrefetch.StartFor(Globals.g_listPRBooks);
+    }
+
+    private void BuildDownloadLine(Transform parent)
+    {
+        _downloadLine = DialogChrome.MakeText(parent, "DownloadLine", BookPrefetch.StatusText, 26, TextAlignmentOptions.Left, UiTheme.TextSecondary);
+        _downloadLine.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
+        _downloadLine.gameObject.SetActive(Edition.Current.downloadAllBooks);
+    }
+
+    private void Update()
+    {
+        if (_downloadLine != null && _downloadLine.gameObject.activeSelf && _downloadLine.text != BookPrefetch.StatusText)
+            _downloadLine.text = BookPrefetch.StatusText;
     }
 
     private static int LevelIndex => System.Array.IndexOf(QuestionLevel.Letters, QuestionLevel.Current);

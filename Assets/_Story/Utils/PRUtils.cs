@@ -198,6 +198,17 @@ public class PRUtils
             yield break; // Ends the coroutine here for local resources.
         }
 
+        // No connection at all: the phone's copy at once, not after the 20-second wait below.
+        if (Application.internetReachability == NetworkReachability.NotReachable)
+        {
+            string offline = DiskCache.TryReadText(url, "scripts", ".txt");
+            if (offline != null)
+            {
+                Debug.Log($"DownloadFile: no connection, served script from cache — {url}");
+                onComplete?.Invoke(offline);
+                yield break;
+            }
+        }
         // H3: dispose UnityWebRequest (native download handler + buffers) when done.
         // C1: do NOT install AcceptAllCertificatesHandler — TLS verification stays on by default.
         using (UnityWebRequest request = UnityWebRequest.Get(url))

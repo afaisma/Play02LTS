@@ -8,5 +8,7 @@
   "catalogUrl": "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.test.json",
   "questionBooksOnly": true,
   "homeScene": "_HomeTalk",
-  "wordTapWhileReading": false
+  "wordTapWhileReading": false,
+  "puzzle": false,
+  "downloadAllBooks": true
 }

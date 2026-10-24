@@ -5,10 +5,17 @@
 // NetworkStatus probes the CDN every 5 seconds, so a naive "offline -> show" would re-open the
 // dialog every 5 seconds after the user has deliberately closed it. Dismissing therefore latches:
 // the dialog stays down until connectivity comes BACK (which clears the latch) and drops again.
+//
+// One probe can fail on a working connection (a slow answer within the 5-second limit, a short
+// gap when the phone changes networks), so the dialog comes only after FailedPollsToShow failed
+// probes in a row.
 // ============================================================================================
 public class NetworkDialogVisibility
 {
+    public const int FailedPollsToShow = 2;
+
     private bool dismissed;
+    private int failed; // failed probes in a row
 
     /// <summary>True while a deliberate dismiss is suppressing the dialog.</summary>
     public bool Dismissed => dismissed;
@@ -22,9 +29,11 @@ public class NetworkDialogVisibility
         if (isConnected)
         {
             dismissed = false;
+            failed = 0;
             return false;
         }
-        return !dismissed;
+        failed++;
+        return !dismissed && failed >= FailedPollsToShow;
     }
 
     /// <summary>The user closed the dialog: stay quiet until connectivity returns and drops again.</summary>

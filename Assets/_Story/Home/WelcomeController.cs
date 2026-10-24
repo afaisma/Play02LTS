@@ -25,8 +25,8 @@ public class WelcomeController : MonoBehaviour
     // Story Comprehension: what the app does, in the parent's words. No pictures yet.
     private static readonly Demo[] TalkDemos =
     {
-        new Demo("", "", "Every answer counts",            "The goal is that your child responds, not a test."),
-        new Demo("", "", "Listening stays on the phone",   "No audio is saved or sent anywhere."),
+        new Demo("", "", "Every answer counts",            "Encourage your child to engage with the story, not just listen."),
+        new Demo("", "", "Responses stay on your phone",   "No audio is saved or sent anywhere."),
         new Demo("", "", "You choose the level",           "Four levels, from touch only to full answers. Change it any time."),
     };
     private static readonly Demo[] Demos =
@@ -168,7 +168,7 @@ public class WelcomeController : MonoBehaviour
             // MakeText's auto-sizing shrinks it further on narrower screens).
             bool talk = Edition.Current.questionBooksOnly;
             var hi = MakeText(content.transform, "Welcome",
-                talk ? "Books that ask your child a question"
+                talk ? "Books that ask your child questions"
                      : "Welcome to <color=#" + ColorUtility.ToHtmlStringRGB(UiTheme.Primary) + ">ReadingBuddy</color>!",
                 talk ? 72 : 104, TextAlignmentOptions.Center);
             hi.fontStyle = FontStyles.Bold; hi.color = UiTheme.TextPrimary;
@@ -176,7 +176,7 @@ public class WelcomeController : MonoBehaviour
             hi.gameObject.AddComponent<LayoutElement>().preferredHeight = 260f; // room for two 104pt lines
 
             var sub = MakeText(content.transform, "Subtitle",
-                talk ? "The app reads a picture book aloud. After some pages it asks a short question. Your child answers by touching a picture, by saying a word, or just by making a sound."
+                talk ? "The app reads a picture book aloud. After a few pages, it asks a question. Your child can respond by touching the screen or speaking."
                      : "A few things that make reading here a little magical", 32, TextAlignmentOptions.Center);
             sub.color = UiTheme.TextSecondary;
             sub.enableWordWrapping = true;
@@ -266,7 +266,9 @@ public class WelcomeController : MonoBehaviour
         nimg.color = UiTheme.Card(4).fill; // soft blue
 
         var t = MakeText(note.transform, "Text",
-            "A good internet connection is recommended — each story downloads its narration and pictures the first time it's opened. Books you've opened before keep working offline.",
+            Edition.Current.downloadAllBooks
+                ? "After you choose the level, the books download to your phone (about 250 MB, Wi-Fi recommended). Then they also work without internet."
+                : "A good internet connection is recommended — each story downloads its narration and pictures the first time it's opened. Books you've opened before keep working offline.",
             26, TextAlignmentOptions.Left);
         t.color = UiTheme.Card(4).accent;
         t.enableWordWrapping = true;

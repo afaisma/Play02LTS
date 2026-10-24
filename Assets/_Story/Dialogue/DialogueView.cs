@@ -629,14 +629,16 @@ public class DialogueView : MonoBehaviour
         _choices.Clear();
         _levelBars.Clear();
         var col = _body.gameObject.AddComponent<VerticalLayoutGroup>();
+        col.spacing = 30f;
         col.childAlignment = TextAnchor.MiddleCenter;
         col.childControlWidth = false; col.childControlHeight = false;
         col.childForceExpandWidth = false; col.childForceExpandHeight = false;
-        float disc = Mathf.Clamp(_bodyHeight - 30f, 170f, 320f);
+        float disc = Mathf.Clamp(_bodyHeight - 96f - 30f, 170f, 320f);
         var outer = Disc("Mic", _body, disc, BlueSoft);
         var mid = Disc("Mid", outer, disc * 0.74f, BlueMid);
         var inner = Disc("Inner", mid, disc * 0.52f, BlueInk);
         BuildMicrophone(UiGlyphs.NewBox(inner, "Glyph", disc * 0.36f), Color.white);
+        BuildLevelBars();
     }
 
     // The choices of a voice question come on screen (after misses, or with the praise).
@@ -662,7 +664,12 @@ public class DialogueView : MonoBehaviour
         var mid = Disc("Mid", outer, disc * 0.74f, BlueMid);
         var inner = Disc("Inner", mid, disc * 0.52f, BlueInk);
         BuildMicrophone(UiGlyphs.NewBox(inner, "Glyph", disc * 0.36f), Color.white);
+        BuildLevelBars();
+    }
 
+    // The level meter under the microphone: nine bars, lit from the left by SetLevel.
+    private void BuildLevelBars()
+    {
         var bars = NewRect("Level", _body);
         bars.sizeDelta = new Vector2(420f, 96f);
         var hlg = bars.gameObject.AddComponent<HorizontalLayoutGroup>();
