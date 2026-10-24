@@ -89,8 +89,7 @@ public class BookPrefetch : MonoBehaviour
         // The voice and speed the reader will use for this book (AudioAndTextPlayer.BuildTtsUrls).
         Match voice = Regex.Match(script, "SetCurrentVoice\\s*\\(?\\s*\"([^\"]+)\"");
         string postfix = voice.Success ? "_" + voice.Groups[1].Value : "";
-        string rate = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1) == 1
-            ? "" + Globals.defaultAudioRateFromPRBook(book) : PlayerPrefs.GetString("g_Rate", "0");
+        string rate = Globals.ReadingRateFor(book);
 
         var seen = new HashSet<string>();
         foreach (string line in script.Split('\n'))

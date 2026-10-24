@@ -173,6 +173,10 @@ namespace ReadingBuddy.Tests
             Assert.IsTrue(prod.puzzle, "a missing puzzle keeps ReadingBuddy's puzzle button");
             Assert.IsTrue(talk.downloadAllBooks, "Story Comprehension keeps every book of the level on the phone");
             Assert.IsFalse(prod.downloadAllBooks, "ReadingBuddy downloads books as they are opened");
+            Assert.IsFalse(talk.readingSpeedByAgeGroup, "Story Comprehension: the slider alone sets the speed");
+            Assert.AreEqual("-10", talk.defaultReadingRate);
+            Assert.IsTrue(prod.readingSpeedByAgeGroup, "a missing readingSpeedByAgeGroup keeps ReadingBuddy's rule");
+            Assert.AreEqual("0", prod.defaultReadingRate);
             Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.storycomprehension"));
             Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(talk.catalogUrl));
         }

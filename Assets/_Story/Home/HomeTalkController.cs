@@ -193,12 +193,25 @@ public class HomeTalkController : MonoBehaviour
         line.gameObject.AddComponent<LayoutElement>().preferredHeight = 40f;
     }
 
+    private static string TileName(PRBook book) => (book.bookName ?? "").Replace(" (with questions)", "");
+
+    private static string SortKey(PRBook book)
+    {
+        string name = TileName(book);
+        foreach (string article in new[] { "The ", "A ", "An " })
+            if (name.StartsWith(article, System.StringComparison.OrdinalIgnoreCase)) return name.Substring(article.Length);
+        return name;
+    }
+
     private void BuildBookGrid(Transform parent)
     {
         var books = new List<PRBook>();
         if (Globals.g_listPRBooks != null)
             foreach (var b in Globals.g_listPRBooks)
                 if (b != null && string.IsNullOrEmpty(b.action)) books.Add(b);
+        // By title, so an adult can find a book (the catalog order is the order the books were added).
+        // "The Snow Queen" sorts under S, as in a library.
+        books.Sort((x, y) => string.Compare(SortKey(x), SortKey(y), System.StringComparison.OrdinalIgnoreCase));
 
         if (books.Count == 0)
         {
@@ -247,7 +260,7 @@ public class HomeTalkController : MonoBehaviour
         string url = Globals.WithContentRev(Globals.baseURL + book.bookImageUrl, book.contentRev);
         StartCoroutine(PRUtils.DownloadImage(url, cover, true, true));
 
-        string name = book.bookName.Replace(" (with questions)", "");
+        string name = TileName(book);
         var label = DialogChrome.MakeText(tile.transform, "Name", name, 30, TextAlignmentOptions.Center, UiTheme.TextPrimary);
         label.fontStyle = FontStyles.Bold;
         label.enableWordWrapping = true;

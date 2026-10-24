@@ -10,5 +10,7 @@
   "homeScene": "_HomeTalk",
   "wordTapWhileReading": false,
   "puzzle": false,
-  "downloadAllBooks": true
+  "downloadAllBooks": true,
+  "readingSpeedByAgeGroup": false,
+  "defaultReadingRate": "-10"
 }

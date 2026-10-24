@@ -175,10 +175,10 @@ PlayerSettings:
     Bratwurst: 0
     Standalone: 0
     VisionOS: 0
-    iPhone: 327
+    iPhone: 328
     tvOS: 0
   overrideDefaultApplicationIdentifier: 1
-  AndroidBundleVersionCode: 327
+  AndroidBundleVersionCode: 328
   AndroidMinSdkVersion: 25
   AndroidTargetSdkVersion: 34
   AndroidPreferredInstallLocation: 0

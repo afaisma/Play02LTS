@@ -44,6 +44,14 @@ public class Edition
     /// (BookPrefetch), and the disk cache is large enough to keep them all.
     /// </summary>
     public bool downloadAllBooks = false;
+    /// <summary>
+    /// True = ReadingBuddy's rule: the reading speed follows the book's age group unless the adult
+    /// switches that off in Settings. False = the Settings slider alone sets the speed (Story
+    /// Comprehension, which has no age groups).
+    /// </summary>
+    public bool readingSpeedByAgeGroup = true;
+    /// <summary>The slider's speed before the adult touches it: "-30", "-20", "-10", "0" or "10".</summary>
+    public string defaultReadingRate = "0";
 
     private static Edition _current;
     public const string OverridePref = "edition_override"; // dev builds only

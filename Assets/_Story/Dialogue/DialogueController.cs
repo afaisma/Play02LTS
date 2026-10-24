@@ -29,6 +29,8 @@ public class DialogueController : MonoBehaviour
     public const float AutoTurnSeconds = 2f;
     /// <summary>Microphone level (RMS) that fills the meter of a question answered by voice.</summary>
     public const float SpeechMeterFull = 0.06f;
+    /// <summary>After a repeated question the app waits this much longer than the book's silence time (Andrey: the pause before the third question was too short).</summary>
+    public const float ExtraWaitAfterRepeat = 5f;
 
     public readonly DialogueScript Script = new DialogueScript();
     private readonly StarRow _stars = new StarRow();
@@ -445,7 +447,7 @@ public class DialogueController : MonoBehaviour
         // Silence clock: only while the app itself is quiet.
         if (speaking) { _quiet = 0f; return; }
         _quiet += dt;
-        if (_quiet >= _flow.spec.settings.silenceSeconds)
+        if (_quiet >= _flow.spec.settings.silenceSeconds + (_flow.silences > 0 ? ExtraWaitAfterRepeat : 0f))
         {
             _quiet = 0f;
             Silence();

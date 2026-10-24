@@ -14,7 +14,13 @@ public class SettingsScene : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        string rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
+        string rate = PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
+        // An edition without age groups (Story Comprehension): no check box, the slider alone.
+        if (!Edition.Current.readingSpeedByAgeGroup && toggleSetReadingSpeedByBooksAgeGroup != null)
+        {
+            toggleSetReadingSpeedByBooksAgeGroup.gameObject.SetActive(false);
+            toggleSetReadingSpeedByBooksAgeGroup = null;
+        }
         if (sliderRate != null)
         {
             switch (rate)
@@ -48,6 +54,8 @@ public class SettingsScene : MonoBehaviour
             else
                 sliderRate.interactable = true;
         }
+        else if (sliderRate != null)
+            sliderRate.interactable = true; // no check box: the slider is always the adult's
 
         DisplayReadingSpeedDescr();
 
@@ -125,7 +133,7 @@ public class SettingsScene : MonoBehaviour
 
     public void DisplayReadingSpeedDescr()
     {
-        string rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
+        string rate = PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
         if (txtReadingSpeedDescr != null)
         {
             string descr = "";
@@ -148,11 +156,10 @@ public class SettingsScene : MonoBehaviour
                     break;
             }
             
-            if (toggleSetReadingSpeedByBooksAgeGroup != null)
-                if (!toggleSetReadingSpeedByBooksAgeGroup.isOn)
-                    txtReadingSpeedDescr.text = descr;
-                else
-                    txtReadingSpeedDescr.text = "(Set by book age group)";
+            if (toggleSetReadingSpeedByBooksAgeGroup != null && toggleSetReadingSpeedByBooksAgeGroup.isOn)
+                txtReadingSpeedDescr.text = "(Set by book age group)";
+            else
+                txtReadingSpeedDescr.text = descr;
         }
     }
 

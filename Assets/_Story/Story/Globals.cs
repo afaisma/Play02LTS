@@ -497,14 +497,17 @@ public class Globals : MonoBehaviour
         return rate;
     }
 
-    public static string getReadingRate()
+    public static string getReadingRate() => ReadingRateFor(g_prbook);
+
+    /// <summary>
+    /// The narration speed for a book: the book's age group when the edition and the adult say so,
+    /// else the Settings slider (the edition's default until the adult moves it).
+    /// </summary>
+    public static string ReadingRateFor(PRBook book)
     {
-        int nSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
-        string rate = PlayerPrefs.GetString("g_Rate", "0"); // -30, -20, -10, 0, 10
-        if (nSetReadingSpeedByBooksAgeGroup == 1)
-            return "" + defaultAudioRateFromPRBook(g_prbook);
-        else
-            return rate;
+        bool byAgeGroup = Edition.Current.readingSpeedByAgeGroup && PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1) == 1;
+        if (byAgeGroup) return "" + defaultAudioRateFromPRBook(book);
+        return PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
     }
 
     public static string Prefs_BookUrl_To_Page_Key(string book_url)
