@@ -447,7 +447,8 @@ public class DialogueController : MonoBehaviour
         // Silence clock: only while the app itself is quiet.
         if (speaking) { _quiet = 0f; return; }
         _quiet += dt;
-        if (_quiet >= _flow.spec.settings.silenceSeconds + (_flow.silences > 0 ? ExtraWaitAfterRepeat : 0f))
+        // A repeated question (after a silence or after another answer) gets the longer wait.
+        if (_quiet >= _flow.spec.settings.silenceSeconds + (_flow.silences + _flow.attempts > 0 ? ExtraWaitAfterRepeat : 0f))
         {
             _quiet = 0f;
             Silence();

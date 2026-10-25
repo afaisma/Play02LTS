@@ -73,6 +73,19 @@ public class SettingsScene : MonoBehaviour
         QuestionLevelSetting.Attach();  // only when the catalog has books made for a question level
         DialogueSkipSetting.Attach();   // same condition
         DialogueRewardSetting.Attach(); // only after a book with questions has been opened on this device
+
+        // Without the age-group check box (Story Comprehension) the top of the screen would be
+        // empty: the speed controls move up and the rows spread out evenly.
+        if (!Edition.Current.readingSpeedByAgeGroup)
+        {
+            Place("txtReadingSpeed", 0.72f, 0.77f);
+            Place("sliderReadingRate", 0.66f, 0.71f);
+            Place("txtReadingSpeedDescr", 0.60f, 0.65f);
+            Place("SkipButtonRow", 0.525f, 0.58f);
+            Place("AutopageRow", 0.455f, 0.51f);
+            Place("QuestionLevelRow", 0.37f, 0.445f);
+            Place("RewardLevelRow", 0.26f, 0.35f);
+        }
     }
 
     // L-R3-2: removed an empty Update() that cost a per-frame managed call for no gain.
@@ -112,6 +125,15 @@ public class SettingsScene : MonoBehaviour
         DisplayReadingSpeedDescr();
     }
     
+    // Moves a control of this screen to another vertical band (anchors), keeping its width.
+    private static void Place(string name, float bottom, float top)
+    {
+        var rt = GameObject.Find(name)?.transform as RectTransform;
+        if (rt == null) return;
+        rt.anchorMin = new Vector2(rt.anchorMin.x, bottom);
+        rt.anchorMax = new Vector2(rt.anchorMax.x, top);
+    }
+
     public void HandleSetReadingSpeedByBooksAgeGroupChange(Toggle toggle)
     {
         //g_bSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
