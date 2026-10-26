@@ -78,13 +78,13 @@ public class SettingsScene : MonoBehaviour
         // empty: the speed controls move up and the rows spread out evenly.
         if (!Edition.Current.readingSpeedByAgeGroup)
         {
-            Place("txtReadingSpeed", 0.72f, 0.77f);
-            Place("sliderReadingRate", 0.66f, 0.71f);
-            Place("txtReadingSpeedDescr", 0.60f, 0.65f);
-            Place("SkipButtonRow", 0.525f, 0.58f);
-            Place("AutopageRow", 0.455f, 0.51f);
-            Place("QuestionLevelRow", 0.37f, 0.445f);
-            Place("RewardLevelRow", 0.26f, 0.35f);
+            Place("txtReadingSpeed", 0.775f, 0.825f);
+            Place("sliderReadingRate", 0.715f, 0.765f);
+            Place("txtReadingSpeedDescr", 0.655f, 0.705f);
+            Place("SkipButtonRow", 0.575f, 0.63f);
+            Place("AutopageRow", 0.50f, 0.555f);
+            Place("QuestionLevelRow", 0.41f, 0.485f);
+            Place("RewardLevelRow", 0.295f, 0.385f);
         }
     }
 
