@@ -169,8 +169,7 @@ public class SpeechListenService : MonoBehaviour
         if (!_armed) yield break;
 
         _armTime = Time.realtimeSinceStartup; // hint clock starts now (after the prompt)
-        StartListening();
-        _listening = true; // recognizer is genuinely listening → the hint clock may run
+        StartListening(); // sets _listening once the recognizer of THIS arm has started
     }
 
     public void Disarm()
@@ -203,6 +202,7 @@ public class SpeechListenService : MonoBehaviour
         {
             _recognizer.SpeechSource = _micSource;
             _recognizer.StartProcessing();
+            _listening = true; // recognizer is genuinely listening → results count, the hint clock may run
             return;
         }
 
@@ -222,6 +222,7 @@ public class SpeechListenService : MonoBehaviour
 
         _recognizer.SpeechSource = _micSource;
         _recognizer.StartProcessing(); // installs the Vocabulary set by Arm() for this keyword
+        _listening = _armed; // the previous session has finished (or timed out): from here the results are ours
     }
 
     // Build the Recognissimo stack on an INACTIVE child, configure it, then activate (so each
@@ -280,6 +281,11 @@ public class SpeechListenService : MonoBehaviour
         // Ignore anything heard while the app is speaking (covers onNotUnderstood/onHint re-prompt
         // overlap and any straggler results between StopProcessing and the prompt actually ending).
         if (_isSpeaking != null && _isSpeaking()) return;
+        // Not listening yet (the recognizer of this arm starts after the prompt): a result now is
+        // the previous session's last words, which can be the prompt itself - a repeated question
+        // "...it is high and warm" was heard as the answer "high" (seen in the Editor and on
+        // Andrey's phone: the third question came at once after the repeat).
+        if (!_listening) return;
 
         if (_matcher != null) // dialogue answers
         {
