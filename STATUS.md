@@ -5,7 +5,7 @@ Updated: 2026-10-30 (checked against git status and the diff).
 - Production app ReadingBuddy 3.1.x in the App Store and Google Play; 90 published books; speech engine (read-along page turn) shipped Sept 2026.
 - Story Comprehension edition (spoken comprehension questions, for children with speech difficulties) is built from the same project on branch `feature/editions`. Test app id `com.imagiration.readingteacher.test` reads `stories.test.json`. Tester: Andrey (Boston University), feedback round 5 applied (icon, Settings layout, longer wait after a repeated question).
 - Last commit (2026-10-30, build 332): second speech-timing fix, confirmed by Alex as fixing Andrey's "no pause after a repeated question" bug. `DialogueController.cs` counts the app as "speaking" from the moment a recording is asked for (`_promptPending`), with try/catch around the disk cache. `SpeechListenService.cs` waits up to `ArmGraceSeconds` (0.6 s) for a prompt to start and needs `SettleSeconds` (0.4 s) of quiet before the microphone opens. Same commit: start block in CLAUDE.md, "Also read" in AGENTS.md, `/_work/` in .gitignore, this STATUS.md.
-- Untracked folder `Claude outputs/` (September 2026: audience note, engine prompt, previews) is not in git and not in .gitignore.
+- September 2026 chat outputs (audience note, engine prompt, previews) live in /Users/alexanderfaisman/dev/Play6.3/_work/claude-outputs-2026-09 (git-ignored).
 - Freeze before the editions work: tag `freeze-2026-10-07-build314`, copy /Users/alexanderfaisman/dev/_frozen/Play6.3_2026-10-07_build314.
 
 ## Open
@@ -16,7 +16,7 @@ Updated: 2026-10-30 (checked against git status and the diff).
 - Wait for Andrey's feedback round 6, then apply it.
 
 ## Waiting for Alex
-- Should `Claude outputs/` be git-ignored, moved to `_work/`, or committed?
+- Nothing recorded.
 
 ## Decisions (append only)
 - 2026-10-07: Story Comprehension is built incrementally inside this Unity project (Option 2), after a freeze; one code base, several store editions.
