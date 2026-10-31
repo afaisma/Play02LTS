@@ -30,3 +30,6 @@ ReadingBuddy is a Unity children's reading app (iOS/Android) with page-by-page s
 - `Assets/_Story/Utils/PRUtils.cs`: Download/cache utilities.
 - `Assets/_Story/Globals.cs`: Global state.
 - Third-party: MiniScript (`Assets/MiniScript/`), DoTween, TextAnimator, Azure TTS (`Players/TTS/MicrosoftTextToSpeech.cs`).
+
+## Also read
+- /Users/alexanderfaisman/dev/Play6.3/CLAUDE.md (project rules and start block) and /Users/alexanderfaisman/dev/Play6.3/STATUS.md (current state). The personal rules in /Users/alexanderfaisman/.claude/CLAUDE.md apply to every agent.

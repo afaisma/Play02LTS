@@ -45,6 +45,7 @@ public class DialogueController : MonoBehaviour
     private DialogueFlow _flow;         // the dialogue on screen
     private SoundTrigger _sound;
     private bool _promptLoading;
+    private bool _promptPending;        // a recording was asked for and has not started playing yet
     private bool _armedSpeech;
     private float _quiet;               // seconds without an answer while nothing is being spoken
     private bool _fromReadAlong;        // opened by "I read it myself" finishing the page
@@ -508,7 +509,10 @@ public class DialogueController : MonoBehaviour
     // True while the app itself makes sound: nothing heard then is an answer.
     private bool IsSpeaking()
     {
-        if (_promptLoading || (_voice != null && _voice.isPlaying)) return true;
+        // _promptPending closes the gap between Ask() and the first frame of a cached recording:
+        // without it the recognizer started during the repeated question and heard the options
+        // the app itself was naming (the second miss came at once, Andrey's "no pause" bug).
+        if (_promptPending || _promptLoading || (_voice != null && _voice.isPlaying)) return true;
         if (NarrationAudible) return true;
         return _pr.audioPlayer != null && _pr.audioPlayer.IsPlaying;
     }
@@ -526,6 +530,7 @@ public class DialogueController : MonoBehaviour
     {
         if (_promptCo != null) { StopCoroutine(_promptCo); _promptCo = null; }
         _promptLoading = false;
+        _promptPending = false;
         if (_voice != null) _voice.Stop();
     }
 
@@ -540,6 +545,7 @@ public class DialogueController : MonoBehaviour
     {
         if (!string.IsNullOrEmpty(reference))
         {
+            _promptPending = true; // "speaking" from this moment on (IsSpeaking), even before the audio starts
             // A question shown with "now" opens while the page is still being read: its recording
             // waits for the narration, so that two voices never speak at once. (The narration
             // starts a moment after the page script, hence the short wait at the page start.)
@@ -551,8 +557,9 @@ public class DialogueController : MonoBehaviour
             {
                 EnsureVoice();
                 _voice.clip = clip;
-                _voice.Play();
+                _voice.Play(); // from here _voice.isPlaying keeps IsSpeaking true
             }
+            _promptPending = false;
         }
         _promptCo = null;
     }
@@ -565,8 +572,11 @@ public class DialogueController : MonoBehaviour
             _promptLoading = true;
             string url = ResolveUrl(reference + ".mp3");
             // The phone's copy first (BookPrefetch, or an earlier reading), then the server.
-            string disk = DiskCache.PathFor(url, "audio", ".mp3");
-            if (System.IO.File.Exists(disk))
+            // A disk problem must not leave the "speaking" flags set (the question would never repeat).
+            string disk = null;
+            try { disk = DiskCache.PathFor(url, "audio", ".mp3"); if (!System.IO.File.Exists(disk)) disk = null; }
+            catch (System.Exception e) { Debug.LogWarning("[Dialogue] disk cache: " + e.Message); }
+            if (disk != null)
             {
                 using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip("file://" + disk, AudioType.MPEG))
                 {
@@ -583,7 +593,11 @@ public class DialogueController : MonoBehaviour
                     if (req.result == UnityWebRequest.Result.Success)
                     {
                         clip = DownloadHandlerAudioClip.GetContent(req);
-                        if (clip != null) DiskCache.WriteBytes(url, "audio", ".mp3", req.downloadHandler.data, DiskCache.AudioBudgetBytes);
+                        if (clip != null)
+                        {
+                            try { DiskCache.WriteBytes(url, "audio", ".mp3", req.downloadHandler.data, DiskCache.AudioBudgetBytes); }
+                            catch (System.Exception e) { Debug.LogWarning("[Dialogue] disk cache write: " + e.Message); }
+                        }
                     }
                     else Debug.Log($"[Dialogue] no recording at {url} ({req.error})");
                 }

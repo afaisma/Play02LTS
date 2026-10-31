@@ -1,3 +1,16 @@
+<!-- Start block added 2026-10-31. The @ lines import files into context automatically. -->
+# ReadingBuddy (Play6.3) — start here
+@STATUS.md
+@/Users/alexanderfaisman/dev/_hub/UNITY.md
+@/Users/alexanderfaisman/dev/_hub/AWS.md
+
+- STATUS.md (imported above) is the record of state and decisions. Update it after every completed step.
+- Personal rules: /Users/alexanderfaisman/.claude/CLAUDE.md (loaded automatically in Claude Code). In a linked chat the hub notes may not have loaded; then read /Users/alexanderfaisman/dev/_hub/UNITY.md and /Users/alexanderfaisman/dev/_hub/AWS.md with the file tools.
+- Scratch: /Users/alexanderfaisman/dev/Play6.3/Build/_smoke/. Briefs and reports for other agents: /Users/alexanderfaisman/dev/Play6.3/_work/ (git-ignored). Discards: _to_delete/.
+- Content (books, catalog, publishing) is NOT here: /Users/alexanderfaisman/dev/readingbuddy-aws.
+
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

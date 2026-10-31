@@ -24,6 +24,11 @@ public class SpeechListenService : MonoBehaviour
 {
     public static SpeechListenService Instance { get; private set; }
 
+    /// <summary>How long an arm waits for a prompt that has not started yet before it counts the app as quiet.</summary>
+    public const float ArmGraceSeconds = 0.6f;
+    /// <summary>Quiet time after the app's own audio before the microphone is opened (the room echo of a loud phone speaker).</summary>
+    public const float SettleSeconds = 0.4f;
+
     /// <summary>
     /// How loud the microphone is right now (RMS of the last samples), while the recognizer runs;
     /// 0 otherwise. For the level meter of a question answered by voice (DialogueView).
@@ -161,12 +166,25 @@ public class SpeechListenService : MonoBehaviour
     // prompt is never fed into the recognizer's stream. Only then start listening and start the hint clock.
     private IEnumerator ArmWhenQuiet()
     {
-        while (_armed && _isSpeaking != null && _isSpeaking())
+        // A prompt or narration that is requested together with the arm starts a moment later (the
+        // narration waits half a second before it plays): give it that moment before deciding that
+        // the app is quiet.
+        float grace = Time.realtimeSinceStartup + ArmGraceSeconds;
+        while (_armed && _isSpeaking != null && !_isSpeaking() && Time.realtimeSinceStartup < grace)
             yield return null;
-        yield return new WaitForSeconds(0.15f); // let the speaker tail / echo decay
+        // Quiet for the whole settle time: a prompt that starts during the settle sends us back to
+        // waiting (otherwise the recognizer would run during the prompt and hear the app's own words).
+        while (true)
+        {
+            while (_armed && _isSpeaking != null && _isSpeaking())
+                yield return null;
+            yield return new WaitForSeconds(SettleSeconds); // let the speaker tail / room echo decay
+            if (!_armed || _isSpeaking == null || !_isSpeaking()) break;
+        }
 
         _armCo = null;
         if (!_armed) yield break;
+        Debug.Log("[Listen] prompt over, listening starts");
 
         _armTime = Time.realtimeSinceStartup; // hint clock starts now (after the prompt)
         StartListening(); // sets _listening once the recognizer of THIS arm has started
