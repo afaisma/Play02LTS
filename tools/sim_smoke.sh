@@ -14,6 +14,8 @@
 #   tools/sim_smoke.sh netlog "<device>"        network lines of the app in the last 6 minutes; the app
 #                                               legitimately talks to the content CDN, so the check is
 #                                               "no host other than the CDN" (count of OTHER lines = 0)
+#   SIM_EDITION=story-comprehension tools/sim_smoke.sh <stage> ...   the same for that edition's
+#                                               export (Build/iOS-sim-<id>, default plan tools/sim_sc.plan)
 #   tools/sim_smoke.sh launchtrace "<device>" [noinstall]  16 screenshots from the launch tap,
 #                                               black % / cream % per frame (launch-gap measurement)
 # Started by Unity (RbSimSmoke.Shell) with the output in a log file, or by hand from Terminal.
@@ -26,13 +28,29 @@ CDN_HOST=d1lgnf093kp9w0.cloudfront.net
 EXPORT=$ROOT/Build/iOS-sim
 DERIVED=$ROOT/Build/_smoke/DerivedData   # outside the export: Unity wipes the export folder on a full re-export
 CAPS=$ROOT/Recordings/simcaps/sim
+DEFPLAN=$ROOT/tools/sim_smoke.plan
+# SIM_EDITION=<edition id> (e.g. story-comprehension): that edition's Simulator export
+# (RbSimSmoke.ExportSimulator("<id>") -> Build/iOS-sim-<id>), its bundle id and app name from
+# Assets/_Story/Resources/Editions/<id>.json, its own DerivedData and captures folder.
+if [ -n "${SIM_EDITION:-}" ]; then
+  EJSON=$ROOT/Assets/_Story/Resources/Editions/$SIM_EDITION.json
+  [ -f "$EJSON" ] || { echo "STATUS no-edition-file-$SIM_EDITION $STAGE $(date -u +%FT%TZ)"; exit 1; }
+  BUNDLE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["appIdentifiers"][0])' "$EJSON")
+  EXPORT=$ROOT/Build/iOS-sim-$SIM_EDITION
+  # the app's process name is Xcode's PRODUCT_NAME_APP (Unity drops the spaces of the product name)
+  PNAME=$(grep -m1 -o 'PRODUCT_NAME_APP = [^;]*' "$EXPORT/Unity-iPhone.xcodeproj/project.pbxproj" 2>/dev/null | sed 's/PRODUCT_NAME_APP = //; s/"//g')
+  [ -n "$PNAME" ] || PNAME=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["appName"].replace(" ", ""))' "$EJSON")
+  DERIVED=$ROOT/Build/_smoke/DerivedData-$SIM_EDITION
+  CAPS=$ROOT/Recordings/simcaps/sim-$SIM_EDITION
+  [ "$SIM_EDITION" = story-comprehension ] && DEFPLAN=$ROOT/tools/sim_sc.plan
+fi
 mkdir -p "$CAPS" "$EXPORT" "$ROOT/Build/_smoke"
 if [ -d "$EXPORT/DerivedData" ]; then mv "$EXPORT/DerivedData" "$ROOT/Build/_smoke/DerivedData-old-$(date +%s)"; fi
 STATUSF=$EXPORT/_smoke_status.txt
 finish() { echo "STATUS $1 $STAGE $(date -u +%FT%TZ)" | tee -a "$STATUSF"; exit $2; }
 udid_of() { xcrun simctl list devices available | grep -F "$1 (" | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/'; }
 slug_of() { echo "$1" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/_/g; s/_+$//'; }
-echo "== sim_smoke $STAGE $EXTRA $EXTRA2  ($(date -u +%FT%TZ))  bundle=$BUNDLE export=$EXPORT"
+echo "== sim_smoke $STAGE $EXTRA $EXTRA2  ($(date -u +%FT%TZ))  bundle=$BUNDLE export=$EXPORT${SIM_EDITION:+ edition=$SIM_EDITION}"
 
 case $STAGE in
 inventory)
@@ -78,7 +96,7 @@ run|store)
   if [ "$STAGE" = store ]; then
     PLANF=$ROOT/tools/sim_store.plan; CAPS=$ROOT/Recordings/simcaps/store; mkdir -p "$CAPS"
   else
-    PLANF=${EXTRA2:-$ROOT/tools/sim_smoke.plan}
+    PLANF=${EXTRA2:-$DEFPLAN}
   fi
   [ -f "$PLANF" ] || finish "no-plan-file-$PLANF" 1
   PLAN=$(tr -d '\n' < "$PLANF")

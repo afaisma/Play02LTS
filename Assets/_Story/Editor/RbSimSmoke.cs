@@ -7,6 +7,8 @@
 //      BuildPlayerOptions.extraScriptingDefines — never into ProjectSettings — so the in-app
 //      driver cannot exist in a device/store build. SDK + architecture are restored in a
 //      finally block and the project is saved so ProjectSettings.asset on disk stays as committed.
+//      ExportSimulator("<edition id>") exports another edition (identifier, name, icons as in
+//      RbTestBuild.ExportIOS) into Build/iOS-sim-<edition id>; `SIM_EDITION=<id> tools/sim_smoke.sh`.
 //   2. Recognissimo: its iOS libRecognissimo.a has x86_64 (Intel Simulator) + arm64 (DEVICE)
 //      slices; an arm64 Simulator link fails on it. For Simulator exports only, the plugin is
 //      excluded and RbSimStubs (IPostprocessBuild) links a generated C stub for the 19
@@ -43,7 +45,19 @@ public static class RbSimSmoke
 
     public static string ProjectRoot => Path.GetDirectoryName(Application.dataPath);
     public static string SmokeDir => Path.Combine(ProjectRoot, "Build", "_smoke");
-    public static string StatusPath => Path.Combine(ProjectRoot, SimFolder, "_export_status.json");
+    private static string _folder = SimFolder;   // Build/iOS-sim, or Build/iOS-sim-<edition> during an edition export
+    public static string StatusPath => Path.Combine(ProjectRoot, _folder, "_export_status.json");
+
+    /// <summary>
+    /// Batch mode (Editor closed), Simulator export of Story Comprehension into Build/iOS-sim-story-comprehension:
+    /// Unity -batchmode -quit -buildTarget iOS -projectPath ... -executeMethod RbSimSmoke.BatchExportSimStoryComprehension
+    /// Exit code 0 = export ok and settings put back. Then: SIM_EDITION=story-comprehension tools/sim_smoke.sh build
+    /// </summary>
+    public static void BatchExportSimStoryComprehension()
+    {
+        bool ok = ExportSimulator("story-comprehension");
+        EditorApplication.Exit(ok ? 0 : 1);
+    }
 
     [Serializable]
     public class Status { public string stage; public bool ok; public string message; public string when; public float seconds; }
@@ -146,17 +160,32 @@ public static class RbSimSmoke
 
     private static PluginImporter RecognissimoImporter() => AssetImporter.GetAtPath(RecognissimoPlugin) as PluginImporter;
 
-    public static void ExportSimulator()
+    public static void ExportSimulator() => ExportSimulator(null);
+
+    /// editionId null = today's export (the project's own identity, Build/iOS-sim). Otherwise the
+    /// edition's identifier, product name and icons are set exactly as RbTestBuild.ExportIOS does,
+    /// the export goes to Build/iOS-sim-<editionId>, and everything is put back and checked.
+    /// Returns true when the export succeeded and (for an edition) the settings were put back.
+    public static bool ExportSimulator(string editionId)
     {
         var sw = Stopwatch.StartNew();
-        if (EditorApplication.isPlaying) { WriteStatus("export", false, "exit Play mode first", 0); return; }
+        _folder = editionId == null ? SimFolder : SimFolder + "-" + editionId;
+        if (EditorApplication.isPlaying) { WriteStatus("export", false, "exit Play mode first", 0); return false; }
+        Edition edition = null;
+        if (editionId != null)
+        {
+            edition = RbTestBuild.FindEditionById(editionId);
+            if (edition == null || edition.appIdentifiers.Length == 0) { WriteStatus("export", false, "no edition " + editionId, 0); return false; }
+        }
+        RbTestBuild.Identity prevIdentity = null;
+        bool ok = false;
 
         var prevSdk  = PlayerSettings.iOS.sdkVersion;
         var prevArch = PlayerSettings.iOS.simulatorSdkArchitecture;
         var plugin   = RecognissimoImporter();
         bool prevPluginIos = plugin != null && plugin.GetCompatibleWithPlatform(BuildTarget.iOS);
 
-        string absFolder = Path.Combine(ProjectRoot, SimFolder);
+        string absFolder = Path.Combine(ProjectRoot, _folder);
         // xcodebuild's DerivedData must not live inside the export (the wipe would fail on it).
         string leftover = Path.Combine(absFolder, "DerivedData");
         if (Directory.Exists(leftover))
@@ -169,6 +198,7 @@ public static class RbSimSmoke
         ClearExportFolder(absFolder);
         try
         {
+            if (edition != null) prevIdentity = RbTestBuild.ApplyEdition(NamedBuildTarget.iOS, edition);
             PlayerSettings.iOS.sdkVersion = iOSSdkVersion.SimulatorSDK;
             // Apple-silicon Mac: the Simulator runs arm64 apps; Unity's default x86_64 slice
             // installs with "Needs to Be Updated / no matching arch" on Xcode 26.
@@ -182,21 +212,21 @@ public static class RbSimSmoke
             var opts = new BuildPlayerOptions
             {
                 scenes = EnabledScenes(),
-                locationPathName = SimFolder,
+                locationPathName = _folder,
                 target = BuildTarget.iOS,
                 options = BuildOptions.None,
                 extraScriptingDefines = new[] { Define },
             };
-            Trace("before BuildPlayer (" + opts.scenes.Length + " scenes)");
+            Trace("before BuildPlayer (" + opts.scenes.Length + " scenes" + (edition != null ? ", edition " + editionId : "") + ")");
             var report = BuildPipeline.BuildPlayer(opts);
             Trace("after BuildPlayer: " + report.summary.result);
-            bool ok = report.summary.result == BuildResult.Succeeded;
+            ok = report.summary.result == BuildResult.Succeeded;
             WriteStatus("export", ok,
-                ok ? "exported " + SimFolder + " (" + report.summary.totalSize / (1024 * 1024) + " MB)"
+                ok ? "exported " + _folder + " (" + report.summary.totalSize / (1024 * 1024) + " MB)"
                    : "build result " + report.summary.result + ", errors " + report.summary.totalErrors,
                 (float)sw.Elapsed.TotalSeconds);
-            Debug.Log("[RB smoke] simulator export " + (ok ? "OK" : "FAILED") + " -> " + SimFolder);
-            if (ok && EditorPrefs.GetBool(ThenSmokeKey, false))
+            Debug.Log("[RB smoke] simulator export " + (ok ? "OK" : "FAILED") + " -> " + _folder);
+            if (ok && edition == null && EditorPrefs.GetBool(ThenSmokeKey, false))
             {
                 EditorPrefs.SetBool(ThenSmokeKey, false);
                 int pid = Shell("smoke", "", "", Path.Combine(SmokeDir, "smoke.log"));
@@ -206,6 +236,7 @@ public static class RbSimSmoke
         }
         catch (Exception e)
         {
+            ok = false;
             WriteStatus("export", false, "exception: " + e.Message, (float)sw.Elapsed.TotalSeconds);
             Debug.LogError("[RB smoke] simulator export failed: " + e);
         }
@@ -213,17 +244,33 @@ public static class RbSimSmoke
         {
             PlayerSettings.iOS.sdkVersion = prevSdk;                     // Device again, always
             PlayerSettings.iOS.simulatorSdkArchitecture = prevArch;
+            if (prevIdentity != null) RbTestBuild.Restore(prevIdentity);
             var p = RecognissimoImporter();
             if (p != null && prevPluginIos && !p.GetCompatibleWithPlatform(BuildTarget.iOS))
             {
                 p.SetCompatibleWithPlatform(BuildTarget.iOS, true);
                 p.SaveAndReimport();
             }
-            Trace("settings restored (sdk=" + prevSdk + ", plugin iOS=" + prevPluginIos + ")");
+            Trace("settings restored (sdk=" + prevSdk + ", plugin iOS=" + prevPluginIos +
+                  (prevIdentity != null ? ", identity " + prevIdentity.id + " / " + prevIdentity.name : "") + ")");
             AssetDatabase.SaveAssets();
             EditorApplication.ExecuteMenuItem("File/Save Project");
             Trace("project saved");
         }
+        if (prevIdentity != null)
+        {
+            string bad = RbTestBuild.VerifyRestored(prevIdentity, edition.appIdentifiers[0]);
+            if (PlayerSettings.iOS.sdkVersion != prevSdk) bad += (bad.Length > 0 ? "; " : "") + "iOS SDK not put back";
+            if (bad.Length > 0)
+            {
+                ok = false;
+                WriteStatus("export", false, "FAILED: settings NOT put back (" + bad + ")", (float)sw.Elapsed.TotalSeconds);
+                Debug.LogError("[RB smoke] settings NOT put back: " + bad);
+            }
+            else Trace("settings checked: " + prevIdentity.id + " / " + prevIdentity.name);
+        }
+        _folder = SimFolder;
+        return ok;
     }
 
     // ------------------------------------------------------------------ shell
@@ -264,7 +311,7 @@ public class RbSimGuard : IPreprocessBuildWithReport
     {
         if (report.summary.platform != BuildTarget.iOS) return;
         string leaf = Path.GetFileName(Path.GetFullPath(report.summary.outputPath).TrimEnd('/', '\\'));
-        bool simFolder = leaf.EndsWith("-sim");
+        bool simFolder = leaf.EndsWith("-sim") || leaf.StartsWith("iOS-sim-");   // iOS-sim, iOS-sim-<edition>
         bool simSdk = PlayerSettings.iOS.sdkVersion == iOSSdkVersion.SimulatorSDK;
         if (simSdk && !simFolder)
             throw new BuildFailedException("ReadingBuddy: export REFUSED — iOS SDK is Simulator but '" + leaf + "' is a device/store export folder");

@@ -5,7 +5,7 @@
     "com.imagiration.storycomprehension"
   ],
   "appStoreId": "",
-  "catalogUrl": "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.test.json",
+  "catalogUrl": "https://d1lgnf093kp9w0.cloudfront.net/uploads/stories-qa/stories.sc.json",
   "questionBooksOnly": true,
   "homeScene": "_HomeTalk",
   "wordTapWhileReading": false,

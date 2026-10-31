@@ -22,7 +22,8 @@
 
 ## Build and test
 - Editor menus (Tools/ReadingBuddy): `Simulator smoke (export + build + 4 devices)`, `Simulator export only` (RbSimSmoke.cs), `Build TEST app (Android APK)`, `Build Story Comprehension (Android APK)` (RbTestBuild.cs — schedule, then run once; see UNITY.md).
-- `tools/sim_smoke.sh` stages: inventory, build, launch, run "<device>" [plan], all, smoke, store, applog, netlog, launchtrace. Sweep plans: tools/*.plan.
+- Per edition (RbTestBuild.cs, settings set from the edition JSON and put back in `finally`): Android APK → Build_Android/; iOS Xcode project (device SDK) → Build/iOS-<stem>/ via `Export Story Comprehension (iOS Xcode project)` or batch `-buildTarget iOS -executeMethod RbTestBuild.BatchExportIOSStoryComprehension` (raises the build number; result in Build/_smoke/ios_status.txt). Simulator export of an edition: batch `-executeMethod RbSimSmoke.BatchExportSimStoryComprehension` → Build/iOS-sim-story-comprehension.
+- `tools/sim_smoke.sh` stages: inventory, build, launch, run "<device>" [plan], all, smoke, store, applog, netlog, launchtrace. Sweep plans: tools/*.plan. `SIM_EDITION=story-comprehension tools/sim_smoke.sh build|run "iPhone 17"` uses that edition's export, bundle id and plan (tools/sim_sc.plan).
 - EditMode tests: `Assets/Tests/Editor/` (EditionTests, DialogueTests, GlobalsParseJSONTests, …).
 - In-game debug console: Quantum Console; `[Command]` methods callable at runtime (tilde key).
 
