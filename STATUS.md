@@ -1,7 +1,8 @@
 # STATUS — ReadingBuddy app (Play6.3)
-Updated: 2026-10-30 (checked against git status and the diff).
+Updated: 2026-10-31 (rules clean-up, Brief 06 Parts 2+3).
 
 ## State
+- 2026-10-31 rules clean-up (Brief 06): CLAUDE.md rewritten 223 → 55 lines; explanations now in docs/ARCHITECTURE.md; AGENTS.md is a symlink to CLAUDE.md (old file in _archive/AGENTS_2026-10-31.md); ledger of removed lines in _work/CLAUDE_removed_2026-10-31.md; .claude/settings.local.json (124 entries) moved to _to_delete/settings.local.json.2026-10-31.
 - Production app ReadingBuddy 3.1.x in the App Store and Google Play; 90 published books; speech engine (read-along page turn) shipped Sept 2026.
 - Story Comprehension edition (spoken comprehension questions, for children with speech difficulties) is built from the same project on branch `feature/editions`. Test app id `com.imagiration.readingteacher.test` reads `stories.test.json`. Tester: Andrey (Boston University), feedback round 5 applied (icon, Settings layout, longer wait after a repeated question).
 - Last commit (2026-10-30, build 332): second speech-timing fix, confirmed by Alex as fixing Andrey's "no pause after a repeated question" bug. `DialogueController.cs` counts the app as "speaking" from the moment a recording is asked for (`_promptPending`), with try/catch around the disk cache. `SpeechListenService.cs` waits up to `ArmGraceSeconds` (0.6 s) for a prompt to start and needs `SettleSeconds` (0.4 s) of quiet before the microphone opens. Same commit: start block in CLAUDE.md, "Also read" in AGENTS.md, `/_work/` in .gitignore, this STATUS.md.
@@ -10,7 +11,6 @@ Updated: 2026-10-30 (checked against git status and the diff).
 
 ## Open
 - Next feedback round from Andrey (ask Alex).
-- Old content-server address in this CLAUDE.md (`d5wtw8f0w3ire…`) is stale; the current one is in /Users/alexanderfaisman/dev/_hub/AWS.md. Fix when the CLAUDE.md is next revised.
 
 ## Next step
 - Wait for Andrey's feedback round 6, then apply it.
