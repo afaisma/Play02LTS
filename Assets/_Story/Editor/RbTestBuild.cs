@@ -122,8 +122,39 @@ public static class RbTestBuild
         return result;
     }
 
-    /// <summary>Builds an edition's APK. Returns one line that starts with "ALL DONE" or "FAILED".</summary>
-    public static string BuildAndroid(string editionId, string fileStem)
+    /// <summary>
+    /// Batch mode (Editor closed), the emulator smoke APK of an edition (tools/android_smoke.sh build):
+    /// Unity -batchmode -quit -buildTarget Android -projectPath ... -executeMethod RbTestBuild.BatchBuildAndroidDev
+    ///       -rbEdition story-comprehension -rbStem StoryComprehension
+    /// Exit code 0 = ALL DONE; the result line also goes to Build/_smoke/apk_status.txt.
+    /// </summary>
+    public static void BatchBuildAndroidDev()
+    {
+        string editionId = TestEditionId, fileStem = "ReadingBuddyTest";
+        var args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "-rbEdition") editionId = args[i + 1];
+            if (args[i] == "-rbStem") fileStem = args[i + 1];
+        }
+        string status = Path.Combine(Path.GetDirectoryName(Application.dataPath), StatusFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(status));
+        File.WriteAllText(status, "building " + fileStem + " (dev, emulator smoke)\n");
+        string result = BuildAndroid(editionId, fileStem, true);
+        File.AppendAllText(status, result + "\n");
+        Debug.Log("[RB test build] " + result);
+        EditorApplication.Exit(result.StartsWith("ALL DONE") ? 0 : 1);
+    }
+
+    /// <summary>True while a dev (emulator smoke) APK is built: BuildStamp then keeps the build number.</summary>
+    public static bool DevBuildRunning;
+
+    /// <summary>
+    /// Builds an edition's APK. Returns one line that starts with "ALL DONE" or "FAILED".
+    /// dev = the emulator smoke APK: READINGBUDDY_DEV (the in-app sweep driver) through
+    /// extraScriptingDefines only, file name &lt;stem&gt;_dev_..., build number NOT raised. Never send it to testers.
+    /// </summary>
+    public static string BuildAndroid(string editionId, string fileStem, bool dev = false)
     {
         Edition test = FindEdition(editionId);
         if (test == null || test.appIdentifiers.Length == 0)
@@ -146,18 +177,20 @@ public static class RbTestBuild
 
             var scenes = new System.Collections.Generic.List<string>();
             foreach (var s in EditorBuildSettings.scenes) if (s.enabled) scenes.Add(s.path);
+            DevBuildRunning = dev;
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes.ToArray(),
                 locationPathName = built,
                 target = BuildTarget.Android,
                 options = BuildOptions.None,
+                extraScriptingDefines = dev ? new[] { RbSimSmoke.Define } : null,
             });
             if (report.summary.result != BuildResult.Succeeded)
                 return "FAILED: build result " + report.summary.result + ", " + report.summary.totalErrors + " error(s). See the Console.";
             // Named after the build: every build raises the build number (BuildStamp), and the
             // file name must show the number that is inside the APK.
-            string apk = Path.Combine(buildDir, fileStem + "_" + PlayerSettings.bundleVersion + "_" +
+            string apk = Path.Combine(buildDir, fileStem + (dev ? "_dev_" : "_") + PlayerSettings.bundleVersion + "_" +
                                                 PlayerSettings.Android.bundleVersionCode + ".apk");
             if (File.Exists(apk)) File.Delete(apk);
             File.Move(built, apk);
@@ -173,6 +206,7 @@ public static class RbTestBuild
         }
         finally
         {
+            DevBuildRunning = false;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, prevId);
             PlayerSettings.productName = prevName;
             EditorUserBuildSettings.buildAppBundle = prevBundle;

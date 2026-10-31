@@ -1,7 +1,8 @@
 # STATUS — ReadingBuddy app (Play6.3)
-Updated: 2026-10-31 (Brief 05b: Story Comprehension iOS export + Simulator smoke per edition, build 333).
+Updated: 2026-10-31 (Brief 07: Android emulator smoke, tools/android_smoke.sh).
 
 ## State
+- 2026-10-31 Brief 07 done (not pushed): tools/android_smoke.sh = Android twin of sim_smoke.sh (inventory, build, launch, run, applog, all, stop; SMOKE_EDITION). New AVDs rb_phone (pixel_7) and rb_tablet (10.1in WXGA), both Android 15 google_apis arm64, no download. RbTestBuild.BatchBuildAndroidDev = dev APK with READINGBUDDY_DEV (sweep driver), build number NOT raised (BuildStamp checks RbTestBuild.DevBuildRunning); SimSmokeDriver reads the plan from the intent extra "sweep" on Android. Story Comprehension on rb_phone: build 93 s, launch 25 s, run 80 s (sim_sc.plan unchanged: _HomeTalk reached, level A, Jack A question answered; only ERR = wait|catalog because stories.sc.json gives 403). rb_tablet created but not run. The batch build leaves the project on the Android target. Report: /Users/alexanderfaisman/dev/_hub/_work/REPORT_07.md.
 - 2026-10-31 Brief 05b done (build 333, not pushed): story-comprehension.json reads `stories.sc.json` (NOT published yet: Alex runs Brief 05a's publish before any SC build goes to testers). RbTestBuild.ExportIOS(edition, stem) exports the iOS Xcode project → Build/iOS-StoryComprehension (bundle id com.imagiration.storycomprehension, own icon, build 333; settings put back and checked). RbSimSmoke.ExportSimulator("story-comprehension") → Build/iOS-sim-story-comprehension; `SIM_EDITION=story-comprehension tools/sim_smoke.sh build|run "iPhone 17"` with tools/sim_sc.plan passed (home, level sheet, Jack A question answered). tools/sim_sc.plan loads the LOCAL stories.test.json (catalogfile step) because stories.sc.json is not live; remove that step once it is. EditMode tests 343/343. Report: /Users/alexanderfaisman/dev/_hub/_work/REPORT_05.md section 5b.
 - 2026-10-31 Brief 02 Part 2: Assets/MiniScript/ORIGIN.md (copy A, source of truth) and LICENSE.txt (MIT, from the official repo) added; `com.coplaydev.unity-mcp` in Packages/manifest.json pinned from `#main` to commit `85c101f5329ec1b0c6f70cba44614166dd78f53c` (the hash resolved in packages-lock.json). The brief's CLAUDE.md/AGENTS.md fixes were skipped — Brief 06 already rewrote those files. Unity will create .meta files for the two new files on the next Editor open; Alex commits them then.
 - 2026-10-31 rules clean-up (Brief 06): CLAUDE.md rewritten 223 → 55 lines; explanations now in docs/ARCHITECTURE.md; AGENTS.md is a symlink to CLAUDE.md (old file in _archive/AGENTS_2026-10-31.md); ledger of removed lines in _work/CLAUDE_removed_2026-10-31.md; .claude/settings.local.json (124 entries) moved to _to_delete/settings.local.json.2026-10-31.
@@ -19,6 +20,7 @@ Updated: 2026-10-31 (Brief 05b: Story Comprehension iOS export + Simulator smoke
 - Wait for Andrey's feedback round 6, then apply it.
 
 ## Waiting for Alex
+- Brief 07 choices to confirm: a separate dev APK (sweep driver, no build-number bump) for the emulator; new AVDs rb_phone/rb_tablet next to the existing ones.
 - App Store record + Apple ID for Story Comprehension; publish of stories.sc.json.
 
 ## Decisions (append only)

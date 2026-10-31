@@ -38,6 +38,13 @@ public class BuildStamp : IPreprocessBuildWithReport
             Debug.Log("[BUILD-STAMP] simulator export: counter NOT bumped (stays " + PlayerSettings.Android.bundleVersionCode + ")");
             return;
         }
+        // The Android emulator smoke APK (RbTestBuild dev build) is a throwaway test build too.
+        if (report.summary.platform == BuildTarget.Android && RbTestBuild.DevBuildRunning)
+        {
+            WriteStamp();
+            Debug.Log("[BUILD-STAMP] dev emulator APK: counter NOT bumped (stays " + PlayerSettings.Android.bundleVersionCode + ")");
+            return;
+        }
         PlayerSettings.Android.bundleVersionCode += 1;
         // iOS CFBundleVersion must also ascend (TestFlight/App Store reject reused numbers).
         // Mirror the one counter instead of keeping a second one, so an Android build and an

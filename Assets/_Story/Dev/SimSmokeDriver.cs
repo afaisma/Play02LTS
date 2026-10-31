@@ -3,7 +3,8 @@
 // scripting define) — never in a store build. The plan arrives as a launch argument:
 // `xcrun simctl launch <udid> <bundle> -sweep "<plan>"` puts "sweep" into NSUserDefaults'
 // argument domain, and PlayerPrefs on iOS IS NSUserDefaults, so PlayerPrefs.GetString("sweep")
-// reads it (Environment.GetCommandLineArgs is the fallback).
+// reads it (Environment.GetCommandLineArgs is the fallback). Android emulator (tools/android_smoke.sh,
+// dev APK from RbTestBuild.BatchBuildAndroidDev): the plan is the intent extra "sweep".
 //
 // Plan = "frames|action|arg;frames|action|arg;..." — wait N frames, then do the action.
 //   cap|<name>    write Documents/sweep/<nn>_<name>.req and wait (<=25 s) for the host's .ack
@@ -38,6 +39,21 @@ public class SimSmokeDriver : MonoBehaviour
             var args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++) if (args[i] == "-sweep") plan = args[i + 1];
         }
+#if UNITY_ANDROID
+        // Android emulator (tools/android_smoke.sh): `am start ... --es sweep '<plan>'` = an intent extra.
+        if (string.IsNullOrEmpty(plan))
+        {
+            try
+            {
+                using (var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var act = up.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var intent = act.Call<AndroidJavaObject>("getIntent"))
+                    plan = intent.Call<string>("getStringExtra", "sweep");
+            }
+            catch (Exception e) { Debug.Log("[SWEEP] no intent extra: " + e.Message); }
+        }
+#endif
+        if (!string.IsNullOrEmpty(plan)) Debug.Log("[SWEEP] plan of " + plan.Split(';').Length + " steps, dir " + Path.Combine(Application.persistentDataPath, "sweep"));
         if (string.IsNullOrEmpty(plan) || FindFirstObjectByType<SimSmokeDriver>() != null) return;
         var go = new GameObject("SimSmokeDriver");
         DontDestroyOnLoad(go);
