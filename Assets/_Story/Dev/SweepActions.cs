@@ -17,6 +17,7 @@
 //                    (file:///.../stories/<Folder>/<script>.txt) — for test books on this Mac
 //   catalogfile|<path>  use a catalog file on this Mac instead of the downloaded catalog
 //   edition|<id>     behave as another edition from now on (e.g. story-comprehension)
+//   level|<letter>   question level a..d (QuestionLevel.Current; the book lists are filtered again)
 //   mode|<Mode>      reading-mode picker tile: Storyteller | AppVoice | IRead | Pictures
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
@@ -29,6 +30,7 @@
 //   A dialogue is driven with click|Choice_<name>, click|TapToAnswer, click|Skip, click|Next;
 //   prefint|dialogue_mic=0 switches its microphone off (Recognissimo is stubbed in the Simulator).
 // Conditions for "wait|<what>": catalog | playing | idle | picker | dialogue | scene=<name>
+//   | silences=<n> (the open dialogue has gone unanswered n times — the silence-timing check)
 #if UNITY_EDITOR || READINGBUDDY_DEV
 using System;
 using System.Collections;
@@ -129,6 +131,13 @@ public static class SweepActions
                 break;
             }
 
+            case "level":
+            {
+                var qT = T("QuestionLevel");
+                qT.GetProperty("Current", Any).SetValue(null, arg);
+                break;
+            }
+
             case "catalogfile":
             {
                 // Replace the loaded catalog with a catalog file on this Mac (for example a dry-run
@@ -207,6 +216,16 @@ public static class SweepActions
     public static bool Condition(string what)
     {
         if (what.StartsWith("scene=")) return SceneManager.GetActiveScene().name == what.Substring(6);
+        if (what.StartsWith("silences="))
+        {
+            var dT = T("DialogueController");
+            var d = UnityEngine.Object.FindFirstObjectByType(dT);
+            if (d == null) return false;
+            object flow = dT.GetField("_flow", Any).GetValue(d);
+            if (flow == null) return false;
+            int n = (int)flow.GetType().GetField("silences", Any).GetValue(flow);
+            return n >= int.Parse(what.Substring(9));
+        }
         switch (what)
         {
             case "catalog":

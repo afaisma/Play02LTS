@@ -178,7 +178,8 @@ run)
       echo "shot $stem  (+$(( $(date +%s) - T0 )) s)"
     done
     "$ADB" -s "$S" shell cat "$DOCS/_log.txt" 2>/dev/null | tr -d '\r' | grep -q "^done" && { RESULT=ok; break; }
-    if [ -z "$("$ADB" -s "$S" shell pidof "$PKG" | tr -d '\r')" ]; then
+    # the process needs a moment to appear after am start: no death check in the first 10 s
+    if [ $(( $(date +%s) - T0 )) -gt 10 ] && [ -z "$("$ADB" -s "$S" shell pidof "$PKG" | tr -d '\r')" ]; then
       sleep 2; "$ADB" -s "$S" shell cat "$DOCS/_log.txt" 2>/dev/null | grep -q "^done" && RESULT=ok || RESULT=app-died; break
     fi
     [ $(( $(date +%s) - T0 )) -gt 480 ] && break
@@ -197,7 +198,7 @@ applog)
   AVD=${EXTRA:-rb_phone}
   S=$(serial_of "$AVD"); [ -n "$S" ] || finish "not-running-$AVD" 1
   "$ADB" -s "$S" logcat -d -v time -s Unity:V AndroidRuntime:E DEBUG:V \
-    | grep -iE "\[BUILD\]|\[NAV\]|\[FPS\]|\[HUM\]|\[MEM\]|\[SWEEP\]|Edition:|HTTP/|launch|error|exception|FATAL" | tail -120
+    | grep -iE "\[BUILD\]|\[NAV\]|\[FPS\]|\[HUM\]|\[MEM\]|\[SWEEP\]|\[Dialogue\]|\[Listen\]|Edition:|HTTP/|launch|error|exception|FATAL" | tail -160
   finish ok 0 ;;
 
 all)
