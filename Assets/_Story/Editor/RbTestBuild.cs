@@ -146,6 +146,30 @@ public static class RbTestBuild
         EditorApplication.Exit(result.StartsWith("ALL DONE") ? 0 : 1);
     }
 
+    /// <summary>
+    /// Batch mode (Editor closed), the real tester APK of an edition (build number raised, for testers):
+    /// Unity -batchmode -quit -buildTarget Android -projectPath ... -executeMethod RbTestBuild.BatchBuildAndroid
+    ///       -rbEdition story-comprehension -rbStem StoryComprehension
+    /// Exit code 0 = ALL DONE; the result line also goes to Build/_smoke/apk_status.txt.
+    /// </summary>
+    public static void BatchBuildAndroid()
+    {
+        string editionId = TestEditionId, fileStem = "ReadingBuddyTest";
+        var args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "-rbEdition") editionId = args[i + 1];
+            if (args[i] == "-rbStem") fileStem = args[i + 1];
+        }
+        string status = Path.Combine(Path.GetDirectoryName(Application.dataPath), StatusFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(status));
+        File.WriteAllText(status, "building " + fileStem + " (tester)\n");
+        string result = BuildAndroid(editionId, fileStem);
+        File.AppendAllText(status, result + "\n");
+        Debug.Log("[RB test build] " + result);
+        EditorApplication.Exit(result.StartsWith("ALL DONE") ? 0 : 1);
+    }
+
     /// <summary>True while a dev (emulator smoke) APK is built: BuildStamp then keeps the build number.</summary>
     public static bool DevBuildRunning;
 

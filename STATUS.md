@@ -1,7 +1,8 @@
 # STATUS — ReadingBuddy app (Play6.3)
-Updated: 2026-11-07 (Welcome countdown button, captures done, waiting for Alex's OK before tester build 335).
+Updated: 2026-11-07 (Story Comprehension tester APK build 335: welcome countdown).
 
 ## State
+- 2026-11-07 Story Comprehension tester APK **build 335** built after Alex's OK on the countdown captures: Build_Android/StoryComprehension_3.1.0_335.apk (161 MB, versionCode 335, live stories.sc.json). Built from 9ee3129 (the welcome countdown) plus RbTestBuild.BatchBuildAndroid — a new batch entry for the real tester APK (Editor-only code, mirrors BatchBuildAndroidDev, build number raised; the tester build had only an Editor menu before). ProjectSettings build number 334→335. Both committed with this entry.
 - 2026-11-07 Welcome countdown button built and verified on the rb_phone emulator (Brief in _work/BRIEF_welcome_countdown_button.md). WelcomeController.cs: on returning launches a lighter bar inside the Continue button drains over the unchanged 5 s and the page then goes Home; the 5 s now count from the moment the button becomes "Continue" (Andrey's complaint), measured with Time.realtimeSinceStartup; a tap still goes Home at once; first launch unchanged. Test tooling: SweepActions wait condition `countdown=<n>`, plan tools/welcome_countdown.plan (series C first launch, A returning, B tap). Evidence: EditMode 343/343; sweep 27 steps 0 ERR; logcat Continue→_HomeTalk 5.049 s; captures in Build/_smoke/welcome_countdown/, report in _work/REPORT_welcome_countdown_button.md. The first sweep caught two real defects (Filled Image needs a sprite to drain; unscaledTime counted from frame start = 4.965 s), both fixed before the final captures. NOT done yet: tester APK build 335 — waits for Alex's OK on the captures. Note: the 2026-11-04 tooling edits were already committed in 07352aa, so the brief's first commit was a no-op.
 - 2026-11-04 Story Comprehension tester APK **build 334** built: Build_Android/StoryComprehension_3.1.0_334.apk (161 MB, versionCode 334, reads the live stories.sc.json). Built from a6860cc (history contains the 2026-10-30 speech fix f9d661d) plus uncommitted tooling edits (NOT committed yet): tools/sim_sc.plan (catalogfile step removed — stories.sc.json is live; new voice-silence part), Assets/_Story/Dev/SweepActions.cs (`level|<letter>` action, `silences=<n>` wait condition), tools/android_smoke.sh (applog also shows [Dialogue]/[Listen]; the run stage waits 10 s before an app-died verdict — it used to race the app start). ProjectSettings: only the build number 333→334.
 - 2026-11-04 emulator silence-timing check PASSED (rb_phone, all 41 plan steps ok, live catalog, no wait|catalog error). The plan now also opens Jack and the Beanstalk B at level b with the microphone on, stays silent through two repeats of the yes/no voice question, then answers by touch. Log evidence: the two `[Dialogue] no answer` lines are 18.8 s apart (≥ 15 = DialogueOnSilence 10 + ExtraWaitAfterRepeat 5) and `[Listen] prompt over, listening starts` comes 6.3–6.4 s AFTER each repeat, never before. Captures in Build/_smoke/android/story-comprehension/.
@@ -16,14 +17,13 @@ Updated: 2026-11-07 (Welcome countdown button, captures done, waiting for Alex's
 - Freeze before the editions work: tag `freeze-2026-10-07-build314`, copy /Users/alexanderfaisman/dev/_frozen/Play6.3_2026-10-07_build314.
 
 ## Open
-- Alex: look at the welcome-countdown captures in Build/_smoke/welcome_countdown/ (report: _work/REPORT_welcome_countdown_button.md). After his OK: tester APK build 335 (build number raised) and a STATUS entry for it.
+- Alex: give Build_Android/StoryComprehension_3.1.0_335.apk to Andrey (supersedes 334; welcome countdown bar, report in _work/REPORT_welcome_countdown_button.md).
 - tools/android_smoke.sh `build` refuses when ANY Unity editor is open (pgrep matches every editor, here ParallelReader's); mentioned, not fixed.
-- Alex: give Build_Android/StoryComprehension_3.1.0_334.apk to Andrey (superseded by 335 once built).
 - Alex: create the App Store record, paste its Apple ID into story-comprehension.json `appStoreId`, archive Build/iOS-StoryComprehension in Xcode → TestFlight. (stories.sc.json is published and live since 2026-11-04 or earlier.)
 - Next feedback round from Andrey (ask Alex).
 
 ## Next step
-- Alex's OK on the welcome-countdown captures → build tester APK 335 (Tools/ReadingBuddy/Build Story Comprehension (Android APK), build number raised) and record it here.
+- Wait for Andrey's feedback on build 335, then apply it.
 
 ## Waiting for Alex
 - Brief 07 choices to confirm: a separate dev APK (sweep driver, no build-number bump) for the emulator; new AVDs rb_phone/rb_tablet next to the existing ones.
