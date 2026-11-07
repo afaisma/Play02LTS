@@ -9,7 +9,8 @@ using UnityEngine.UI;
 // Light & playful (UiTheme): warm cream page, bright pastel demo cards, rounded Fredoka font.
 // It is the app's first scene: while the catalog downloads, the shared loading button advances to
 // _Home. The rich intro (demo cards + connectivity note) is shown on every launch; first launch
-// waits for a Continue tap, returning launches auto-continue after ~5s (Continue still works early).
+// waits for a Continue tap; on returning launches a bar inside the button counts down 5 s from the
+// moment it becomes "Continue", then the page auto-continues (a tap still works early).
 // UI is built in Awake() so the loading button exists before Globals.Start() binds it.
 // ============================================================================================
 public class WelcomeController : MonoBehaviour
@@ -20,6 +21,12 @@ public class WelcomeController : MonoBehaviour
     private const float AutoAdvanceSeconds = 5f; // returning users auto-continue after this many seconds
 
     private bool _firstRun;
+
+    // Returning-launch countdown: the shared loading button plus the bar inside it.
+    // Set in BuildLoadingButton; the bar stays inactive until the button says "Continue".
+    private Button _continueButton;
+    private TMP_Text _continueLabel;
+    private Image _countdownBar;
 
     private struct Demo { public string imgA, imgB, title, sub; public Demo(string a, string b, string t, string s){imgA=a;imgB=b;title=t;sub=s;} }
     // Story Comprehension: what the app does, in the parent's words. No pictures yet.
@@ -113,18 +120,31 @@ public class WelcomeController : MonoBehaviour
         if (button != null && button.interactable) button.onClick.Invoke();
     }
 
-    // Returning users: linger on the intro for AutoAdvanceSeconds, then go to _Home. We also wait
-    // for the catalog so _Home isn't empty — so the delay is "at least" AutoAdvanceSeconds. The
-    // Continue button is still live throughout, so the user can skip the wait by tapping it.
+    // Returning users: once the shared loading button has turned into "Continue" (catalog loaded,
+    // button interactable), show a countdown bar inside it that empties over AutoAdvanceSeconds,
+    // then go to _Home. No bar and no countdown while the button says "Loading Library Catalog"
+    // or "Connect to the Internet and Retry". The Continue button is live throughout, so a tap
+    // skips the wait (the scene change kills this coroutine).
     private IEnumerator AutoAdvanceReturning()
     {
-        float t0 = Time.time;
-        // The whole catalog, not the filtered list: a question level with no books must not hold
-        // a returning user on this screen.
-        while (Globals.g_allPRBooks == null || Globals.g_allPRBooks.Count == 0)
-            yield return new WaitForSeconds(0.25f);
-        float remaining = AutoAdvanceSeconds - (Time.time - t0);
-        if (remaining > 0f) yield return new WaitForSeconds(remaining);
+        while (_continueButton == null || !_continueButton.interactable ||
+               _continueLabel == null || _continueLabel.text != "Continue")
+            yield return null;
+
+        Debug.Log("[Welcome] Continue shown, countdown " + AutoAdvanceSeconds + "s");
+        _countdownBar.fillAmount = 1f;
+        _countdownBar.gameObject.SetActive(true);
+        // realtimeSinceStartup, not unscaledTime: unscaledTime is the frame-START time, and the
+        // scene-activation frame is long, so 5 s measured from it can end ~0.1 s after the label
+        // actually switched to "Continue". Sampled here, after the switch, the 5 s hold strictly.
+        float t0 = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - t0 < AutoAdvanceSeconds)
+        {
+            _countdownBar.fillAmount = Mathf.Clamp01(1f - (Time.realtimeSinceStartup - t0) / AutoAdvanceSeconds);
+            yield return null;
+        }
+        _countdownBar.fillAmount = 0f;
+        Debug.Log("[Welcome] countdown over, going Home");
         Navigation.GoToHome();
     }
 
@@ -287,9 +307,33 @@ public class WelcomeController : MonoBehaviour
         img.sprite = RoundedSprite(); img.type = Image.Type.Sliced;
         img.color = UiTheme.Primary;
 
+        // Countdown bar for returning launches: a lighter strip along the bottom edge, inside the
+        // rounded corners, under the label. Filled from the right so it shrinks right-to-left.
+        // Inactive until AutoAdvanceReturning sees the button become "Continue".
+        var barGO = new GameObject("CountdownBar", typeof(RectTransform), typeof(Image));
+        barGO.transform.SetParent(go.transform, false);
+        var barRT = barGO.GetComponent<RectTransform>();
+        barRT.anchorMin = new Vector2(0f, 0f);
+        barRT.anchorMax = new Vector2(1f, 0f);
+        barRT.offsetMin = new Vector2(26f, 12f);
+        barRT.offsetMax = new Vector2(-26f, 24f);
+        _countdownBar = barGO.GetComponent<Image>();
+        // A sprite is required: with a null sprite, Image ignores type Filled and draws a full quad.
+        _countdownBar.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f));
+        _countdownBar.color = new Color(1f, 1f, 1f, 0.55f); // lighter than UiTheme.Primary, label stays clear of it
+        _countdownBar.type = Image.Type.Filled;
+        _countdownBar.fillMethod = Image.FillMethod.Horizontal;
+        _countdownBar.fillOrigin = (int)Image.OriginHorizontal.Right;
+        _countdownBar.fillAmount = 1f;
+        _countdownBar.raycastTarget = false;
+        barGO.SetActive(false);
+
         var label = MakeText(go.transform, "Text", "Loading Library Catalog", 40, TextAlignmentOptions.Center);
         label.color = UiTheme.OnPrimary; label.fontStyle = FontStyles.Bold;
         Stretch(label.rectTransform);
+
+        _continueButton = go.GetComponent<Button>();
+        _continueLabel = label;
     }
 
     // ---------------------------------------------------------------- helpers
