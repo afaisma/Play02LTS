@@ -308,8 +308,10 @@ public class WelcomeController : MonoBehaviour
         img.color = UiTheme.Primary;
 
         // Countdown bar for returning launches: a lighter strip along the bottom edge, inside the
-        // rounded corners, under the label. Filled from the right so it shrinks right-to-left.
-        // Inactive until AutoAdvanceReturning sees the button become "Continue".
+        // rounded corners, under the label. Filled from the left, so the remaining part stays
+        // anchored at the left edge and the right end moves left as time runs out (Andrey's
+        // feedback on build 335). Inactive until AutoAdvanceReturning sees the button become
+        // "Continue".
         var barGO = new GameObject("CountdownBar", typeof(RectTransform), typeof(Image));
         barGO.transform.SetParent(go.transform, false);
         var barRT = barGO.GetComponent<RectTransform>();
@@ -323,7 +325,7 @@ public class WelcomeController : MonoBehaviour
         _countdownBar.color = new Color(1f, 1f, 1f, 0.55f); // lighter than UiTheme.Primary, label stays clear of it
         _countdownBar.type = Image.Type.Filled;
         _countdownBar.fillMethod = Image.FillMethod.Horizontal;
-        _countdownBar.fillOrigin = (int)Image.OriginHorizontal.Right;
+        _countdownBar.fillOrigin = (int)Image.OriginHorizontal.Left;
         _countdownBar.fillAmount = 1f;
         _countdownBar.raycastTarget = false;
         barGO.SetActive(false);

@@ -112,7 +112,9 @@ inventory)
   finish ok 0 ;;
 
 build)
-  pgrep -f "Unity.app/Contents/MacOS/Unity" >/dev/null && finish "unity-editor-is-open-close-it" 1
+  # only THIS project's editor blocks the batch build; another project's open Unity is fine
+  # (Hub passes -projectpath, batch -projectPath: match either case)
+  ps -axo command | grep "Unity.app/Contents/MacOS/Unity" | grep -v grep | grep -qi "projectpath $ROOT" && finish "unity-editor-is-open-close-it" 1
   T0=$(date +%s)
   BEFORE=$(cd "$ROOT" && git status --porcelain ProjectSettings)
   LOG=$OUT/build_$EDITION.log
