@@ -1,5 +1,5 @@
 # STATUS — ReadingBuddy app (Play6.3)
-Updated: 2026-11-25 (Story Comprehension tester APK build 339: larger picker text, both editions; for Andrey).
+Updated: 2026-11-25 (main up to 2ff1c3e and the tag before-pause-2026-11-24 pushed by Alex; tester APK 339 ready for Andrey).
 
 ## State
 - 2026-11-25 **Tester APK build 339** Build_Android/StoryComprehension_3.1.0_339.apk (161 MB; versionCode 339, targetSdk 36, arm64-v8a; stories.sc.json), from ba753fb: build 337 + larger reading-mode picker text in both editions (09af577, Andrey's only comment on 337, which he found "much better") + the demo goes Home without the cut-off slide-away (ba753fb, no more DOTween warning). No iOS export this time (decision of 2026-11-25). Checks: picker before/after on rb_phone, rb_tablet, iPhone SE, both editions (tools/picker_sc.plan, picker_rb.plan; review page _work/review_picker_text.html, captures Build/_smoke/picker_text/); welcome_countdown, welcome_skip, sim_sc, sim_smoke, pause_rb on all three devices 0 ERR, DOTween warnings 0; EditMode 354/354; APK 339 on rb_phone: Continue -> demo -> Home -> book, picker with the larger text, log "[BUILD] build 339". ProjectSettings build number 338 -> 339.
@@ -32,7 +32,7 @@ Updated: 2026-11-25 (Story Comprehension tester APK build 339: larger picker tex
 - Wait for Andrey's feedback on build 339 (if he and his test user accept it, it becomes the release candidate).
 
 ## Waiting for Alex
-- Send build 339 and the picker pairs to Andrey; push when ready (commits 488ca24..HEAD and tag before-pause-2026-11-24); real-device checklist in _work/REPORT_parent_screens_and_reading_controls.md.
+- Send build 339 and the picker pairs to Andrey (main up to 2ff1c3e and the tag before-pause-2026-11-24 pushed by Alex on 2026-11-25); real-device checklist in _work/REPORT_parent_screens_and_reading_controls.md.
 - Decide on the empty-box star in the tile progress line (another sign, or the star added to the font).
 - App Store record + Apple ID for Story Comprehension.
 
