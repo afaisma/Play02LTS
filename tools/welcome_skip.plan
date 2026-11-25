@@ -1,0 +1,1 @@
+60|prefint|dialogue_mic=0;5|wait|catalog;60|click|ButtonLoadingRetryContinue;5|wait|demo;40|cap|S1_demo_after_continue;1|click|Skip;5|wait|scene=_HomeTalk;120|cap|S2_home_level_sheet_after_skip;1|log|series S ok: Skip went Home

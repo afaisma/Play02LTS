@@ -33,6 +33,7 @@
 // Conditions for "wait|<what>": catalog | playing | idle | picker | dialogue | scene=<name>
 //   | silences=<n> (the open dialogue has gone unanswered n times — the silence-timing check)
 //   | countdown=<n> (the Welcome countdown bar is showing and has emptied to <= n percent)
+//   | demo (the Welcome page's demo question is showing)
 #if UNITY_EDITOR || READINGBUDDY_DEV
 using System;
 using System.Collections;
@@ -261,6 +262,14 @@ public static class SweepActions
                 var pT = T("UnifiedReadingModePicker");
                 var p = UnityEngine.Object.FindFirstObjectByType(pT);
                 return p != null && (bool)pT.GetField("_open", Any).GetValue(p);
+            }
+            case "demo":
+            {
+                var wT = T("WelcomeController");
+                var w = UnityEngine.Object.FindFirstObjectByType(wT);
+                if (w == null) return false;
+                object v = wT.GetField("_demo", Any).GetValue(w);
+                return v != null && (bool)v.GetType().GetProperty("Visible", Any).GetValue(v);
             }
             case "dialogue":
             {

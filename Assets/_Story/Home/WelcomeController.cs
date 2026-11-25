@@ -9,8 +9,9 @@ using UnityEngine.UI;
 // Light & playful (UiTheme): warm cream page, bright pastel demo cards, rounded Fredoka font.
 // It is the app's first scene: while the catalog downloads, the shared loading button advances to
 // _Home. The rich intro (demo cards + connectivity note) is shown on every launch; first launch
-// waits for a Continue tap; on returning launches a bar inside the button counts down 5 s from the
-// moment it becomes "Continue", then the page auto-continues (a tap still works early).
+// waits for a Continue tap (Story Comprehension: that tap shows the demo question first); on
+// returning launches a bar inside the button counts down 5 s from the moment it becomes
+// "Continue", then the page auto-continues (a tap still works early).
 // UI is built in Awake() so the loading button exists before Globals.Start() binds it.
 // ============================================================================================
 public class WelcomeController : MonoBehaviour
@@ -55,14 +56,20 @@ public class WelcomeController : MonoBehaviour
     private void Start()
     {
         if (!_firstRun) StartCoroutine(AutoAdvanceReturning());
-        else if (Edition.Current.questionBooksOnly) StartCoroutine(DemoQuestionSoon());
+        else if (Edition.Current.questionBooksOnly) StartCoroutine(DemoOnContinue());
     }
+
+    // The shared loading button says "Continue": the catalog is loaded and the button is live.
+    private bool ContinueShown() =>
+        _continueButton != null && _continueButton.interactable &&
+        _continueLabel != null && _continueLabel.text == "Continue";
 
     // ---------------------------------------------------------------- the demo question
 
-    // Story Comprehension, first start: one real question slides up over this page, so the
-    // parent sees and tries what the child will do. It is the book dialogue itself (DialogueView
-    // and DialogueFlow), answered by touch, with pictures inside the app; no sound, no microphone.
+    // Story Comprehension, first start: the page stays until the parent taps Continue, so it can
+    // be read. That tap slides one real question up over this page, so the parent sees and tries
+    // what the child will do. It is the book dialogue itself (DialogueView and DialogueFlow),
+    // answered by touch, with pictures inside the app; no sound, no microphone.
     public const string DemoQuestion = "Touch the bear.";
     public const string DemoCaption = "Try it: your child will see questions like this";
     public const string DemoPraise = "Yes! That is the bear.";
@@ -71,15 +78,21 @@ public class WelcomeController : MonoBehaviour
     private DialogueView _demo;
     private DialogueFlow _demoFlow;
 
-    private IEnumerator DemoQuestionSoon()
+    // Until the catalog is loaded the button keeps Globals' own handler ("Loading Library Catalog",
+    // "Connect to the Internet and Retry"). Globals sets the handler once per catalog download, and a
+    // new download starts only from the Retry state, so the handler set here stays.
+    private IEnumerator DemoOnContinue()
     {
-        yield return new WaitForSeconds(0.8f);
-        if (this == null) yield break;
-        ShowDemoQuestion();
+        while (!ContinueShown()) yield return null;
+        Debug.Log("[Welcome] first launch: Continue shown, waiting for the tap");
+        _continueButton.onClick.RemoveAllListeners();
+        _continueButton.onClick.AddListener(ShowDemoQuestion);
     }
 
     private void ShowDemoQuestion()
     {
+        if (_demo != null) return; // the sheet covers the button; a second tap must not stack a second one
+        Debug.Log("[Welcome] Continue tapped: demo question");
         var spec = new DialogueSpec { question = DemoQuestion, answer = "bear", praiseText = DemoPraise };
         spec.choices.Add(new DialogueChoice { id = "girl", text = "Girl", image = "res://welcome/talk_girl" });
         spec.choices.Add(new DialogueChoice { id = "bear", text = "Bear", image = "res://welcome/talk_bear" });
@@ -88,7 +101,7 @@ public class WelcomeController : MonoBehaviour
         _demoFlow = new DialogueFlow(spec);
         _demo = DialogueView.Create();
         _demo.Show(spec, voiceOn: false, choicesShown: true, pictureBottomScreenY: -1f, resolveUrl: url => url,
-            onChoice: DemoAnswer, onReplay: () => { }, onSkip: DemoClose, onNext: DemoNext, onTap: () => { });
+            onChoice: DemoAnswer, onReplay: () => { }, onSkip: DemoDone, onNext: DemoDone, onTap: () => { });
         _demo.Refresh(_demoFlow, DemoCaption);
     }
 
@@ -105,19 +118,13 @@ public class WelcomeController : MonoBehaviour
         }
     }
 
-    private void DemoClose()
+    // "Choose the level" and Skip: Home, where the level sheet opens. The catalog is loaded (the demo
+    // comes only from the real Continue), so this is what Continue does without the demo.
+    private void DemoDone()
     {
         if (_demo != null) _demo.Hide();
-    }
-
-    // "Choose the level": the same as the Continue button below (Home, or retry when the catalog
-    // did not load). While the catalog is still loading the page stays, with its loading button.
-    private void DemoNext()
-    {
-        DemoClose();
-        var go = GameObject.Find("ButtonLoadingRetryContinue");
-        var button = go != null ? go.GetComponent<Button>() : null;
-        if (button != null && button.interactable) button.onClick.Invoke();
+        Debug.Log("[Welcome] demo question done, going Home");
+        Globals.Instance.Home();
     }
 
     // Returning users: once the shared loading button has turned into "Continue" (catalog loaded,
@@ -127,9 +134,7 @@ public class WelcomeController : MonoBehaviour
     // skips the wait (the scene change kills this coroutine).
     private IEnumerator AutoAdvanceReturning()
     {
-        while (_continueButton == null || !_continueButton.interactable ||
-               _continueLabel == null || _continueLabel.text != "Continue")
-            yield return null;
+        while (!ContinueShown()) yield return null;
 
         Debug.Log("[Welcome] Continue shown, countdown " + AutoAdvanceSeconds + "s");
         _countdownBar.fillAmount = 1f;
