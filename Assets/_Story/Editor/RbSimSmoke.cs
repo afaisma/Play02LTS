@@ -59,6 +59,19 @@ public static class RbSimSmoke
         EditorApplication.Exit(ok ? 0 : 1);
     }
 
+    /// <summary>
+    /// Batch mode (Editor closed), Simulator export of any edition into Build/iOS-sim-<id>:
+    /// Unity -batchmode -quit -buildTarget iOS -projectPath ... -executeMethod RbSimSmoke.BatchExportSim -rbEdition readingbuddy-test
+    /// Then: SIM_EDITION=<id> tools/sim_smoke.sh build
+    /// </summary>
+    public static void BatchExportSim()
+    {
+        string editionId = "story-comprehension";
+        var args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++) if (args[i] == "-rbEdition") editionId = args[i + 1];
+        EditorApplication.Exit(ExportSimulator(editionId) ? 0 : 1);
+    }
+
     [Serializable]
     public class Status { public string stage; public bool ok; public string message; public string when; public float seconds; }
 

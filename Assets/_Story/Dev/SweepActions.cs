@@ -22,6 +22,7 @@
 //                    (IRead is NOT supported in the Simulator — Recognissimo is stubbed there)
 //   picker           toggle the reading-mode picker (open <-> closed)
 //   click|<name>     press any active Button by GameObject name (e.g. ShowAllAges)
+//   scroll|<pos>     every active scroll list to a vertical position (1 = top, 0 = bottom)
 //   next | prev      page-turn arrows
 //   rate | ratelater the rate-app panel in / out
 //   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly;
@@ -178,6 +179,16 @@ public static class SweepActions
             case "picker": { var pT = T("UnifiedReadingModePicker"); Call(Find(pT), pT, "TogglePicker"); break; }
 
             case "click": ClickByName(arg); break;   // any active GameObject with a Button, by name
+            case "scroll":
+            {
+                // every active scroll list of the screen to a vertical position: 1 = top, 0 = bottom
+                float pos = float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture);
+                int n = 0;
+                foreach (var sr in UnityEngine.Object.FindObjectsByType<ScrollRect>(FindObjectsSortMode.None))
+                    if (sr.isActiveAndEnabled) { sr.StopMovement(); sr.verticalNormalizedPosition = pos; n++; }
+                if (n == 0) throw new Exception("no active ScrollRect");
+                break;
+            }
             case "next": ClickByName("btnNext"); break;
             case "prev": ClickByName("btnPrev"); break;
 
