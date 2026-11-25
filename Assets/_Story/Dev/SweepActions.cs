@@ -28,7 +28,9 @@
 //   slider|<name>=<n>  move a Slider to a value as a finger would (its change handler runs)
 // Notes for "note|<what>" (a value written into the log): narration (the newest narration file,
 //   with its speed) | rate (the saved slider speed g_Rate, or "not saved") | page (the reading page's
-//   page number as shown, and the page index the reader is on)
+//   page number as shown, and the page index the reader is on) | audio (the page narration: sound
+//   position, playing, read aloud, paused, the Repeat button's face) | dialogue (open or closed)
+//   word|<text>      what a tap on that word of the page plays (the word bank, ReadingBuddy)
 //   next | prev      page-turn arrows
 //   swipe|left|right a finger swipe on the page text (left = next page, right = previous)
 //   rate | ratelater the rate-app panel in / out
@@ -41,6 +43,7 @@
 //   | silences=<n> (the open dialogue has gone unanswered n times — the silence-timing check)
 //   | countdown=<n> (the Welcome countdown bar is showing and has emptied to <= n percent)
 //   | demo (the Welcome page's demo question is showing)
+//   | audiotime=<s> (the page narration is playing at or past s seconds)
 #if UNITY_EDITOR || READINGBUDDY_DEV
 using System;
 using System.Collections;
@@ -220,6 +223,13 @@ public static class SweepActions
                 break;
             }
             case "next": ClickByName("btnNext"); break;
+            case "word":
+            {
+                object p = PagePlayer();
+                if (!(bool)p.GetType().GetMethod("TryPlayWord", Any).Invoke(p, new object[] { arg }))
+                    throw new Exception("no word '" + arg + "' in this book's word bank");
+                break;
+            }
             case "swipe":
             {
                 // What the swipe detector does: PRScript.LeftSwipe / RightSwipe with the text's swipe object.
@@ -289,6 +299,24 @@ public static class SweepActions
                 int step = (int)t.GetField("nCurrentStep", Any).GetValue(pr);
                 return "shown \"" + (label != null && label.gameObject.activeInHierarchy ? label.text : "(hidden)") + "\", step index " + step;
             }
+            case "audio":
+            {
+                object p = PagePlayer();
+                var pT = p.GetType();
+                var src = pT.GetField("audioSource", Any).GetValue(p) as AudioSource;
+                var t = T("PRScript");
+                object face = t.GetField("_replayShown", Any).GetValue(Find(t));
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "time {0:F2} s, playing {1}, read aloud {2}, paused {3}, button {4}",
+                    src != null ? src.time : -1f, src != null && src.isPlaying,
+                    pT.GetProperty("IsReadingAloud", Any).GetValue(p), pT.GetProperty("IsPaused", Any).GetValue(p), face);
+            }
+            case "dialogue":
+            {
+                var dT = T("DialogueController");
+                var d = UnityEngine.Object.FindFirstObjectByType(dT);
+                return d != null && (bool)dT.GetProperty("IsOpen", Any).GetValue(d) ? "open" : "closed";
+            }
             default: throw new Exception("unknown note " + what);
         }
     }
@@ -298,6 +326,11 @@ public static class SweepActions
     public static bool Condition(string what)
     {
         if (what.StartsWith("scene=")) return SceneManager.GetActiveScene().name == what.Substring(6);
+        if (what.StartsWith("audiotime="))
+        {
+            var src = PagePlayer().GetType().GetField("audioSource", Any).GetValue(PagePlayer()) as AudioSource;
+            return src != null && src.isPlaying && src.time >= float.Parse(what.Substring(10), System.Globalization.CultureInfo.InvariantCulture);
+        }
         if (what.StartsWith("countdown="))
         {
             var wT = T("WelcomeController");
@@ -348,6 +381,13 @@ public static class SweepActions
             }
             default: throw new Exception("unknown condition " + what);
         }
+    }
+
+    // The reading page's narration player (PRScript.audioAndTextPlayer).
+    private static object PagePlayer()
+    {
+        var t = T("PRScript");
+        return t.GetField("audioAndTextPlayer", Any).GetValue(Find(t));
     }
 
     private static bool AnyNarration()

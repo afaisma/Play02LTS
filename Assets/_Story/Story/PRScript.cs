@@ -120,6 +120,21 @@ public class PRScript : MonoBehaviour
     // "7 / 24" at the top right of the reading page (BuildPageNumber, ShowPageNumber).
     private TMP_Text _pageNumber;
 
+    // ---- pause ---- The toolbar's Repeat button (btnReplay) has three faces.
+    public enum ReplayButtonState { Repeat, Pause, Play }
+
+    /// <summary>
+    /// The face of the Repeat button: Pause while the page is read aloud (also while its sound is
+    /// still loading), Play while paused, Repeat when the page is finished or the mode has no
+    /// narration (pictures only, "I read") - exactly as before pause existed.
+    /// </summary>
+    public static ReplayButtonState ReplayButtonStateFor(bool readingAloud, bool paused) =>
+        paused ? ReplayButtonState.Play : readingAloud ? ReplayButtonState.Pause : ReplayButtonState.Repeat;
+
+    private Button _replayButton;
+    private GameObject _replayGlyph, _pauseGlyph, _playGlyph;
+    private ReplayButtonState _replayShown = ReplayButtonState.Repeat;
+
     public string baseURL = "";
     public ButtonController buttonController;
     [SerializeField] private UnityEngine.UI.Button btnHome; // reader toolbar home button; restyled to the shared HomeButton look
@@ -256,6 +271,7 @@ public class PRScript : MonoBehaviour
         // name — the same approach UnifiedReadingModePicker uses for btnVoiceSelection (which it
         // styles itself, with the speaker glyph).
         StyleToolbarIcon("btnReplay");
+        SetUpReplayButton();
         BuildPageNumber();
 
         // The bottom bar is authored flush with the screen edge, which on a notched iPhone puts
@@ -1324,6 +1340,9 @@ public class PRScript : MonoBehaviour
                 // New page visit: the Read-next sheet belonged to the page that ended.
                 _readNextFired = false;
                 DestroyReadNextSheet();
+                // A pause belongs to its page: the new page reads normally (also a page without
+                // narration must not inherit the paused sound of the last one).
+                if (audioAndTextPlayer != null && audioAndTextPlayer.IsPaused) audioAndTextPlayer.StopAudio();
             }
             
             if (index == _scriptlets.Count - 1)
@@ -1401,6 +1420,63 @@ public class PRScript : MonoBehaviour
             glyph.preserveAspect = true;
             glyph.raycastTarget = false;
         });
+    }
+
+    // The Repeat button: its scene-wired tap (ReplayCurrenStep) is switched off and OnReplayButton
+    // takes its place; the scene's replay art stays as the Repeat face, and a Pause face (two bars)
+    // and a Play face (a triangle) are drawn beside it in the same glyph slot, with the same ink.
+    private void SetUpReplayButton()
+    {
+        var go = GameObject.Find("btnReplay");
+        _replayButton = go != null ? go.GetComponent<Button>() : null;
+        if (_replayButton == null) return;
+        for (int i = 0; i < _replayButton.onClick.GetPersistentEventCount(); i++)
+            _replayButton.onClick.SetPersistentListenerState(i, UnityEngine.Events.UnityEventCallState.Off);
+        _replayButton.onClick.AddListener(OnReplayButton);
+
+        var slot = _replayButton.transform.Find(ToolbarButtonStyle.GlyphSlotName);
+        if (slot == null) return;
+        var icon = slot.Find("Icon");
+        _replayGlyph = icon != null ? icon.gameObject : null;
+        float size = ((RectTransform)slot).sizeDelta.x;
+        _pauseGlyph = UiGlyphs.NewBox(slot, "Pause", size).gameObject;
+        UiGlyphs.AddShape(_pauseGlyph.transform, "BarL", null, -17f, 0f, 20f, 66f, 0f, UiTheme.Primary);
+        UiGlyphs.AddShape(_pauseGlyph.transform, "BarR", null, 17f, 0f, 20f, 66f, 0f, UiTheme.Primary);
+        _playGlyph = UiGlyphs.NewBox(slot, "Play", size).gameObject;
+        // TriangleSprite points left; turned half round it points right, nudged right to look centred.
+        UiGlyphs.AddShape(_playGlyph.transform, "Triangle", UiGlyphs.TriangleSprite(), 6f, 0f, 60f, 70f, 180f, UiTheme.Primary);
+        ShowReplayFace(ReplayButtonState.Repeat);
+    }
+
+    private ReplayButtonState ReplayState() => audioAndTextPlayer == null ? ReplayButtonState.Repeat
+        : ReplayButtonStateFor(audioAndTextPlayer.IsReadingAloud, audioAndTextPlayer.IsPaused);
+
+    private void OnReplayButton()
+    {
+        switch (ReplayState())
+        {
+            case ReplayButtonState.Pause: audioAndTextPlayer.PauseReading(); break;
+            case ReplayButtonState.Play: audioAndTextPlayer.ResumeReading(); break;
+            default: ReplayCurrenStep(); break; // as before: the page again from the start
+        }
+        ShowReplayFace(ReplayState());
+    }
+
+    private void ShowReplayFace(ReplayButtonState state)
+    {
+        _replayShown = state;
+        if (_replayGlyph != null) _replayGlyph.SetActive(state == ReplayButtonState.Repeat);
+        if (_pauseGlyph != null) _pauseGlyph.SetActive(state == ReplayButtonState.Pause);
+        if (_playGlyph != null) _playGlyph.SetActive(state == ReplayButtonState.Play);
+    }
+
+    // The face follows the narration (start, end, page turn, the picker) without each of them
+    // having to say so: one comparison per frame, a change only when the state changes.
+    private void LateUpdate()
+    {
+        if (_replayButton == null) return;
+        var state = ReplayState();
+        if (state != _replayShown) ShowReplayFace(state);
     }
 
     // The page number "7 / 24": the page on screen and the pages of the book, counted as the

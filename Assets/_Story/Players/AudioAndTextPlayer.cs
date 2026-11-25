@@ -85,6 +85,52 @@ public class AudioAndTextPlayer : MonoBehaviour
     /// <summary>The narration is playing and can be heard (not "App is silent", where it runs muted).</summary>
     public bool IsAudible => IsPlaying && !audioSource.mute && audioSource.volume > 0.001f;
 
+    // ---- pause (the reader's Pause / Play on the Repeat button, PRScript.OnReplayButton) ----
+    // A paused AudioSource is not "playing", so the highlight loop in LoadAudioAndTimings also waits
+    // while _paused: a plain Pause() would end the page there (OnAudioFinished, the automatic turn,
+    // the question). Every new page narration and StopAudio clear both flags.
+    private bool _readingAloud; // the page's narration is loading or playing with sound (also while paused)
+    private bool _paused;
+    private bool _soundStarted; // audioSource.Play() has run for this narration
+
+    /// <summary>The page is being read aloud with sound (app voice or storyteller): its narration is
+    /// loading or playing, also while paused. False when it is finished, and in the modes without
+    /// narration (pictures only, "I read").</summary>
+    public bool IsReadingAloud => _readingAloud;
+    /// <summary>The reader paused the narration of this page.</summary>
+    public bool IsPaused => _paused;
+
+    /// <summary>Hold the narration where it is: the sound, the highlighted word, and everything that
+    /// follows the end of the page. Also works while the sound is still loading.</summary>
+    public void PauseReading()
+    {
+        if (!_readingAloud || _paused) return;
+        _paused = true;
+        if (audioSource != null && audioSource.isPlaying) audioSource.Pause();
+        // Paused in the short gap between two words, the mark would sit on a space or a comma and
+        // show nothing: move it back to the word just read. Moving the index back is safe - the
+        // highlight loop searches forward from it again after Play.
+        if (currentWordTimings != null && currentWordIndex < currentWordTimings.Count)
+        {
+            int w = currentWordIndex;
+            while (w > 0 && (string.IsNullOrWhiteSpace(currentWordTimings[w].Word) || IsWordPunctuation(w))) w--;
+            if (w != currentWordIndex) { currentWordIndex = w; RenderHighlight(true); }
+        }
+        Debug.Log("[Narration] paused at " + NarrationTime() + ", word " + currentWordIndex);
+    }
+
+    /// <summary>Continue from the same position; the page then ends as it would have.</summary>
+    public void ResumeReading()
+    {
+        if (!_paused) return;
+        _paused = false;
+        if (_soundStarted && audioSource != null && audioSource.clip != null) audioSource.UnPause();
+        Debug.Log("[Narration] resumed at " + NarrationTime());
+    }
+
+    private string NarrationTime() =>
+        audioSource != null ? audioSource.time.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + " s" : "-";
+
     public string hilightTextColor = "FF55FF";
     public string hilightBackColor = "00FF0044";
 
@@ -320,6 +366,11 @@ public class AudioAndTextPlayer : MonoBehaviour
     {
         JSONNode timings = null;
         AudioAndTextStruct audioAndTextStruct = null;
+        // A new narration: not paused; read aloud with sound only in the voice modes (pictures only
+        // plays it muted, "I read" not at all).
+        _paused = false;
+        _soundStarted = false;
+        _readingAloud = !string.IsNullOrEmpty(audioURL) && _PlayAudio && !ReadAlongActive;
 
         // Instant text on page entry (esp. slow connections): paint the script-provided
         // page text immediately from `content`, before the audio/timings download. The real
@@ -506,6 +557,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             // region at the end of this file.)
             if (ReadAlongActive)
             {
+                _readingAloud = false;
                 if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
                 OnReadAlongPageParsed();
                 yield break;
@@ -563,9 +615,12 @@ public class AudioAndTextPlayer : MonoBehaviour
 
         // Small delay before playing
         yield return new WaitForSeconds(0.5f);
+        // Paused while the sound was loading: the page starts when the reader taps Play.
+        while (_paused) yield return null;
 
         audioSource.volume = !_PlayAudio ? 0 : 1;
         audioSource.Play();
+        _soundStarted = true;
         // No clip = the narration could not be loaded (offline, missing file). Autopage must not
         // treat that as "finished reading": it turned such pages after one second each, straight
         // to the end of the book.
@@ -577,14 +632,16 @@ public class AudioAndTextPlayer : MonoBehaviour
             if (audioSource.isPlaying)
                 dtWasPlaying = DateTime.Now;
 
-            // Highlight loop
-            while (audioSource.isPlaying)
+            // Highlight loop. While paused the sound is not "playing": keep waiting, with the
+            // highlighted word left as it is.
+            while (audioSource.isPlaying || _paused)
             {
-                UpdateHighlightedText(audioSource.time * 1000 - 500); // offset in ms
+                if (!_paused) UpdateHighlightedText(audioSource.time * 1000 - 500); // offset in ms
                 yield return null;
             }
 
             // Reset highlight once audio finishes
+            _readingAloud = false;
             UpdateHighlightedText(0, false);
             Debug.Log("Audio has stopped playing.");
             OnAudioFinished?.Invoke();
@@ -598,6 +655,7 @@ public class AudioAndTextPlayer : MonoBehaviour
         else
         {
             // Static text scenario
+            _readingAloud = false; // reported finished at once, as before: nothing to pause
             UpdateHighlightedText(0, false);
             Debug.Log("Static text – no JSON timings used.");
             OnAudioFinished?.Invoke();
@@ -707,7 +765,12 @@ public class AudioAndTextPlayer : MonoBehaviour
                 break;
             }
         }
+        RenderHighlight(bHilight);
+    }
 
+    // The page text with the token at currentWordIndex marked (when highlighting is on).
+    private void RenderHighlight(bool bHilight)
+    {
         string newForegroundText = "";
         string newBackgroundText = "";
         for (int i = 0; i < currentWordTimings.Count; i++)
@@ -1330,18 +1393,22 @@ public class AudioAndTextPlayer : MonoBehaviour
     public void StopPageAudioForReadAlong()
     {
         if (!ReadAlongActive) return;
+        _readingAloud = false; _paused = false;
         StopAllCoroutines();
         StopWordTap();
-        if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+        if (audioSource != null) audioSource.Stop(); // also a paused source: else a replay resumes mid-page
     }
 
     // Hard-stop page audio + highlight coroutines regardless of mode. Used to silence any in-flight
     // narration the instant the reading-mode picker opens (companion to the Play/PlayExt IsOpen gate).
     public void StopAudio()
     {
+        _readingAloud = false; _paused = false; // a stopped narration is neither read nor paused
         StopAllCoroutines();
         StopWordTap();
-        if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+        // Also a paused source (isPlaying is false then): left paused, the replay after the picker
+        // closes would resume the same clip mid-page instead of reading the page from the start.
+        if (audioSource != null) audioSource.Stop();
     }
 
     // Index-driven highlight render. Mirrors UpdateHighlightedText's render block (the audio path is
