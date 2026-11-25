@@ -52,6 +52,20 @@ public class Edition
     public bool readingSpeedByAgeGroup = true;
     /// <summary>The slider's speed before the adult touches it: "-30", "-20", "-10", "0" or "10".</summary>
     public string defaultReadingRate = "0";
+    /// <summary>
+    /// Story Comprehension: the slider's speed before the adult touches it, per question level, in
+    /// the order of QuestionLevel.Letters (a, b, c, d). Empty = defaultReadingRate at every level.
+    /// </summary>
+    public string[] defaultReadingRateByLevel = new string[0];
+
+    /// <summary>The speed before the adult moves the slider, at a question level ("a".."d").</summary>
+    public string DefaultReadingRate(string level)
+    {
+        int i = Array.IndexOf(QuestionLevel.Letters, level);
+        if (i >= 0 && i < defaultReadingRateByLevel.Length && !string.IsNullOrEmpty(defaultReadingRateByLevel[i]))
+            return defaultReadingRateByLevel[i];
+        return defaultReadingRate;
+    }
 
     private static Edition _current;
     public const string OverridePref = "edition_override"; // dev builds only
@@ -74,6 +88,7 @@ public class Edition
             Edition e = JsonUtility.FromJson<Edition>(json);
             if (e == null || string.IsNullOrEmpty(e.id)) return null;
             if (e.appIdentifiers == null) e.appIdentifiers = new string[0];
+            if (e.defaultReadingRateByLevel == null) e.defaultReadingRateByLevel = new string[0];
             if (string.IsNullOrEmpty(e.homeScene)) e.homeScene = "_Home";
             return e;
         }

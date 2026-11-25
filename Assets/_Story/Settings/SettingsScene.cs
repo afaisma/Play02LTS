@@ -12,36 +12,18 @@ public class SettingsScene : MonoBehaviour
     public TMP_Text versionText;
 
     // Start is called before the first frame update
+    // The slider's positions, left to right.
+    private static readonly string[] Rates = { "-30", "-20", "-10", "0", "10" };
+
     void Start()
     {
-        string rate = PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
         // An edition without age groups (Story Comprehension): no check box, the slider alone.
         if (!Edition.Current.readingSpeedByAgeGroup && toggleSetReadingSpeedByBooksAgeGroup != null)
         {
             toggleSetReadingSpeedByBooksAgeGroup.gameObject.SetActive(false);
             toggleSetReadingSpeedByBooksAgeGroup = null;
         }
-        if (sliderRate != null)
-        {
-            switch (rate)
-            {
-                case "-30":
-                    sliderRate.value = 0;
-                    break;
-                case "-20":
-                    sliderRate.value = 1;
-                    break;
-                case "-10":
-                    sliderRate.value = 2;
-                    break;
-                case "0":
-                    sliderRate.value = 3;
-                    break;
-                case "10":
-                    sliderRate.value = 4;
-                    break;
-            }
-        }
+        ShowReadingRate();
 
         int nSetReadingSpeedByBooksAgeGroup = PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1);
 
@@ -57,7 +39,7 @@ public class SettingsScene : MonoBehaviour
         else if (sliderRate != null)
             sliderRate.interactable = true; // no check box: the slider is always the adult's
 
-        DisplayReadingSpeedDescr();
+        DisplayReadingSpeedDescr(); // again, now that the check box shows the saved choice
 
         if (versionText != null)
             versionText.text = "Version: " + Application.version;
@@ -70,7 +52,7 @@ public class SettingsScene : MonoBehaviour
         // "Turn pages automatically" — built in code against this scene's canvas (see
         // AutopageSettingRow); it moved here out of the reading-mode modal.
         AutopageSettingRow.Attach();
-        QuestionLevelSetting.Attach();  // only when the catalog has books made for a question level
+        QuestionLevelSetting.Attach(ShowReadingRate); // only when the catalog has books made for a question level
         DialogueSkipSetting.Attach();   // same condition
         DialogueRewardSetting.Attach(); // only after a book with questions has been opened on this device
 
@@ -89,6 +71,17 @@ public class SettingsScene : MonoBehaviour
     }
 
     // L-R3-2: removed an empty Update() that cost a per-frame managed call for no gain.
+
+    // The slider and its words show the speed in use (Globals.ReadingRateFromSlider): the adult's own
+    // once they have moved the slider, else the default, which in Story Comprehension follows the
+    // question level (so also after the level row below changes it). Saves nothing: only a move of
+    // the slider by the adult does (HandleRateValueChange).
+    private void ShowReadingRate()
+    {
+        int i = System.Array.IndexOf(Rates, Globals.ReadingRateFromSlider());
+        if (sliderRate != null && i >= 0) sliderRate.SetValueWithoutNotify(i);
+        DisplayReadingSpeedDescr();
+    }
 
     public void RateThisApp()
     {
@@ -155,7 +148,7 @@ public class SettingsScene : MonoBehaviour
 
     public void DisplayReadingSpeedDescr()
     {
-        string rate = PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
+        string rate = Globals.ReadingRateFromSlider(); // -30, -20, -10, 0, 10
         if (txtReadingSpeedDescr != null)
         {
             string descr = "";

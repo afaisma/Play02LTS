@@ -13,6 +13,7 @@
 //                 scene=<name> | idle (no narration) — ReadingBuddy streams content from the
 //                 CDN, so frame counts alone would race the download
 //   secs|<n>      wait n seconds (real time; the log line shows the measured wait)
+//   note|<what>   write a value into the log (SweepActions.Note: narration, rate, ...)
 //   log|<text>    write a line; everything else -> SweepActions.Perform (reflection)
 // Log: Documents/sweep/_log.txt, header with device/screen/safe area, "ok"/"ERR" per step,
 // last line "done".
@@ -107,6 +108,11 @@ public class SimSmokeDriver : MonoBehaviour
                 float t0 = Time.realtimeSinceStartup;
                 yield return new WaitForSecondsRealtime(float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture));
                 log.Add("ok " + plan[idx] + " f=" + Time.frameCount + " t=" + (Time.realtimeSinceStartup - t0).ToString("F1"));
+            }
+            else if (a == "note")
+            {
+                try { log.Add("note " + arg + ": " + SweepActions.Note(arg)); }
+                catch (Exception e) { log.Add("ERR note " + arg + " :: " + e.Message); }
             }
             else if (a == "log") log.Add(arg);
             else if (a == "dev") log.Add("skip " + plan[idx]);

@@ -12,5 +12,5 @@
   "puzzle": false,
   "downloadAllBooks": true,
   "readingSpeedByAgeGroup": false,
-  "defaultReadingRate": "-10"
+  "defaultReadingRateByLevel": ["-30", "-20", "-20", "-10"]
 }

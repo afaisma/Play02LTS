@@ -174,11 +174,52 @@ namespace ReadingBuddy.Tests
             Assert.IsTrue(talk.downloadAllBooks, "Story Comprehension keeps every book of the level on the phone");
             Assert.IsFalse(prod.downloadAllBooks, "ReadingBuddy downloads books as they are opened");
             Assert.IsFalse(talk.readingSpeedByAgeGroup, "Story Comprehension: the slider alone sets the speed");
-            Assert.AreEqual("-10", talk.defaultReadingRate);
+            CollectionAssert.AreEqual(new[] { "-30", "-20", "-20", "-10" }, talk.defaultReadingRateByLevel);
             Assert.IsTrue(prod.readingSpeedByAgeGroup, "a missing readingSpeedByAgeGroup keeps ReadingBuddy's rule");
             Assert.AreEqual("0", prod.defaultReadingRate);
+            Assert.AreEqual(0, prod.defaultReadingRateByLevel.Length, "ReadingBuddy: one default for every book");
             Assert.AreSame(talk, Edition.Pick(all, "com.imagiration.storycomprehension"));
             Assert.AreEqual(PRUtils.RemoveFileNameFromUrl(prod.catalogUrl), PRUtils.RemoveFileNameFromUrl(talk.catalogUrl));
+        }
+
+        // ---- default reading speed by question level (round 7, Part 3) ----
+
+        [Test]
+        public void Shipped_TalkEdition_DefaultSpeedFollowsTheLevel()
+        {
+            Edition talk = ShippedEditions().Find(e => e.id == "story-comprehension");
+            Assert.AreEqual("-30", talk.DefaultReadingRate("a"));
+            Assert.AreEqual("-20", talk.DefaultReadingRate("b"));
+            Assert.AreEqual("-20", talk.DefaultReadingRate("c"));
+            Assert.AreEqual("-10", talk.DefaultReadingRate("d"));
+        }
+
+        [Test]
+        public void Shipped_ReadingBuddy_DefaultSpeedIsTheSameAtEveryLevel()
+        {
+            Edition prod = ShippedEditions().Find(e => e.id == Edition.DefaultId);
+            foreach (string level in QuestionLevel.Letters) Assert.AreEqual("0", prod.DefaultReadingRate(level), level);
+        }
+
+        [Test]
+        public void DefaultReadingRate_LevelWithoutAnEntry_UsesTheEditionDefault()
+        {
+            var e = new Edition { id = "x", defaultReadingRate = "-10", defaultReadingRateByLevel = new[] { "-30", "" } };
+            Assert.AreEqual("-30", e.DefaultReadingRate("a"));
+            Assert.AreEqual("-10", e.DefaultReadingRate("b"), "empty entry");
+            Assert.AreEqual("-10", e.DefaultReadingRate("c"), "list too short");
+            Assert.AreEqual("-10", e.DefaultReadingRate("z"), "not a level");
+            Assert.AreEqual(0, Edition.Parse("{\"id\":\"x\"}").defaultReadingRateByLevel.Length, "missing in the file");
+        }
+
+        [Test]
+        public void SliderRate_TheLevelDefault_UntilTheAdultMovesTheSlider_ThenTheirValueAtEveryLevel()
+        {
+            Edition talk = ShippedEditions().Find(e => e.id == "story-comprehension");
+            Assert.AreEqual("-30", Globals.SliderRate(talk, "a", null));
+            Assert.AreEqual("-10", Globals.SliderRate(talk, "d", null), "a level change moves the default");
+            foreach (string level in QuestionLevel.Letters)
+                Assert.AreEqual("0", Globals.SliderRate(talk, level, "0"), "the adult's value at level " + level);
         }
 
         // The project settings decide which product a build is. They must name an edition directly

@@ -25,6 +25,9 @@
 //   picker           toggle the reading-mode picker (open <-> closed)
 //   click|<name>     press any active Button by GameObject name (e.g. ShowAllAges)
 //   scroll|<pos>     every active scroll list to a vertical position (1 = top, 0 = bottom)
+//   slider|<name>=<n>  move a Slider to a value as a finger would (its change handler runs)
+// Notes for "note|<what>" (a value written into the log): narration (the newest narration file,
+//   with its speed) | rate (the saved slider speed g_Rate, or "not saved")
 //   next | prev      page-turn arrows
 //   rate | ratelater the rate-app panel in / out
 //   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly;
@@ -195,6 +198,15 @@ public static class SweepActions
             case "picker": { var pT = T("UnifiedReadingModePicker"); Call(Find(pT), pT, "TogglePicker"); break; }
 
             case "click": ClickByName(arg); break;   // any active GameObject with a Button, by name
+            case "slider":
+            {
+                var kv = arg.Split('=');
+                var go = GameObject.Find(kv[0]);
+                var sl = go != null ? go.GetComponent<Slider>() : null;
+                if (sl == null) throw new Exception("no Slider '" + kv[0] + "'");
+                sl.value = float.Parse(kv[1], System.Globalization.CultureInfo.InvariantCulture);
+                break;
+            }
             case "scroll":
             {
                 // every active scroll list of the screen to a vertical position: 1 = top, 0 = bottom
@@ -236,6 +248,26 @@ public static class SweepActions
             }
 
             default: throw new Exception("unknown action " + a);
+        }
+    }
+
+    // ------------------------------------------------------------------ notes
+
+    public static string Note(string what)
+    {
+        switch (what)
+        {
+            case "narration":
+            {
+                // The narration cache is ordered by use: its last key is the newest narration file.
+                var cache = T("AudioAndTextPlayer").GetField("CacheAudioAndTimingsStructs", Any).GetValue(null) as System.Collections.Specialized.OrderedDictionary;
+                if (cache == null || cache.Count == 0) return "none";
+                object last = null;
+                foreach (DictionaryEntry e in cache) last = e.Key;
+                return last as string;
+            }
+            case "rate": return PlayerPrefs.HasKey("g_Rate") ? PlayerPrefs.GetString("g_Rate") : "not saved";
+            default: throw new Exception("unknown note " + what);
         }
     }
 

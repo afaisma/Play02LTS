@@ -501,14 +501,27 @@ public class Globals : MonoBehaviour
 
     /// <summary>
     /// The narration speed for a book: the book's age group when the edition and the adult say so,
-    /// else the Settings slider (the edition's default until the adult moves it).
+    /// else the Settings slider (ReadingRateFromSlider).
     /// </summary>
     public static string ReadingRateFor(PRBook book)
     {
         bool byAgeGroup = Edition.Current.readingSpeedByAgeGroup && PlayerPrefs.GetInt("g_bSetReadingSpeedByBooksAgeGroup", 1) == 1;
         if (byAgeGroup) return "" + defaultAudioRateFromPRBook(book);
-        return PlayerPrefs.GetString("g_Rate", Edition.Current.defaultReadingRate); // -30, -20, -10, 0, 10
+        return ReadingRateFromSlider();
     }
+
+    /// <summary>
+    /// The Settings slider's speed: "-30", "-20", "-10", "0" or "10". The adult's own value once they
+    /// have moved the slider (only that saves g_Rate), at every question level; until then the
+    /// edition's default, which in Story Comprehension follows the current question level.
+    /// </summary>
+    public static string ReadingRateFromSlider() =>
+        SliderRate(Edition.Current, QuestionLevel.Current, PlayerPrefs.HasKey("g_Rate") ? PlayerPrefs.GetString("g_Rate") : null);
+
+    /// <summary>The rule of ReadingRateFromSlider. adultRate: the slider value the adult saved, null
+    /// when they never moved the slider.</summary>
+    public static string SliderRate(Edition edition, string level, string adultRate) =>
+        adultRate ?? edition.DefaultReadingRate(level);
 
     public static string Prefs_BookUrl_To_Page_Key(string book_url)
     {

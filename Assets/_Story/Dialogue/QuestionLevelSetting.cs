@@ -19,7 +19,8 @@ public static class QuestionLevelSetting
     private const float AutopageRowBottom = 0.385f;      // instead of 0.36
     public const float RewardRowTopBelowThisRow = 0.295f; // instead of 0.345
 
-    public static void Attach()
+    /// <param name="onChanged">After the adult picks another level (Settings shows the speed of the new level).</param>
+    public static void Attach(System.Action onChanged = null)
     {
         if (!QuestionLevel.CatalogHasLevels(Globals.g_allPRBooks)) return;
         Transform canvas = AutopageSettingRow.FindSettingsCanvas();
@@ -86,7 +87,7 @@ public static class QuestionLevelSetting
             DialogChrome.Stretch(labels[i].rectTransform, 4f);
             var button = go.GetComponent<Button>();
             button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(() => { QuestionLevel.Current = letter; Paint(); });
+            button.onClick.AddListener(() => { QuestionLevel.Current = letter; Paint(); onChanged?.Invoke(); });
             TapFeedback.AddPressFeedback(go);
         }
         Paint();
