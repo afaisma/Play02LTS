@@ -13,6 +13,8 @@
 //                    to see that edition's first-run Welcome)
 //   library|<filter> Library shelf (everything, fairytales, learn to read, level2, new, ...)
 //   book|<folder>    open the book whose bookUrl contains <folder> (e.g. FarmAnimalsRhymebook)
+//   progress|<folder>=<n>  record n answers and the saved page n-1 for that book (a long progress
+//                    line on Story Comprehension's Home tile)
 //   bookfile|<url>   open a book that is NOT in the catalog by the address of its script
 //                    (file:///.../stories/<Folder>/<script>.txt) — for test books on this Mac
 //   catalogfile|<path>  use a catalog file on this Mac instead of the downloaded catalog
@@ -83,6 +85,19 @@ public static class SweepActions
         b.onClick.Invoke();
     }
 
+    // The book (of the shown list) whose bookUrl contains <part>.
+    private static object FindBook(string part)
+    {
+        var list = T("Globals").GetField("g_listPRBooks", Any).GetValue(null) as IList;
+        if (list == null || list.Count == 0) throw new Exception("catalog not loaded");
+        foreach (var b in list)
+        {
+            var url = b.GetType().GetField("bookUrl", Any)?.GetValue(b) as string;
+            if (url != null && url.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0) return b;
+        }
+        throw new Exception("no book matching '" + part + "'");
+    }
+
     // ------------------------------------------------------------------ actions
 
     public static void Perform(string a, string arg)
@@ -108,19 +123,19 @@ public static class SweepActions
             case "bookstore": Call(null, T("Navigation"), "GoToBookstore"); break;
             case "library":   Call(null, T("Globals"), "GotoLibrary", string.IsNullOrEmpty(arg) ? "everything" : arg); break;
 
-            case "book":
+            case "book": T("Globals").GetMethod("GotoPrBook", Any).Invoke(null, new[] { FindBook(arg) }); break;
+
+            case "progress":
             {
-                var gT = T("Globals");
-                var list = gT.GetField("g_listPRBooks", Any).GetValue(null) as IList;
-                if (list == null || list.Count == 0) throw new Exception("catalog not loaded");
-                object target = null;
-                foreach (var b in list)
-                {
-                    var url = b.GetType().GetField("bookUrl", Any)?.GetValue(b) as string;
-                    if (url != null && url.IndexOf(arg, StringComparison.OrdinalIgnoreCase) >= 0) { target = b; break; }
-                }
-                if (target == null) throw new Exception("no book matching '" + arg + "'");
-                gT.GetMethod("GotoPrBook", Any).Invoke(null, new[] { target });
+                // A tile with a long progress line: n answers (pages 1..n) and the saved page n-1, so
+                // Home shows "★ n answers · page n" for the book whose bookUrl contains <folder>.
+                var kv = arg.Split('=');
+                object target = FindBook(kv[0]);
+                int n = int.Parse(kv[1]);
+                var add = T("DialogueResults").GetMethod("Add", Any);
+                for (int p = 1; p <= n; p++) add.Invoke(null, new object[] { target, p, "x", true, "touch", 1 });
+                string url = target.GetType().GetField("bookUrl", Any).GetValue(target) as string;
+                PlayerPrefs.SetInt(url + "_page", n - 1); PlayerPrefs.Save();
                 break;
             }
 

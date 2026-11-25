@@ -94,11 +94,20 @@ public class HomeTalkController : MonoBehaviour
         scroll.content = _contentRoot;
     }
 
+    // Every text on this screen is read by an adult: never below UiTheme.AdultTextMin, also when
+    // auto-sizing shrinks it (DialogChrome.MakeText alone lets it go down to 60 % of its size).
+    private static TMP_Text AdultText(Transform parent, string name, string text, float size, TextAlignmentOptions align, Color color)
+    {
+        var t = DialogChrome.MakeText(parent, name, text, size, align, color);
+        t.fontSizeMin = Mathf.Max(UiTheme.AdultTextMin, t.fontSizeMin);
+        return t;
+    }
+
     private void ShowLoading(bool show)
     {
         if (_loadingLabel == null)
         {
-            var t = DialogChrome.MakeText(_canvasRoot.transform, "Loading", "Loading…", 48, TextAlignmentOptions.Center, UiTheme.TextPrimary);
+            var t = AdultText(_canvasRoot.transform, "Loading", "Loading…", 48, TextAlignmentOptions.Center, UiTheme.TextPrimary);
             DialogChrome.Stretch(t.rectTransform);
             _loadingLabel = t.gameObject;
         }
@@ -124,8 +133,8 @@ public class HomeTalkController : MonoBehaviour
 
     private void BuildDownloadLine(Transform parent)
     {
-        _downloadLine = DialogChrome.MakeText(parent, "DownloadLine", BookPrefetch.StatusText, 26, TextAlignmentOptions.Left, UiTheme.TextSecondary);
-        _downloadLine.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
+        _downloadLine = AdultText(parent, "DownloadLine", BookPrefetch.StatusText, 40, TextAlignmentOptions.Left, UiTheme.TextSecondary);
+        _downloadLine.enableWordWrapping = true; // as tall as its lines; the text changes while books download
         _downloadLine.gameObject.SetActive(Edition.Current.downloadAllBooks);
     }
 
@@ -148,7 +157,7 @@ public class HomeTalkController : MonoBehaviour
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = true;
         hlg.childAlignment = TextAnchor.MiddleLeft;
 
-        var title = DialogChrome.MakeText(row.transform, "Title", Edition.Current.appName, 60, TextAlignmentOptions.Left, UiTheme.Primary);
+        var title = AdultText(row.transform, "Title", Edition.Current.appName, 60, TextAlignmentOptions.Left, UiTheme.Primary);
         title.fontStyle = FontStyles.Bold;
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
 
@@ -156,6 +165,7 @@ public class HomeTalkController : MonoBehaviour
         var chip = new GameObject("LevelChip", typeof(RectTransform), typeof(Image), typeof(Button), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         chip.transform.SetParent(row.transform, false);
         var cle = chip.GetComponent<LayoutElement>(); cle.preferredWidth = 290f; cle.preferredHeight = 96f;
+        cle.minWidth = 290f; // the long title shrinks its letters, not the chip
         var cimg = chip.GetComponent<Image>(); cimg.sprite = DialogChrome.RoundedSprite(); cimg.type = Image.Type.Sliced; cimg.color = UiTheme.Track;
         var chl = chip.GetComponent<HorizontalLayoutGroup>();
         chl.padding = new RectOffset(12, 24, 10, 10); chl.spacing = 14;
@@ -167,11 +177,11 @@ public class HomeTalkController : MonoBehaviour
         disc.transform.SetParent(chip.transform, false);
         disc.GetComponent<LayoutElement>().preferredWidth = 76f;
         var dimg = disc.GetComponent<Image>(); dimg.sprite = UiGlyphs.CircleSprite(); dimg.color = UiTheme.Primary; dimg.raycastTarget = false; dimg.preserveAspect = true;
-        var letter = DialogChrome.MakeText(disc.transform, "Text", QuestionLevel.Current.ToUpperInvariant(), 44, TextAlignmentOptions.Center, UiTheme.OnPrimary);
+        var letter = AdultText(disc.transform, "Text", QuestionLevel.Current.ToUpperInvariant(), 44, TextAlignmentOptions.Center, UiTheme.OnPrimary);
         letter.fontStyle = FontStyles.Bold;
         DialogChrome.Stretch(letter.rectTransform);
 
-        var word = DialogChrome.MakeText(chip.transform, "Word", "Level", 34, TextAlignmentOptions.Left, UiTheme.TextPrimary);
+        var word = AdultText(chip.transform, "Word", "Level", 44, TextAlignmentOptions.Left, UiTheme.TextPrimary);
         word.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
         // A small triangle pointing down (the font has no arrow glyph).
         var arrowBox = new GameObject("Arrow", typeof(RectTransform), typeof(LayoutElement));
@@ -187,10 +197,10 @@ public class HomeTalkController : MonoBehaviour
     private void BuildLevelLine(Transform parent)
     {
         int i = Mathf.Max(0, LevelIndex);
-        var line = DialogChrome.MakeText(parent, "LevelLine",
+        var line = AdultText(parent, "LevelLine",
             "Level " + QuestionLevel.Letters[i].ToUpperInvariant() + " · " + QuestionLevel.TextAbout[i],
-            30, TextAlignmentOptions.Left, UiTheme.TextSecondary);
-        line.gameObject.AddComponent<LayoutElement>().preferredHeight = 40f;
+            40, TextAlignmentOptions.Left, UiTheme.TextSecondary);
+        line.enableWordWrapping = true; // as tall as its lines
     }
 
     private static string TileName(PRBook book) => (book.bookName ?? "").Replace(" (with questions)", "");
@@ -215,7 +225,7 @@ public class HomeTalkController : MonoBehaviour
 
         if (books.Count == 0)
         {
-            var none = DialogChrome.MakeText(parent, "NoBooks", "No books for this level yet.", 36, TextAlignmentOptions.Center, UiTheme.TextSecondary);
+            var none = AdultText(parent, "NoBooks", "No books for this level yet.", 44, TextAlignmentOptions.Center, UiTheme.TextSecondary);
             none.gameObject.AddComponent<LayoutElement>().preferredHeight = 120f;
             return;
         }
@@ -226,22 +236,40 @@ public class HomeTalkController : MonoBehaviour
         float scale = Mathf.Pow(2f, 0.5f * (Mathf.Log(Screen.width / 1080f, 2f) + Mathf.Log(Screen.height / 1920f, 2f)));
         float width = Screen.width / scale - 96f;
         float cellW = Mathf.Floor((width - 24f) / 2f);
-        float cellH = cellW + 120f;
         var grid = new GameObject("Grid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(LayoutElement));
         grid.transform.SetParent(parent, false);
         var g = grid.GetComponent<GridLayoutGroup>();
-        g.cellSize = new Vector2(cellW, cellH);
         g.spacing = new Vector2(24f, 24f);
         g.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         g.constraintCount = 2;
         g.childAlignment = TextAnchor.UpperCenter;
+
+        // The name and progress areas are as tall as the longest of them in this list (a name may
+        // take three lines on a phone; progress may take two), the same in every tile so the covers
+        // line up. Measured with the tile's own text settings at the tile's inner width.
+        var labels = new List<(TMP_Text name, TMP_Text progress)>();
+        foreach (var book in books) labels.Add(BuildBookTile(grid.transform, book));
+        float inner = cellW - 28f, nameH = 0f, progressH = 0f;
+        foreach (var (name, progress) in labels)
+        {
+            nameH = Mathf.Max(nameH, name.GetPreferredValues(name.text, inner, 0f).y);
+            if (progress.text.Length > 0) progressH = Mathf.Max(progressH, progress.GetPreferredValues(progress.text, inner, 0f).y);
+        }
+        nameH = Mathf.Ceil(nameH); progressH = Mathf.Ceil(progressH);
+        foreach (var (name, progress) in labels)
+        {
+            name.GetComponent<LayoutElement>().preferredHeight = nameH;
+            progress.GetComponent<LayoutElement>().preferredHeight = progressH;
+            progress.gameObject.SetActive(progressH > 0f); // no empty line (and gap) under every tile
+        }
+        // Cover (as before: the inner width less 20), padding 14 + 14, gap 10, name, gap 10, progress.
+        float cellH = (inner - 20f) + 28f + 10f + nameH + (progressH > 0f ? 10f + progressH : 0f);
+        g.cellSize = new Vector2(cellW, cellH);
         int rows = (books.Count + 1) / 2;
         grid.GetComponent<LayoutElement>().preferredHeight = rows * cellH + (rows - 1) * 24f;
-
-        foreach (var book in books) BuildBookTile(grid.transform, book);
     }
 
-    private void BuildBookTile(Transform parent, PRBook book)
+    private (TMP_Text name, TMP_Text progress) BuildBookTile(Transform parent, PRBook book)
     {
         var tile = new GameObject("Tile_" + book.id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup));
         tile.transform.SetParent(parent, false);
@@ -261,10 +289,10 @@ public class HomeTalkController : MonoBehaviour
         StartCoroutine(PRUtils.DownloadImage(url, cover, true, true));
 
         string name = TileName(book);
-        var label = DialogChrome.MakeText(tile.transform, "Name", name, 30, TextAlignmentOptions.Center, UiTheme.TextPrimary);
+        var label = AdultText(tile.transform, "Name", name, 40, TextAlignmentOptions.Top, UiTheme.TextPrimary);
         label.fontStyle = FontStyles.Bold;
         label.enableWordWrapping = true;
-        label.gameObject.AddComponent<LayoutElement>().preferredHeight = 84f;
+        label.gameObject.AddComponent<LayoutElement>(); // height set by BuildBookGrid
 
         // What the child has done with this book on this device (read from the prefs, not from
         // the catalog copy, which is not updated while the app runs).
@@ -275,14 +303,16 @@ public class HomeTalkController : MonoBehaviour
         if (answered > 0) progress = "★ " + answered + (answered == 1 ? " answer" : " answers");
         if (page > 0 && !done)
             progress += (progress.Length > 0 ? " · " : "") + "page " + (page + 1);
-        var prog = DialogChrome.MakeText(tile.transform, "Progress", progress, 26, TextAlignmentOptions.Center, UiTheme.TextSecondary);
-        prog.gameObject.AddComponent<LayoutElement>().preferredHeight = 36f;
+        var prog = AdultText(tile.transform, "Progress", progress, 40, TextAlignmentOptions.Top, UiTheme.TextSecondary);
+        prog.enableWordWrapping = true;
+        prog.gameObject.AddComponent<LayoutElement>(); // height set by BuildBookGrid
 
         var captured = book;
         tile.GetComponent<Button>().transition = Selectable.Transition.None;
         TapFeedback.AddPressFeedback(tile);
         tile.GetComponent<Button>().onClick.AddListener(
             () => TapFeedback.TapThenGo(tile.transform, () => Nav.GoToBook(captured)));
+        return (label, prog);
     }
 
     // ---------------------------------------------------------------- level sheet
@@ -314,14 +344,13 @@ public class HomeTalkController : MonoBehaviour
         card.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         SafeAreaInsets.ApplyBottom(crt);
 
-        var title = DialogChrome.MakeText(card.transform, "Title", "How does your child talk now?", 48, TextAlignmentOptions.Left, UiTheme.TextPrimary);
+        var title = AdultText(card.transform, "Title", "How does your child talk now?", 48, TextAlignmentOptions.Left, UiTheme.TextPrimary);
         title.fontStyle = FontStyles.Bold; title.enableWordWrapping = true;
         title.gameObject.AddComponent<LayoutElement>().preferredHeight = 64f;
-        var sub = DialogChrome.MakeText(card.transform, "Sub",
+        var sub = AdultText(card.transform, "Sub",
             firstTime ? "Pick the closest one. You can change it later from the Home screen." : "Pick the closest one.",
-            28, TextAlignmentOptions.Left, UiTheme.TextSecondary);
-        sub.enableWordWrapping = true;
-        sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 40f;
+            40, TextAlignmentOptions.Left, UiTheme.TextSecondary);
+        sub.enableWordWrapping = true; // as tall as its lines
 
         string chosen = QuestionLevel.Current;
         var fills = new Image[QuestionLevel.Letters.Length];
@@ -343,7 +372,7 @@ public class HomeTalkController : MonoBehaviour
             string letter = QuestionLevel.Letters[i];
             var opt = new GameObject("Level_" + letter, typeof(RectTransform), typeof(Image), typeof(Button), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
             opt.transform.SetParent(card.transform, false);
-            opt.GetComponent<LayoutElement>().preferredHeight = 150f;
+            opt.GetComponent<LayoutElement>().minHeight = 150f; // taller when the text needs it
             fills[i] = opt.GetComponent<Image>();
             fills[i].sprite = DialogChrome.RoundedSprite(); fills[i].type = Image.Type.Sliced;
             var hl = opt.GetComponent<HorizontalLayoutGroup>();
@@ -355,8 +384,10 @@ public class HomeTalkController : MonoBehaviour
             var disc = new GameObject("Disc", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             disc.transform.SetParent(opt.transform, false);
             disc.GetComponent<LayoutElement>().preferredWidth = 96f;
+            disc.GetComponent<LayoutElement>().minWidth = 96f;        // a long line beside it must not squeeze it
+            disc.GetComponent<LayoutElement>().preferredHeight = 96f; // not the circle sprite's own size
             discs[i] = disc.GetComponent<Image>(); discs[i].sprite = UiGlyphs.CircleSprite(); discs[i].raycastTarget = false; discs[i].preserveAspect = true;
-            var l = DialogChrome.MakeText(disc.transform, "Letter", letter.ToUpperInvariant(), 48, TextAlignmentOptions.Center, UiTheme.TextPrimary);
+            var l = AdultText(disc.transform, "Letter", letter.ToUpperInvariant(), 48, TextAlignmentOptions.Center, UiTheme.TextPrimary);
             l.fontStyle = FontStyles.Bold; DialogChrome.Stretch(l.rectTransform);
 
             var col = new GameObject("Col", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
@@ -365,12 +396,11 @@ public class HomeTalkController : MonoBehaviour
             var cv = col.GetComponent<VerticalLayoutGroup>();
             cv.spacing = 4; cv.childAlignment = TextAnchor.MiddleLeft;
             cv.childControlWidth = true; cv.childControlHeight = true; cv.childForceExpandWidth = true; cv.childForceExpandHeight = false;
-            var t = DialogChrome.MakeText(col.transform, "Title", QuestionLevel.TextChild[i], 34, TextAlignmentOptions.Left, UiTheme.TextPrimary);
+            var t = AdultText(col.transform, "Title", QuestionLevel.TextChild[i], 44, TextAlignmentOptions.Left, UiTheme.TextPrimary);
             t.fontStyle = FontStyles.Bold;
-            t.gameObject.AddComponent<LayoutElement>().preferredHeight = 44f;
-            var m = DialogChrome.MakeText(col.transform, "More", QuestionLevel.TextChildMore[i], 26, TextAlignmentOptions.Left, UiTheme.TextSecondary);
-            m.enableWordWrapping = true;
-            m.gameObject.AddComponent<LayoutElement>().preferredHeight = 64f;
+            t.gameObject.AddComponent<LayoutElement>().preferredHeight = 56f;
+            var m = AdultText(col.transform, "More", QuestionLevel.TextChildMore[i], 40, TextAlignmentOptions.Left, UiTheme.TextSecondary);
+            m.enableWordWrapping = true; // as tall as its lines
 
             opt.GetComponent<Button>().transition = Selectable.Transition.None;
             opt.GetComponent<Button>().onClick.AddListener(() => { chosen = letter; Paint(); });
@@ -381,7 +411,7 @@ public class HomeTalkController : MonoBehaviour
         ok.transform.SetParent(card.transform, false);
         ok.GetComponent<LayoutElement>().preferredHeight = 112f;
         var oimg = ok.GetComponent<Image>(); oimg.sprite = DialogChrome.RoundedSprite(); oimg.type = Image.Type.Sliced; oimg.color = UiTheme.Primary;
-        go = DialogChrome.MakeText(ok.transform, "Text", "", 38, TextAlignmentOptions.Center, UiTheme.OnPrimary);
+        go = AdultText(ok.transform, "Text", "", 44, TextAlignmentOptions.Center, UiTheme.OnPrimary);
         go.fontStyle = FontStyles.Bold; DialogChrome.Stretch(go.rectTransform);
         ok.GetComponent<Button>().transition = Selectable.Transition.None;
         ok.GetComponent<Button>().onClick.AddListener(() =>
@@ -393,8 +423,8 @@ public class HomeTalkController : MonoBehaviour
         TapFeedback.AddPressFeedback(ok);
         if (firstTime)
         {
-            var hint = DialogChrome.MakeText(card.transform, "Hint", "Not sure? Start low. Moving up is one tap.", 26, TextAlignmentOptions.Center, UiTheme.TextSecondary);
-            hint.gameObject.AddComponent<LayoutElement>().preferredHeight = 36f;
+            var hint = AdultText(card.transform, "Hint", "Not sure? Start low. Moving up is one tap.", 40, TextAlignmentOptions.Center, UiTheme.TextSecondary);
+            hint.enableWordWrapping = true; // as tall as its lines
         }
         Paint();
         _sheet.transform.SetAsLastSibling();
@@ -408,7 +438,7 @@ public class HomeTalkController : MonoBehaviour
         go.transform.SetParent(parent, false);
         go.GetComponent<LayoutElement>().preferredHeight = 96f;
         var img = go.GetComponent<Image>(); img.sprite = DialogChrome.RoundedSprite(); img.type = Image.Type.Sliced; img.color = UiTheme.Track;
-        var label = DialogChrome.MakeText(go.transform, "Label", "For grown-ups", 34, TextAlignmentOptions.Center, UiTheme.TextPrimary);
+        var label = AdultText(go.transform, "Label", "For grown-ups", 44, TextAlignmentOptions.Center, UiTheme.TextPrimary);
         DialogChrome.Stretch(label.rectTransform);
         go.GetComponent<Button>().transition = Selectable.Transition.None;
         go.GetComponent<Button>().onClick.AddListener(() => ShowGate(Navigation.GoToSettings));
@@ -436,22 +466,23 @@ public class HomeTalkController : MonoBehaviour
         _gate.GetComponent<Button>().transition = Selectable.Transition.None;
         _gate.GetComponent<Button>().onClick.AddListener(() => Destroy(gate));
 
-        var card = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup));
+        var card = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(Button), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
         card.transform.SetParent(_gate.transform, false);
         card.GetComponent<Button>().transition = Selectable.Transition.None; // taps on the card stay on it
         var crt = card.GetComponent<RectTransform>();
         crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0.5f, 0.5f);
         crt.sizeDelta = new Vector2(840f, 720f);
+        card.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize; // as tall as its rows
         DialogChrome.StyleCard(card.GetComponent<Image>());
         var cvl = card.GetComponent<VerticalLayoutGroup>();
         cvl.padding = new RectOffset(48, 48, 44, 44); cvl.spacing = 22; cvl.childAlignment = TextAnchor.UpperCenter;
         cvl.childControlWidth = true; cvl.childControlHeight = true; cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
 
-        var title = DialogChrome.MakeText(card.transform, "Title", "Grown-ups only", 46, TextAlignmentOptions.Center, UiTheme.TextPrimary);
+        var title = AdultText(card.transform, "Title", "Grown-ups only", 46, TextAlignmentOptions.Center, UiTheme.TextPrimary);
         title.fontStyle = FontStyles.Bold;
         title.gameObject.AddComponent<LayoutElement>().preferredHeight = 64f;
-        var q = DialogChrome.MakeText(card.transform, "Q", "What is " + question.a + " x " + question.b + " ?", 40, TextAlignmentOptions.Center, UiTheme.TextSecondary);
-        q.gameObject.AddComponent<LayoutElement>().preferredHeight = 58f;
+        var q = AdultText(card.transform, "Q", "What is " + question.a + " x " + question.b + " ?", 48, TextAlignmentOptions.Center, UiTheme.TextSecondary);
+        q.gameObject.AddComponent<LayoutElement>().preferredHeight = 66f;
 
         for (int i = 0; i < opts.Count; i++)
         {
@@ -469,7 +500,7 @@ public class HomeTalkController : MonoBehaviour
         go.transform.SetParent(parent, false);
         go.GetComponent<LayoutElement>().preferredHeight = 108f;
         var img = go.GetComponent<Image>(); img.sprite = DialogChrome.RoundedSprite(); img.type = Image.Type.Sliced; img.color = fill;
-        var label = DialogChrome.MakeText(go.transform, "Label", text, 40, TextAlignmentOptions.Center, textColor);
+        var label = AdultText(go.transform, "Label", text, 48, TextAlignmentOptions.Center, textColor);
         label.fontStyle = FontStyles.Bold;
         DialogChrome.Stretch(label.rectTransform);
         go.GetComponent<Button>().transition = Selectable.Transition.None;

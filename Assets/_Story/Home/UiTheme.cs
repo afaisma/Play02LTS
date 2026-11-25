@@ -15,6 +15,10 @@ public static class UiTheme
     public static readonly Color OnPrimary     = Color.white;
     public static readonly Color Track         = Hex(0xE0D8C6); // progress-bar track on greige
 
+    // Screens an adult reads (Welcome; Story Comprehension's Home, level sheet, grown-ups gate):
+    // no line smaller than this on the 1080-unit-wide page, also when auto-sizing shrinks a text.
+    public const float AdultTextMin = 40f;
+
     // Muted pastel cards: (fill, accent) pairs. accent = title text / badge / progress fill.
     public static readonly (Color fill, Color accent)[] Cards =
     {

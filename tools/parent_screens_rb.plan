@@ -1,0 +1,1 @@
+5|wait|catalog;60|cap|P2_rb_welcome_first;1|click|ButtonLoadingRetryContinue;5|wait|scene=_Home;90|cap|P1_rb_home_after_continue;30|scene|_Welcome;5|wait|scene=_Welcome;1|wait|countdown=97;1|cap|P2_rb_welcome_returning;5|wait|scene=_Home;30|log|done

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -29,14 +30,27 @@ public class WelcomeController : MonoBehaviour
     private TMP_Text _continueLabel;
     private Image _countdownBar;
 
-    private struct Demo { public string imgA, imgB, title, sub; public Demo(string a, string b, string t, string s){imgA=a;imgB=b;title=t;sub=s;} }
+    // subShort: the shorter line used only when the page does not fit the screen (UseShortWordingIfNeeded).
+    private struct Demo { public string imgA, imgB, title, sub, subShort; public Demo(string a, string b, string t, string s, string sShort = null){imgA=a;imgB=b;title=t;sub=s;subShort=sShort;} }
     // Story Comprehension: what the app does, in the parent's words. No pictures yet.
+    // The shorter lines were checked by a second model on 2026-11-24 (round 7 brief).
     private static readonly Demo[] TalkDemos =
     {
-        new Demo("", "", "Every answer counts",            "Encourage your child to engage with the story, not just listen."),
+        new Demo("", "", "Every answer counts",            "Encourage your child to engage with the story, not just listen.",
+                                                           "Help your child take part in the story."),
         new Demo("", "", "Responses stay on your phone",   "No audio is saved or sent anywhere."),
-        new Demo("", "", "You choose the level",           "Four levels, from touch only to full answers. Change it any time."),
+        new Demo("", "", "You choose the level",           "Four levels, from touch only to full answers. Change it any time.",
+                                                           "Four levels. Change any time."),
     };
+    private const string TalkSubtitle = "The app reads a picture book aloud. After a few pages, it asks a question. Your child can respond by touching the screen or speaking.";
+    private const string TalkSubtitleShort = "The app reads a picture book aloud and asks questions. Your child can answer by touch or voice.";
+    private const string TalkDownloadNote = "After you choose the level, the books download to your phone (about 250 MB, Wi-Fi recommended). Then they also work without internet.";
+    private const string TalkDownloadNoteShort = "After you choose the level, the books download (about 250 MB, Wi-Fi recommended). Then they work without internet too.";
+
+    // Everything above the Continue button is in a scroll area (BuildUI). Story Comprehension's
+    // texts with a shorter line, and that line.
+    private RectTransform _scrollViewport, _scrollContent;
+    private readonly List<(TMP_Text text, string shortText)> _shortWording = new List<(TMP_Text, string)>();
     private static readonly Demo[] Demos =
     {
         new Demo("welcome/demo_read_a", "welcome/demo_read_b", "Read along together",           "Words light up as it's read — tap any word to hear it"),
@@ -55,8 +69,27 @@ public class WelcomeController : MonoBehaviour
 
     private void Start()
     {
+        UseShortWordingIfNeeded();
         if (!_firstRun) StartCoroutine(AutoAdvanceReturning());
         else if (Edition.Current.questionBooksOnly) StartCoroutine(DemoOnContinue());
+    }
+
+    // Story Comprehension: the shorter lines replace the full ones only on a screen where the page
+    // does not fit with the full ones (a 3:4 iPad, for example). Still too tall after that, the
+    // page scrolls. Runs before the first frame, so the full lines never flash.
+    private void UseShortWordingIfNeeded()
+    {
+        Canvas.ForceUpdateCanvases();
+        float room = _scrollViewport.rect.height;
+        float need = LayoutUtility.GetPreferredHeight(_scrollContent);
+        if (_shortWording.Count == 0 || need <= room || room <= 0f)
+        {
+            Debug.Log($"[Welcome] page needs {need:F0} of {room:F0}: full wording");
+            return;
+        }
+        foreach (var (text, shortText) in _shortWording) text.text = shortText;
+        Canvas.ForceUpdateCanvases();
+        Debug.Log($"[Welcome] page needs {need:F0} of {room:F0}: short wording, now {LayoutUtility.GetPreferredHeight(_scrollContent):F0}");
     }
 
     // The shared loading button says "Continue": the catalog is loaded and the button is live.
@@ -172,18 +205,44 @@ public class WelcomeController : MonoBehaviour
         Stretch(bg.GetComponent<RectTransform>());
         bg.GetComponent<Image>().color = UiTheme.Bg;
 
-        var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup));
-        content.transform.SetParent(canvasGO.transform, false);
-        Stretch(content.GetComponent<RectTransform>());
-        var vlg = content.GetComponent<VerticalLayoutGroup>();
+        var page = new GameObject("Page", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        page.transform.SetParent(canvasGO.transform, false);
+        Stretch(page.GetComponent<RectTransform>());
+        var vlg = page.GetComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(72, 72, 120, 84);
-        // The headline is the first child and the Continue button the last, so one call keeps the
-        // headline off the island and stops the button running into the home indicator.
+        // The scroll area (headline first) is the first child and the Continue button the last, so
+        // one call keeps the headline off the island and the button off the home indicator.
         SafeAreaInsets.ApplyLayoutPadding(vlg);
         vlg.spacing = 30;
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         vlg.childAlignment = TextAnchor.UpperCenter;
+
+        // Everything above the button scrolls, so a screen too short for the texts can still show
+        // all of them; the button stays at the bottom. Where the page fits, nothing moves.
+        var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect), typeof(LayoutElement));
+        scrollGO.transform.SetParent(page.transform, false);
+        scrollGO.GetComponent<LayoutElement>().flexibleHeight = 1f;
+        scrollGO.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f); // takes the drag between the cards
+        var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        content.transform.SetParent(scrollGO.transform, false);
+        _scrollContent = content.GetComponent<RectTransform>();
+        _scrollContent.anchorMin = new Vector2(0f, 1f); _scrollContent.anchorMax = new Vector2(1f, 1f);
+        _scrollContent.pivot = new Vector2(0.5f, 1f);
+        _scrollContent.offsetMin = Vector2.zero; _scrollContent.offsetMax = Vector2.zero;
+        var cvlg = content.GetComponent<VerticalLayoutGroup>();
+        cvlg.spacing = 30;
+        cvlg.childControlWidth = true; cvlg.childControlHeight = true;
+        cvlg.childForceExpandWidth = true; cvlg.childForceExpandHeight = false;
+        cvlg.childAlignment = TextAnchor.UpperCenter;
+        content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        var scroll = scrollGO.GetComponent<ScrollRect>();
+        scroll.horizontal = false; scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 28f;
+        _scrollViewport = scrollGO.GetComponent<RectTransform>();
+        scroll.viewport = _scrollViewport;
+        scroll.content = _scrollContent;
 
         if (firstRun)
         {
@@ -201,11 +260,10 @@ public class WelcomeController : MonoBehaviour
             hi.gameObject.AddComponent<LayoutElement>().preferredHeight = 260f; // room for two 104pt lines
 
             var sub = MakeText(content.transform, "Subtitle",
-                talk ? "The app reads a picture book aloud. After a few pages, it asks a question. Your child can respond by touching the screen or speaking."
-                     : "A few things that make reading here a little magical", 32, TextAlignmentOptions.Center);
+                talk ? TalkSubtitle : "A few things that make reading here a little magical", 40, TextAlignmentOptions.Center);
             sub.color = UiTheme.TextSecondary;
-            sub.enableWordWrapping = true;
-            sub.gameObject.AddComponent<LayoutElement>().preferredHeight = talk ? 150f : 46f;
+            sub.enableWordWrapping = true; // as tall as its lines
+            if (talk) _shortWording.Add((sub, TalkSubtitleShort));
 
             Demo[] demos = talk ? TalkDemos : Demos;
             for (int i = 0; i < demos.Length; i++) BuildDemoRow(content.transform, demos[i], i);
@@ -222,12 +280,7 @@ public class WelcomeController : MonoBehaviour
             sub.gameObject.AddComponent<LayoutElement>().preferredHeight = 56f;
         }
 
-        // Flexible spacer pushes the Continue button to the bottom and fills the page.
-        var spacer = new GameObject("Spacer", typeof(RectTransform), typeof(LayoutElement));
-        spacer.transform.SetParent(content.transform, false);
-        spacer.GetComponent<LayoutElement>().flexibleHeight = 1f;
-
-        BuildLoadingButton(content.transform);
+        BuildLoadingButton(page.transform);
     }
 
     private void BuildDemoRow(Transform parent, Demo d, int idx)
@@ -236,7 +289,7 @@ public class WelcomeController : MonoBehaviour
 
         var row = new GameObject("Demo_" + d.imgA, typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
         row.transform.SetParent(parent, false);
-        row.GetComponent<LayoutElement>().preferredHeight = 230f;
+        row.GetComponent<LayoutElement>().minHeight = 230f; // taller when the text needs it
         var rimg = row.GetComponent<Image>();
         rimg.sprite = RoundedSprite(); rimg.type = Image.Type.Sliced;
         rimg.color = palette.fill;
@@ -252,6 +305,7 @@ public class WelcomeController : MonoBehaviour
             var thumbGO = new GameObject("Thumb", typeof(RectTransform), typeof(LayoutElement), typeof(RectMask2D));
             thumbGO.transform.SetParent(row.transform, false);
             thumbGO.GetComponent<LayoutElement>().preferredWidth = 250f;
+            thumbGO.GetComponent<LayoutElement>().minWidth = 250f; // a long line beside it must not squeeze it
 
             var front = MakeThumbImage(thumbGO.transform, d.imgA);
             var anim = thumbGO.AddComponent<DemoCardAnim>();
@@ -264,7 +318,7 @@ public class WelcomeController : MonoBehaviour
             }
             else anim.zoom = true;
         }
-        else row.GetComponent<LayoutElement>().preferredHeight = 170f;
+        else row.GetComponent<LayoutElement>().minHeight = 170f;
 
         var col = new GameObject("Col", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         col.transform.SetParent(row.transform, false);
@@ -274,32 +328,36 @@ public class WelcomeController : MonoBehaviour
         cvl.childControlWidth = true; cvl.childControlHeight = true;
         cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
 
-        var t = MakeText(col.transform, "Title", d.title, 42, TextAlignmentOptions.Left);
+        var t = MakeText(col.transform, "Title", d.title, 48, TextAlignmentOptions.Left);
         t.fontStyle = FontStyles.Bold; t.color = palette.accent;
-        t.gameObject.AddComponent<LayoutElement>().preferredHeight = 54f;
-        var s = MakeText(col.transform, "Sub", d.sub, 28, TextAlignmentOptions.Left);
+        t.gameObject.AddComponent<LayoutElement>().preferredHeight = 60f;
+        var s = MakeText(col.transform, "Sub", d.sub, 40, TextAlignmentOptions.Left);
         s.color = UiTheme.TextSecondary; s.enableWordWrapping = true;
+        if (d.subShort != null) _shortWording.Add((s, d.subShort));
     }
 
     private void BuildConnectivityNote(Transform parent)
     {
-        var note = new GameObject("Connectivity", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        // As tall as its text: a layout group around the text instead of a fixed height.
+        var note = new GameObject("Connectivity", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
         note.transform.SetParent(parent, false);
-        note.GetComponent<LayoutElement>().preferredHeight = 150f;
         var nimg = note.GetComponent<Image>();
         nimg.sprite = RoundedSprite(); nimg.type = Image.Type.Sliced;
         nimg.color = UiTheme.Card(4).fill; // soft blue
+        var nvl = note.GetComponent<VerticalLayoutGroup>();
+        nvl.padding = new RectOffset(24, 24, 16, 16);
+        nvl.childControlWidth = true; nvl.childControlHeight = true;
+        nvl.childForceExpandWidth = true; nvl.childForceExpandHeight = false;
 
+        bool talk = Edition.Current.downloadAllBooks;
         var t = MakeText(note.transform, "Text",
-            Edition.Current.downloadAllBooks
-                ? "After you choose the level, the books download to your phone (about 250 MB, Wi-Fi recommended). Then they also work without internet."
+            talk
+                ? TalkDownloadNote
                 : "A good internet connection is recommended — each story downloads its narration and pictures the first time it's opened. Books you've opened before keep working offline.",
-            26, TextAlignmentOptions.Left);
+            40, TextAlignmentOptions.Left);
         t.color = UiTheme.Card(4).accent;
         t.enableWordWrapping = true;
-        var rt = t.rectTransform;
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = new Vector2(24, 16); rt.offsetMax = new Vector2(-24, -16);
+        if (talk) _shortWording.Add((t, TalkDownloadNoteShort));
     }
 
     private void BuildLoadingButton(Transform parent)
@@ -335,7 +393,7 @@ public class WelcomeController : MonoBehaviour
         _countdownBar.raycastTarget = false;
         barGO.SetActive(false);
 
-        var label = MakeText(go.transform, "Text", "Loading Library Catalog", 40, TextAlignmentOptions.Center);
+        var label = MakeText(go.transform, "Text", "Loading Library Catalog", 48, TextAlignmentOptions.Center);
         label.color = UiTheme.OnPrimary; label.fontStyle = FontStyles.Bold;
         Stretch(label.rectTransform);
 
@@ -396,7 +454,7 @@ public class WelcomeController : MonoBehaviour
         tmp.text = text;
         tmp.fontSize = size;
         tmp.enableAutoSizing = true;
-        tmp.fontSizeMin = size * 0.6f;
+        tmp.fontSizeMin = Mathf.Max(UiTheme.AdultTextMin, size * 0.6f); // never below 40 (adults read this page)
         tmp.fontSizeMax = size;
         tmp.alignment = align;
         tmp.color = UiTheme.TextPrimary;
