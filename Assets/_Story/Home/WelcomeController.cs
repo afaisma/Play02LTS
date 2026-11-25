@@ -153,9 +153,10 @@ public class WelcomeController : MonoBehaviour
 
     // "Choose the level" and Skip: Home, where the level sheet opens. The catalog is loaded (the demo
     // comes only from the real Continue), so this is what Continue does without the demo.
+    // No slide-away first: Home loads at once, and a slide cut off by the scene change made DOTween
+    // log "Target or field is missing/null" (seen on build 337).
     private void DemoDone()
     {
-        if (_demo != null) _demo.Hide();
         Debug.Log("[Welcome] demo question done, going Home");
         Globals.Instance.Home();
     }
