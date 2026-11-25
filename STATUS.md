@@ -32,7 +32,6 @@ Updated: 2026-11-25 (Andrey on build 337: much better; one comment on the picker
 - Wait for Andrey's feedback on build 337 (round 7; if he and his test user accept it, it becomes the release candidate). Next build: go Home from the demo without the sheet's slide-away (the DOTween warning).
 
 ## Waiting for Alex
-- Picker text (Andrey's comment on build 337): larger in both editions (like round 7 Part 2), or Story Comprehension only? Then: change, checks with captures, next tester builds (APK 339, iOS 340) with the demo-warning fix.
 - Round 7: send build 337 and the Part 2 pairs to Andrey; push when ready (commits 488ca24..HEAD and tag before-pause-2026-11-24); real-device checklist in _work/REPORT_parent_screens_and_reading_controls.md.
 - Decide on the empty-box star in the tile progress line (another sign, or the star added to the font).
 - App Store record + Apple ID for Story Comprehension.
@@ -60,3 +59,4 @@ Updated: 2026-11-25 (Andrey on build 337: much better; one comment on the picker
 - 2026-11-24: Pause, both editions: the Repeat button of the reading toolbar shows Pause while the app reads, Play when paused (continues from the same word) and Repeat when the page is finished. Pause also holds the word highlighting, the automatic page turn and the question. The speaker button is unchanged.
 - 2026-11-24: Andrey's feedback round 7 (email of 2026-11-24) is built from one brief, /Users/alexanderfaisman/dev/Play6.3/_work/BRIEF_parent_screens_and_reading_controls.md; pause is the last part and its own commit. If Andrey and his test user accept the resulting tester build, it becomes the release candidate for the stores.
 - 2026-11-25: Andrey agrees by email to all five points of the round 7 plan as proposed: the demo question after the Continue tap, small text about 1.5 times larger, default reading speed A -30, B -20, C -20, D -10, pause on the Repeat button, page number "7 / 24" without a slider.
+- 2026-11-25 (Alex, after Andrey's comment on build 337): the reading-mode picker ("How shall we read?") gets the round 7 text rule in both editions: title 48, option names 44, the line under each 40, message 44, never below 40. No new wording, same panel. Next tester build: only the Android APK (339) for Andrey; the iOS export is made later from the final commit, when Alex is ready to archive.

@@ -470,7 +470,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         hlg.childAlignment = TextAnchor.MiddleLeft;
         rowGO.GetComponent<LayoutElement>().preferredHeight = 70f;
 
-        var title = MakeText(rowGO.transform, "Title", "How shall we read?", 40, TextAlignmentOptions.Left);
+        var title = MakeText(rowGO.transform, "Title", "How shall we read?", 48, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
 
         var xGO = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -562,12 +562,12 @@ public class UnifiedReadingModePicker : MonoBehaviour
         cvl.childControlWidth = true; cvl.childControlHeight = true;
         cvl.childForceExpandWidth = true; cvl.childForceExpandHeight = false;
 
-        var title = MakeText(col.transform, "title", TileLabel(mode), 34, TextAlignmentOptions.Left);
+        var title = MakeText(col.transform, "title", TileLabel(mode), 44, TextAlignmentOptions.Left);
         title.fontStyle = FontStyles.Bold;
-        title.gameObject.AddComponent<LayoutElement>().preferredHeight = 48f;
-        var subL = MakeText(col.transform, "sub", SubLabel(mode), 24, TextAlignmentOptions.Left);
+        title.gameObject.AddComponent<LayoutElement>().preferredHeight = 54f;
+        var subL = MakeText(col.transform, "sub", SubLabel(mode), 40, TextAlignmentOptions.Left);
         subL.color = UiTheme.TextSecondary;
-        subL.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
+        subL.gameObject.AddComponent<LayoutElement>().preferredHeight = 48f;
 
         var captured = mode;
         tileGO.GetComponent<Button>().onClick.AddListener(() => OnTileSelected(captured));
@@ -735,7 +735,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        var label = MakeText(go.transform, "Label", message, 36, TextAlignmentOptions.Center);
+        var label = MakeText(go.transform, "Label", message, 44, TextAlignmentOptions.Center);
         label.enableWordWrapping = true;
         label.gameObject.AddComponent<LayoutElement>().preferredWidth = 780f;
 
@@ -780,7 +780,7 @@ public class UnifiedReadingModePicker : MonoBehaviour
         tmp.text = text;
         tmp.fontSize = size;
         tmp.enableAutoSizing = true;
-        tmp.fontSizeMin = size * 0.6f;
+        tmp.fontSizeMin = Mathf.Max(UiTheme.AdultTextMin, size * 0.6f); // never below 40 (Andrey, build 337)
         tmp.fontSizeMax = size;
         tmp.alignment = align;
         tmp.color = UiTheme.TextPrimary;

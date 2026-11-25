@@ -1,0 +1,1 @@
+5|wait|catalog;30|continue|;5|wait|scene=_Home;40|book|JackAndTheBeanstalk_v2/;5|wait|picker;60|cap|picker_rb_four_options;10|mode|AppVoice;5|wait|playing;30|picker|;5|wait|picker;40|cap|picker_rb_reopened;10|picker|;10|home|;5|wait|scene=_Home;10|prefstr|reading_mode_default=storyteller;10|book|VehiclesRhymebook/;5|wait|picker;20|cap|picker_rb_no_storyteller_message;30|log|done
