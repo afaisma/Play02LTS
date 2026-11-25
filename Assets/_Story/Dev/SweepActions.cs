@@ -27,8 +27,10 @@
 //   scroll|<pos>     every active scroll list to a vertical position (1 = top, 0 = bottom)
 //   slider|<name>=<n>  move a Slider to a value as a finger would (its change handler runs)
 // Notes for "note|<what>" (a value written into the log): narration (the newest narration file,
-//   with its speed) | rate (the saved slider speed g_Rate, or "not saved")
+//   with its speed) | rate (the saved slider speed g_Rate, or "not saved") | page (the reading page's
+//   page number as shown, and the page index the reader is on)
 //   next | prev      page-turn arrows
+//   swipe|left|right a finger swipe on the page text (left = next page, right = previous)
 //   rate | ratelater the rate-app panel in / out
 //   offline | online | dismissoffline   the no-internet dialog (drives NetworkStatus directly;
 //                    the dialog comes after two offline polls, so send offline| twice)
@@ -218,6 +220,18 @@ public static class SweepActions
                 break;
             }
             case "next": ClickByName("btnNext"); break;
+            case "swipe":
+            {
+                // What the swipe detector does: PRScript.LeftSwipe / RightSwipe with the text's swipe object.
+                var t = T("PRScript");
+                var pr = Find(t);
+                object target = null;
+                foreach (var o in UnityEngine.Object.FindObjectsByType(T("SwipeableObject"), FindObjectsSortMode.None))
+                    if (((Component)o).name.ToLower() == "textforeground") target = o;
+                if (target == null) throw new Exception("no swipeable TextForeground");
+                Call(pr, t, arg == "left" ? "LeftSwipe" : "RightSwipe", target);
+                break;
+            }
             case "prev": ClickByName("btnPrev"); break;
 
             case "rate":      { var t = T("MovingRatingsOptionsPanel"); Call(Find(t, true), t, "MoveIn"); break; }
@@ -267,6 +281,14 @@ public static class SweepActions
                 return last as string;
             }
             case "rate": return PlayerPrefs.HasKey("g_Rate") ? PlayerPrefs.GetString("g_Rate") : "not saved";
+            case "page":
+            {
+                var t = T("PRScript");
+                var pr = Find(t);
+                var label = t.GetField("_pageNumber", Any).GetValue(pr) as TMPro.TMP_Text;
+                int step = (int)t.GetField("nCurrentStep", Any).GetValue(pr);
+                return "shown \"" + (label != null && label.gameObject.activeInHierarchy ? label.text : "(hidden)") + "\", step index " + step;
+            }
             default: throw new Exception("unknown note " + what);
         }
     }

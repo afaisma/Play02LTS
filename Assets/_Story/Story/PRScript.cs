@@ -117,6 +117,8 @@ public class PRScript : MonoBehaviour
     /// <summary>True when the page on screen is the book's last one.</summary>
     public bool IsLastPage => IsOnLastStep();
     private bool _puzzleEnabledCurrentPage = true;
+    // "7 / 24" at the top right of the reading page (BuildPageNumber, ShowPageNumber).
+    private TMP_Text _pageNumber;
 
     public string baseURL = "";
     public ButtonController buttonController;
@@ -254,6 +256,7 @@ public class PRScript : MonoBehaviour
         // name — the same approach UnifiedReadingModePicker uses for btnVoiceSelection (which it
         // styles itself, with the speaker glyph).
         StyleToolbarIcon("btnReplay");
+        BuildPageNumber();
 
         // The bottom bar is authored flush with the screen edge, which on a notched iPhone puts
         // it inside the home-indicator inset. Lift the whole bar — btnNext moves with it, so
@@ -1312,6 +1315,7 @@ public class PRScript : MonoBehaviour
         {
             bool stepChanged = index != nCurrentStep;
             nCurrentStep = index;
+            ShowPageNumber();
             Globals.g_prbook?.
                 SetAndSaveCurrentPage(index);
 
@@ -1397,6 +1401,55 @@ public class PRScript : MonoBehaviour
             glyph.preserveAspect = true;
             glyph.raycastTarget = false;
         });
+    }
+
+    // The page number "7 / 24": the page on screen and the pages of the book, counted as the
+    // script's pages (the first is 1). Top right, under the safe-area top, over the picture's corner
+    // (or in the band above it where the picture leaves one). Small and calm on a half-transparent
+    // plate so it reads on any picture; not a button and takes no taps. Built once, empty until the
+    // script is parsed; SetCurrentStep, the one place a page changes (arrows, swipe, automatic turn,
+    // resume on a saved page), keeps it current.
+    private void BuildPageNumber()
+    {
+        if (storyStepsUI == null || storyStepsUI.canvasMain == null) return;
+        // A zero-size anchor at the top right, moved below the notch; the plate hangs from it and
+        // sizes itself to the text (kept apart so the safe-area shift and the size never fight).
+        var anchor = new GameObject("PageNumber", typeof(RectTransform));
+        anchor.transform.SetParent(storyStepsUI.canvasMain.transform, false);
+        var art = (RectTransform)anchor.transform;
+        art.anchorMin = art.anchorMax = art.pivot = new Vector2(1f, 1f);
+        art.sizeDelta = Vector2.zero;
+        art.anchoredPosition = new Vector2(-22f, -18f);
+        SafeAreaInsets.ApplyTop(art);
+
+        var plate = new GameObject("Plate", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+        plate.transform.SetParent(anchor.transform, false);
+        var prt = (RectTransform)plate.transform;
+        prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(1f, 1f);
+        prt.anchoredPosition = Vector2.zero;
+        var img = plate.GetComponent<Image>();
+        img.sprite = DialogChrome.RoundedSprite(); img.type = Image.Type.Sliced;
+        img.color = new Color(UiTheme.Surface.r, UiTheme.Surface.g, UiTheme.Surface.b, 0.78f);
+        img.raycastTarget = false;
+        var hl = plate.GetComponent<HorizontalLayoutGroup>();
+        hl.padding = new RectOffset(18, 18, 5, 5);
+        hl.childControlWidth = true; hl.childControlHeight = true;
+        hl.childForceExpandWidth = false; hl.childForceExpandHeight = false;
+        var fit = plate.GetComponent<ContentSizeFitter>();
+        fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        _pageNumber = DialogChrome.MakeText(plate.transform, "Text", "", 34f, TextAlignmentOptions.Center, UiTheme.TextSecondary);
+        _pageNumber.enableAutoSizing = false;
+        _pageNumber.enableWordWrapping = false;
+        anchor.SetActive(false); // until the first page
+    }
+
+    private void ShowPageNumber()
+    {
+        if (_pageNumber == null || _scriptlets == null || _scriptlets.Count == 0) return;
+        _pageNumber.text = (nCurrentStep + 1) + " / " + _scriptlets.Count;
+        _pageNumber.transform.parent.parent.gameObject.SetActive(true);
     }
 
     // Move a scene-built bottom bar up by Screen.safeArea's bottom inset. Found by name, the same
