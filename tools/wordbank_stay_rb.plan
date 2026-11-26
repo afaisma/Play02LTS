@@ -1,0 +1,1 @@
+5|wait|catalog;30|continue|;5|wait|scene=_Home;1|secs|3;1|note|mem;10|book|JackAndTheBeanstalk_v2/;5|wait|picker;40|mode|AppVoice;5|wait|playing;1|wait|wordbank;1|note|mem;1|word|mother;20|cap|W1_word_tapped;1|home|;5|wait|scene=_Home;1|secs|3;1|note|mem;30|log|done

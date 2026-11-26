@@ -30,6 +30,8 @@
 //   with its speed) | rate (the saved slider speed g_Rate, or "not saved") | page (the reading page's
 //   page number as shown, and the page index the reader is on) | audio (the page narration: sound
 //   position, playing, read aloud, paused, the Repeat button's face) | dialogue (open or closed)
+//   | prefetch (Story Comprehension's book download: its line, running, books done, complete)
+//   | mem (a MemProbe line: what is in memory now, textures and sound clips)
 //   word|<text>      what a tap on that word of the page plays (the word bank, ReadingBuddy)
 //   next | prev      page-turn arrows
 //   swipe|left|right a finger swipe on the page text (left = next page, right = previous)
@@ -44,6 +46,8 @@
 //   | countdown=<n> (the Welcome countdown bar is showing and has emptied to <= n percent)
 //   | demo (the Welcome page's demo question is showing)
 //   | audiotime=<s> (the page narration is playing at or past s seconds)
+//   | prefetch (the book download has finished with every file on the phone)
+//   | wordbank (the reading page's word bank is loaded: a tapped word can play)
 #if UNITY_EDITOR || READINGBUDDY_DEV
 using System;
 using System.Collections;
@@ -317,6 +321,16 @@ public static class SweepActions
                 var d = UnityEngine.Object.FindFirstObjectByType(dT);
                 return d != null && (bool)dT.GetProperty("IsOpen", Any).GetValue(d) ? "open" : "closed";
             }
+            case "prefetch":
+            {
+                var bT = T("BookPrefetch");
+                object b = bT.GetProperty("Instance", Any).GetValue(null);
+                if (b == null) return "not started";
+                return "\"" + bT.GetProperty("StatusText", Any).GetValue(null) + "\" (running " + bT.GetProperty("Running", Any).GetValue(b)
+                    + ", " + bT.GetProperty("Done", Any).GetValue(b) + " of " + bT.GetProperty("Total", Any).GetValue(b)
+                    + " books done, complete " + bT.GetProperty("Complete", Any).GetValue(b) + ")";
+            }
+            case "mem": return (string)T("MemProbe").GetMethod("Line", Any).Invoke(null, new object[] { "sweep", 3 });
             default: throw new Exception("unknown note " + what);
         }
     }
@@ -378,6 +392,18 @@ public static class SweepActions
                 var dT = T("DialogueController");
                 var d = UnityEngine.Object.FindFirstObjectByType(dT);
                 return d != null && (bool)dT.GetProperty("IsOpen", Any).GetValue(d);
+            }
+            case "prefetch":
+            {
+                var bT = T("BookPrefetch");
+                object b = bT.GetProperty("Instance", Any).GetValue(null);
+                return b != null && (int)bT.GetProperty("Total", Any).GetValue(b) > 0
+                    && !(bool)bT.GetProperty("Running", Any).GetValue(b) && (bool)bT.GetProperty("Complete", Any).GetValue(b);
+            }
+            case "wordbank":
+            {
+                object p = PagePlayer();
+                return (bool)p.GetType().GetField("_wordBankReady", Any).GetValue(p);
             }
             default: throw new Exception("unknown condition " + what);
         }
