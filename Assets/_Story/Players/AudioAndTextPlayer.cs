@@ -934,13 +934,19 @@ public class AudioAndTextPlayer : MonoBehaviour
         // entry even though the filename is identical across books (section 2a).
         string suffix = string.IsNullOrEmpty(rev) ? "" : "?v=" + rev;
         Runnable.Run(LoadWordBankAssets(
+            key,
             baseURL + "wordbank.mp3" + suffix,
             baseURL + "wordbank.json" + suffix));
     }
 
     // Fetches wordbank.mp3 + wordbank.json via the existing DiskCache → UnityWebRequest path,
     // keyed by the full URL. Any miss/404/parse failure returns quietly with _wordBankReady=false.
-    private IEnumerator LoadWordBankAssets(string audioURL, string jsonURL)
+    // The job runs on Runnable, which outlives the story scene, and nothing else frees its decoded
+    // clip (tens of MB): it is kept only when, at the end, this player still exists, still wants
+    // this bank (key == _wordBankLoadedRev) and the map parsed; otherwise it is destroyed here.
+    // After every yield a closed book (this == null) stops the job, so it downloads and decodes no
+    // further. Runnable.Stop would not do: a stopped routine still runs up to its next yield.
+    private IEnumerator LoadWordBankAssets(string key, string audioURL, string jsonURL)
     {
         AudioClip clip = null;
 
@@ -952,6 +958,7 @@ public class AudioAndTextPlayer : MonoBehaviour
                 "file://" + diskAudioPath, AudioType.MPEG))
             {
                 yield return diskReq.SendWebRequest();
+                if (this == null) { Debug.Log("[WB] dropped: book closed while loading"); yield break; } // TEMP [WB]
                 if (diskReq.result == UnityWebRequest.Result.Success)
                     clip = DownloadHandlerAudioClip.GetContent(diskReq);
             }
@@ -963,6 +970,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             {
                 uwr.timeout = 60;
                 yield return uwr.SendWebRequest();
+                if (this == null) { Debug.Log("[WB] dropped: book closed while loading"); yield break; } // TEMP [WB]
                 if (uwr.result == UnityWebRequest.Result.Success)
                 {
                     clip = DownloadHandlerAudioClip.GetContent(uwr);
@@ -988,6 +996,7 @@ public class AudioAndTextPlayer : MonoBehaviour
             {
                 www.timeout = 20;
                 yield return www.SendWebRequest();
+                if (this == null) { Destroy(clip); Debug.Log("[WB] dropped: book closed while loading"); yield break; } // TEMP [WB]
                 if (www.result == UnityWebRequest.Result.Success)
                 {
                     text = www.downloadHandler.text;
@@ -995,17 +1004,19 @@ public class AudioAndTextPlayer : MonoBehaviour
                 }
             }
         }
-        if (string.IsNullOrEmpty(text))
-        {
-            Debug.Log($"[WB] no json (url={jsonURL})"); // TEMP [WB]
-            yield break; // audio without a map → no bank, taps stay silent
-        }
 
+        // Audio without a map, or a malformed/empty map → no bank, taps stay silent.
         var map = ParseWordBank(text);
-        if (map == null || map.Count == 0)
+        string drop = this == null ? "book closed while loading"
+            : key != _wordBankLoadedRev ? "this player wants another bank now"
+            : string.IsNullOrEmpty(text) ? $"no json (url={jsonURL})"
+            : map == null || map.Count == 0 ? $"json failed/empty (url={jsonURL})"
+            : null;
+        if (drop != null)
         {
-            Debug.Log($"[WB] json failed/empty (url={jsonURL})"); // TEMP [WB]
-            yield break; // malformed/empty → no bank
+            Destroy(clip);
+            Debug.Log("[WB] dropped: " + drop); // TEMP [WB]
+            yield break;
         }
 
         _wordBankClip = clip;
