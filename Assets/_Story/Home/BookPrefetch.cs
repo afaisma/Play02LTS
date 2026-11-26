@@ -40,7 +40,8 @@ public class BookPrefetch : MonoBehaviour
         }
     }
 
-    /// <summary>Download these books (the current level). A list already running is left alone.</summary>
+    /// <summary>Download these books (the current level). The same list at the same reading speeds,
+    /// already running or complete, is left alone.</summary>
     public static void StartFor(List<PRBook> books)
     {
         if (books == null || books.Count == 0) return;
@@ -50,13 +51,21 @@ public class BookPrefetch : MonoBehaviour
             DontDestroyOnLoad(go);
             Instance = go.AddComponent<BookPrefetch>();
         }
-        var keys = new List<string>();
-        foreach (PRBook b in books) if (b != null && string.IsNullOrEmpty(b.action)) keys.Add(b.bookUrl + "@" + b.contentRev);
-        string key = string.Join("|", keys);
+        string key = ListKey(books, Globals.ReadingRateFor);
         if (key == Instance._listKey && (Instance.Running || Instance.Complete)) return;
         Instance._listKey = key;
         if (Instance._co != null) Instance.StopCoroutine(Instance._co);
         Instance._co = Instance.StartCoroutine(Instance.Run(books));
+    }
+
+    /// <summary>The key of a list: per book its address, content revision and the reading speed its
+    /// narration is downloaded at (rateFor = Globals.ReadingRateFor, as in FetchBook). Another speed
+    /// gives another key, so the list runs again and fetches the narration of the new speed.</summary>
+    public static string ListKey(List<PRBook> books, System.Func<PRBook, string> rateFor)
+    {
+        var keys = new List<string>();
+        foreach (PRBook b in books) if (b != null && string.IsNullOrEmpty(b.action)) keys.Add(b.bookUrl + "@" + b.contentRev + "@" + rateFor(b));
+        return string.Join("|", keys);
     }
 
     private IEnumerator Run(List<PRBook> books)
