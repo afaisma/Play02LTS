@@ -114,7 +114,10 @@ run|store)
   # "Allow microphone" screen (the sweep cannot answer the system question).
   [ "${SIM_GRANT_MIC:-0}" = 1 ] && xcrun simctl privacy "$UDID" grant microphone "$BUNDLE"
   T0=$(date +%s)
-  xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" -sweep "$PLAN" || finish launch-failed 1
+  # SIM_STDOUT=<file>: the app's standard output and error go to that file (Unity's Debug.Log
+  # lines; they are not in the unified log that applog reads).
+  xcrun simctl launch --terminate-running-process ${SIM_STDOUT:+--stdout=$SIM_STDOUT} ${SIM_STDOUT:+--stderr=$SIM_STDOUT} \
+    "$UDID" "$BUNDLE" -sweep "$PLAN" || finish launch-failed 1
   DOCS=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)/Documents/sweep
   echo "docs: $DOCS"
   RESULT=timeout
